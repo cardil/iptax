@@ -88,33 +88,34 @@ test-watch: $(GUARDS)/install.done  ## Run tests in watch mode
 .PHONY: lint
 lint: $(GUARDS)/lint.passed  ## Run linter (idempotent)
 
-$(GUARDS)/lint.passed: $(GUARDS)/install.done $(SRC_FILES)
+$(GUARDS)/lint.passed: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES) pyproject.toml .editorconfig
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/ruff check src/ tests/
 	@touch $@
 
 .PHONY: format
-format: $(GUARDS)/format.done  ## Format code (idempotent)
-
-$(GUARDS)/format.done: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES)
-	@mkdir -p $(GUARDS)
+format: $(GUARDS)/install.done  ## Format code
 	$(VENV_BIN)/black src/ tests/
 	$(VENV_BIN)/ruff check --fix src/ tests/
-	@touch $@
+	@echo -e "$(GREEN)$(CHECK) Code formatted$(RESET)"
 
 .PHONY: format-check
-format-check: $(GUARDS)/install.done  ## Check if code formatting is correct
+format-check: $(GUARDS)/format.done  ## Check if code formatting is correct (idempotent)
+
+$(GUARDS)/format.done: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES) pyproject.toml .editorconfig
+	@mkdir -p $(GUARDS)
 	@echo -e "$(BLUE)$(GEAR) Checking code formatting...$(RESET)"
 	@$(VENV_BIN)/black --check --diff src/ tests/
 	@$(VENV_BIN)/ruff check src/ tests/
 	@echo -e "$(GREEN)$(CHECK) Code formatting is correct$(RESET)"
+	@touch $@
 
 .PHONY: typecheck
 typecheck: $(GUARDS)/typecheck.passed  ## Run type checker
 
-$(GUARDS)/typecheck.passed: $(GUARDS)/install.done $(SRC_FILES)
+$(GUARDS)/typecheck.passed: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES) pyproject.toml
 	@mkdir -p $(GUARDS)
-	$(VENV_BIN)/mypy src/
+	$(VENV_BIN)/mypy src/ tests/
 	@touch $@
 
 .PHONY: check

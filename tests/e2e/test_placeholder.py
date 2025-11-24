@@ -4,7 +4,7 @@ import pytest
 
 
 @pytest.mark.e2e
-def test_placeholder():
+def test_placeholder() -> None:
     """Placeholder test to allow e2e test suite to pass.
 
     TODO: Remove this test once actual e2e tests are implemented.
