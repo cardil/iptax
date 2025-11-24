@@ -1,9 +1,27 @@
 # Makefile for iptax
 # Using guard files for idempotent operations
 
+# Colors
+RED := \033[0;31m
+GREEN := \033[0;32m
+YELLOW := \033[0;33m
+BLUE := \033[0;34m
+CYAN := \033[0;36m
+RESET := \033[0m
+
+# Emojis
+CHECK := ✓
+CROSS := ✗
+ROCKET := 🚀
+GEAR := ⚙️
+TEST := 🧪
+CLEAN := 🧹
+BOOK := 📚
+
 .PHONY: help
 help:  ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo -e "$(CYAN)$(BOOK) Available targets:$(RESET)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[0;36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # Guard files directory
 GUARDS := .make
@@ -86,14 +104,10 @@ $(GUARDS)/format.done: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES)
 
 .PHONY: format-check
 format-check: $(GUARDS)/install.done  ## Check if code formatting is correct
-	$(VENV_BIN)/black src/ tests/
-	$(VENV_BIN)/ruff check --fix src/ tests/
-	@if ! git diff --exit-code > /dev/null 2>&1; then \
-		echo "Error: Code formatting changes detected. Please run 'make format' and commit the changes."; \
-		git diff; \
-		exit 1; \
-	fi
-	@echo "✓ Code formatting is correct"
+	@echo -e "$(BLUE)$(GEAR) Checking code formatting...$(RESET)"
+	@$(VENV_BIN)/black --check --diff src/ tests/
+	@$(VENV_BIN)/ruff check src/ tests/
+	@echo -e "$(GREEN)$(CHECK) Code formatting is correct$(RESET)"
 
 .PHONY: typecheck
 typecheck: $(GUARDS)/typecheck.passed  ## Run type checker
@@ -105,39 +119,44 @@ $(GUARDS)/typecheck.passed: $(GUARDS)/install.done $(SRC_FILES)
 
 .PHONY: check
 check: lint format-check typecheck  ## Run all code quality checks (lint + format + typecheck)
-	@echo "✓ All code quality checks passed"
+	@echo -e "$(GREEN)$(CHECK) All code quality checks passed$(RESET)"
 
 ##@ Verification
 
 .PHONY: verify
 verify: $(GUARDS)/lint.passed $(GUARDS)/format.done test  ## Run full verification (lint + format + tests)
-	@echo "✓ All verifications passed"
+	@echo -e "$(GREEN)$(ROCKET) All verifications passed$(RESET)"
 
 ##@ Development
 
 .PHONY: clean
 clean:  ## Clean build artifacts and caches
-	rm -rf $(GUARDS)/
-	rm -rf .pytest_cache/
-	rm -rf htmlcov/
-	rm -rf .coverage
-	rm -rf dist/
-	rm -rf build/
-	rm -rf *.egg-info/
-	rm -rf .mypy_cache/
-	rm -rf .ruff_cache/
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	find . -type f -name '*.pyc' -delete
-	find . -type f -name '*.pyo' -delete
+	@echo -e "$(YELLOW)$(CLEAN) Cleaning build artifacts...$(RESET)"
+	@rm -rf $(GUARDS)/
+	@rm -rf .pytest_cache/
+	@rm -rf htmlcov/
+	@rm -rf .coverage
+	@rm -rf dist/
+	@rm -rf build/
+	@rm -rf *.egg-info/
+	@rm -rf .mypy_cache/
+	@rm -rf .ruff_cache/
+	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name '*.pyc' -delete
+	@find . -type f -name '*.pyo' -delete
+	@echo -e "$(GREEN)$(CHECK) Build artifacts cleaned$(RESET)"
 
 .PHONY: distclean
 distclean: clean  ## Complete cleanup including venv
-	rm -rf $(VENV)
+	@echo -e "$(YELLOW)$(CLEAN) Removing virtual environment...$(RESET)"
+	@rm -rf $(VENV)
+	@echo -e "$(GREEN)$(CHECK) Complete cleanup done$(RESET)"
 
 .PHONY: coverage
 coverage: $(GUARDS)/install.done  ## Run tests with coverage report
-	$(VENV_BIN)/pytest --cov=iptax --cov-report=html --cov-report=term
-	@echo "Coverage report: htmlcov/index.html"
+	@echo -e "$(BLUE)$(TEST) Running tests with coverage...$(RESET)"
+	@$(VENV_BIN)/pytest --cov=iptax --cov-report=html --cov-report=term
+	@echo -e "$(GREEN)$(CHECK) Coverage report: htmlcov/index.html$(RESET)"
 
 ##@ Utilities
 

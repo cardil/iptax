@@ -1,4 +1,4 @@
-"""Command-line interface for iptax-reporter."""
+"""Command-line interface for iptax."""
 
 import click
 
