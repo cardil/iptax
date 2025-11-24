@@ -29,8 +29,8 @@ def test_report_command_placeholder(runner: CliRunner) -> None:
 
 
 @pytest.mark.unit
-def test_config_command_placeholder(runner: CliRunner) -> None:
-    """Test that config command shows placeholder message."""
-    result = runner.invoke(cli, ["config"])
+def test_config_command_show(runner: CliRunner) -> None:
+    """Test that config command shows config path."""
+    result = runner.invoke(cli, ["config", "--path"])
     assert result.exit_code == 0
-    assert "not yet implemented" in result.output
+    assert "iptax/settings.yaml" in result.output

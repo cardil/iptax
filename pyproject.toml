@@ -52,9 +52,13 @@ dependencies = [
     
     # Rich terminal UI
     "rich>=13.7.0",
+    "questionary>=2.0.1",
     
     # Data validation
     "pydantic>=2.5.0",
+    
+    # Did integration (PR/MR fetching) - using PR #311
+    "did @ git+https://github.com/psss/did.git@refs/pull/311/head",
 ]
 
 [project.optional-dependencies]
@@ -147,12 +151,14 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 strict_equality = true
+plugins = ['pydantic.mypy']
 
 [[tool.mypy.overrides]]
 module = [
     "playwright.*",
     "weasyprint.*",
     "litellm.*",
+    "did.*"
 ]
 ignore_missing_imports = true
 
