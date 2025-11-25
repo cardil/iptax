@@ -83,7 +83,7 @@ class Configurator:
     def _get_default_settings_path() -> Path:
         """Get default path for iptax settings.yaml.
 
-        Respects XDG_CONFIG_HOME environment variable if set.
+        Respects XDG_CONFIG_HOME and HOME environment variables.
 
         Returns:
             Path to settings.yaml
@@ -93,7 +93,10 @@ class Configurator:
         if xdg_config_home:
             config_dir = Path(xdg_config_home) / "iptax"
         else:
-            config_dir = Path.home() / ".config" / "iptax"
+            # Respect HOME environment variable, fall back to Path.home()
+            home = os.environ.get("HOME")
+            home_path = Path(home) if home else Path.home()
+            config_dir = home_path / ".config" / "iptax"
 
         return config_dir / "settings.yaml"
 
@@ -101,10 +104,15 @@ class Configurator:
     def _get_default_did_config_path() -> Path:
         """Get default path for did config.
 
+        Respects HOME environment variable, falls back to Path.home().
+
         Returns:
             Path to ~/.did/config
         """
-        return Path.home() / ".did" / "config"
+        # Respect HOME environment variable, fall back to Path.home()
+        home = os.environ.get("HOME")
+        home_path = Path(home) if home else Path.home()
+        return home_path / ".did" / "config"
 
     def load(self) -> Settings:
         """Load and validate settings from config file.
