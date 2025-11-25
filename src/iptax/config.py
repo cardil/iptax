@@ -425,45 +425,41 @@ class Configurator:
 
         # List available providers from did config
         questionary.print("\nReading did config...", style="italic")
+        original_path = self.did_config_path
         try:
             # Temporarily update did_config_path to read providers
-            original_path = self.did_config_path
             self.did_config_path = Path(did_config_path).expanduser()
-
             available_providers = self.list_did_providers()
-
-            # Restore original path
+        finally:
+            # Always restore original path
             self.did_config_path = original_path
 
-            questionary.print("Found providers:", style="bold")
+        questionary.print("Found providers:", style="bold")
 
-            # Determine checked state
-            checked_providers = set(available_providers)
-            if defaults:
-                checked_providers = set(defaults.did.providers)
+        # Determine checked state
+        checked_providers = set(available_providers)
+        if defaults:
+            checked_providers = set(defaults.did.providers)
 
-            # Let user select providers using checkbox
-            # Use Choice objects with checked=True/False
-            choices = []
-            for p in available_providers:
-                is_checked = p in checked_providers
-                choices.append(Choice(title=p, checked=is_checked))
+        # Let user select providers using checkbox
+        # Use Choice objects with checked=True/False
+        choices = []
+        for p in available_providers:
+            is_checked = p in checked_providers
+            choices.append(Choice(title=p, checked=is_checked))
 
-            selected_providers = questionary.checkbox(
-                "Select providers to use:",
-                choices=choices,
-            ).ask()
+        selected_providers = questionary.checkbox(
+            "Select providers to use:",
+            choices=choices,
+        ).ask()
 
-            if not selected_providers:
-                questionary.print("⚠ At least one provider must be selected", style="bold red")
-                selected_providers = available_providers
+        if not selected_providers:
+            questionary.print("⚠ At least one provider must be selected", style="bold red")
+            selected_providers = available_providers
 
-            questionary.print("\nSelected providers:", style="bold")
-            for provider in selected_providers:
-                questionary.print(f"  ✓ {provider}", style="green")
-
-        except DidConfigError:
-            raise
+        questionary.print("\nSelected providers:", style="bold")
+        for provider in selected_providers:
+            questionary.print(f"  ✓ {provider}", style="green")
 
         did = DidConfig(
             config_path=did_config_path,

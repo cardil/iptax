@@ -349,6 +349,9 @@ class Settings(BaseModel):
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid settings file format in {path}: expected a mapping")
+
         return cls(**data)
 
     def to_yaml_file(self, path: Path) -> None:
