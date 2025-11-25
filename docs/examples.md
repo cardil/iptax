@@ -370,7 +370,7 @@ ______________________________________________________________________
 
 **Error:**
 
-```
+```text
 Error: ~/.did/config not found
 ```
 
@@ -388,7 +388,7 @@ iptax config
 
 **Error:**
 
-```
+```text
 Error: Invalid Gemini API key
 ```
 
@@ -409,7 +409,7 @@ iptax config --validate
 
 **Error:**
 
-```
+```text
 Error: Workday authentication failed
 ```
 
@@ -427,7 +427,7 @@ iptax report --skip-workday
 
 **Error:**
 
-```
+```text
 No changes found for 2024-11-26 to 2024-12-25
 ```
 

@@ -95,10 +95,6 @@ jobs:
       - name: Run unit tests
         run: make unit
 
-      - name: Generate coverage report
-        if: matrix.python-version == '3.11'
-        run: make coverage
-
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v4

@@ -6,7 +6,7 @@ from pathlib import Path
 def fix_file(filepath: Path) -> bool:
     """Fix whitespace issues in a file. Returns True if modified."""
     try:
-        content = filepath.read_text()
+        content = filepath.read_text(encoding='utf-8')
         original = content
 
         # Fix trailing whitespace on each line
@@ -22,11 +22,11 @@ def fix_file(filepath: Path) -> bool:
             content += '\n'
 
         if content != original:
-            filepath.write_text(content)
+            filepath.write_text(content, encoding='utf-8')
             return True
         return False
-    except Exception as e:
-        print(f"Error processing {filepath}: {e}", file=sys.stderr)
+    except (OSError, UnicodeError) as exc:
+        print(f"Error processing {filepath}: {exc}", file=sys.stderr)
         return False
 
 def main():

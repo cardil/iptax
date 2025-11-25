@@ -10,10 +10,10 @@ CYAN := \033[0;36m
 RESET := \033[0m
 
 # Emojis
-CHECK := ✓
-CROSS := ✗
+CHECK := ✅
+CROSS := ❌
 ROCKET := 🚀
-GEAR := ⚙️
+GEAR := "⚙️ "
 TEST := 🧪
 CLEAN := 🧹
 BOOK := 📚
@@ -24,8 +24,6 @@ help:  ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[0;36m%-20s\033[0m %s\n", $$1, $$2}'
 
-# Guard files directory
-GUARDS := .make
 
 # Python and pip
 PYTHON := python3
@@ -33,13 +31,14 @@ PIP := $(PYTHON) -m pip
 
 # Virtual environment
 VENV := .venv
+GUARDS := $(VENV)/.make
 VENV_BIN := $(VENV)/bin
 VENV_PYTHON := $(VENV_BIN)/python
 VENV_PIP := $(VENV_PYTHON) -m pip
 
 # Source tracking
 SRC_FILES := $(shell find src -type f -name '*.py' 2>/dev/null)
-TEST_FILES := $(shell find tests scripts -type f -name '*.py' 2>/dev/null)
+TEST_FILES := $(shell find tests scripts -type f -name '*.py' 2>/dev/null) Makefile
 MD_FILES := $(shell find docs -type f -name '*.md' 2>/dev/null) README.md
 
 ##@ Installation
@@ -60,17 +59,17 @@ install:  ## Install iptax to system or user environment
 
 ##@ Development Setup
 
-$(VENV): $(GUARDS)/venv.done
-$(GUARDS)/venv.done: pyproject.toml
+$(VENV): $(VENV)/venv.done
+$(VENV)/venv.done: pyproject.toml
 	@mkdir -p $(GUARDS)
 	$(PYTHON) -m venv $(VENV)
 	$(VENV_PIP) install --upgrade pip setuptools wheel
 	@touch $@
 
 .PHONY: init
-init: $(GUARDS)/init.done  ## Initialize development environment (install deps)
+init: $(VENV)/init.done  ## Initialize development environment (install deps)
 
-$(GUARDS)/init.done: $(GUARDS)/venv.done pyproject.toml
+$(VENV)/init.done: $(VENV)/venv.done pyproject.toml
 	@mkdir -p $(GUARDS)
 	$(VENV_PIP) install -e ".[dev]"
 	$(VENV_PYTHON) -m playwright install chromium
@@ -83,23 +82,25 @@ test: unit e2e  ## Run all tests
 
 .PHONY: unit
 unit: $(GUARDS)/unit.passed  ## Run unit tests
+	@echo -e "$(TEST) Unit tests ........................... $(GREEN)PASSED$(RESET)"
 
-$(GUARDS)/unit.passed: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES)
+$(GUARDS)/unit.passed: $(VENV)/init.done $(SRC_FILES) $(TEST_FILES)
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/pytest tests/unit/ -v
 	@touch $@
 
 .PHONY: e2e
 e2e: $(GUARDS)/e2e.passed  ## Run end-to-end tests
+	@echo -e "$(GEAR) E2E tests ............................ $(GREEN)PASSED$(RESET)"
 
-$(GUARDS)/e2e.passed: $(GUARDS)/init.done $(GUARDS)/unit.passed \
+$(GUARDS)/e2e.passed: $(VENV)/init.done $(GUARDS)/unit.passed \
 	$(SRC_FILES) $(TEST_FILES)
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/pytest tests/e2e/ -v --no-cov
 	@touch $@
 
 .PHONY: test-watch
-test-watch: $(GUARDS)/init.done  ## Run tests in watch mode
+test-watch: $(VENV)/init.done  ## Run tests in watch mode
 	$(VENV_BIN)/pytest-watch tests/unit/
 
 ##@ Code Quality
@@ -107,7 +108,7 @@ test-watch: $(GUARDS)/init.done  ## Run tests in watch mode
 .PHONY: lint
 lint: $(GUARDS)/lint.passed  ## Run linter (idempotent)
 
-$(GUARDS)/lint.passed: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) \
+$(GUARDS)/lint.passed: $(VENV)/init.done $(SRC_FILES) $(TEST_FILES) \
 	$(MD_FILES) pyproject.toml .editorconfig
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/ruff check src/ tests/
@@ -115,7 +116,7 @@ $(GUARDS)/lint.passed: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) \
 	@touch $@
 
 .PHONY: format
-format: $(GUARDS)/init.done  ## Format code and markdown
+format: $(VENV)/init.done  ## Format code and markdown
 	$(VENV_BIN)/black src/ tests/
 	$(VENV_BIN)/ruff check --fix src/ tests/
 	$(VENV_BIN)/mdformat --wrap 88 docs/ README.md
@@ -124,34 +125,33 @@ format: $(GUARDS)/init.done  ## Format code and markdown
 
 .PHONY: format-check
 format-check: $(GUARDS)/format.done  ## Check if code formatting is correct
+	@echo -e "$(BOOK) Code formatting  ..................... $(GREEN)CORRECT$(RESET)"
 
-$(GUARDS)/format.done: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) \
+$(GUARDS)/format.done: $(VENV)/init.done $(SRC_FILES) $(TEST_FILES) \
 	$(MD_FILES) pyproject.toml .editorconfig
 	@mkdir -p $(GUARDS)
 	@echo -e "$(BLUE)$(GEAR) Checking code formatting...$(RESET)"
 	@$(VENV_BIN)/black --check --diff src/ tests/
 	@$(VENV_BIN)/ruff check src/ tests/
 	@$(VENV_BIN)/mdformat --wrap 88 --check docs/ README.md
-	@echo -e "$(GREEN)$(CHECK) Code and markdown formatting is correct$(RESET)"
 	@touch $@
 
 .PHONY: typecheck
 typecheck: $(GUARDS)/typecheck.passed  ## Run type checker
 
-$(GUARDS)/typecheck.passed: $(GUARDS)/init.done $(SRC_FILES) pyproject.toml
+$(GUARDS)/typecheck.passed: $(VENV)/init.done $(SRC_FILES) pyproject.toml
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/mypy src/
 	@touch $@
 
 .PHONY: check
 check: lint format-check typecheck  ## Run all code quality checks
-	@echo -e "$(GREEN)$(CHECK) All code quality checks passed$(RESET)"
+	@echo -e "$(CHECK) Code quality ......................... $(GREEN)PASSED$(RESET)"
 
 ##@ Verification
 
 .PHONY: verify
-verify: $(GUARDS)/lint.passed $(GUARDS)/format.done test  ## Full verification
-	@echo -e "$(GREEN)$(ROCKET) All verifications passed$(RESET)"
+verify: check test  ## Full verification
 
 ##@ Development
 
@@ -161,7 +161,7 @@ clean:  ## Clean build artifacts and caches
 	@rm -rf $(GUARDS)/
 	@rm -rf .pytest_cache/
 	@rm -rf htmlcov/
-	@rm -rf .coverage
+	@rm -rf .coverage coverage.xml
 	@rm -rf dist/
 	@rm -rf build/
 	@rm -rf *.egg-info/
@@ -182,5 +182,5 @@ distclean: clean  ## Complete cleanup including venv
 ##@ Utilities
 
 .PHONY: shell
-shell: $(GUARDS)/init.done  ## Start interactive Python shell
+shell: $(VENV)/init.done  ## Start interactive Python shell
 	$(VENV_BIN)/python

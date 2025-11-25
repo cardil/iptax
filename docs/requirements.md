@@ -204,7 +204,7 @@ with a unified interface.
 
 **Batch Filtering Workflow:**
 
-```
+```text
 1. Load judgment history/cache
 2. Collect all changes from did
 3. Build batch prompt with:
@@ -222,7 +222,7 @@ with a unified interface.
 
 **AI Batch Prompt Template:**
 
-```
+```text
 Product: {product_name}
 
 Previous Judgment History (for context and learning):

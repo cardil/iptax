@@ -53,7 +53,10 @@ iptax-reporter/
 │   └── iptax/
 │       ├── __init__.py
 │       ├── cli.py              # CLI entry point, Click commands
-│       ├── config.py           # Configuration management, validation
+│       ├── config/
+│       │   ├── __init__.py     # Public config API
+│       │   ├── base.py         # Configuration management, validation
+│       │   └── interactive.py  # Interactive configuration wizard
 │       ├── history.py          # History tracking, date range calculation
 │       ├── did_integration.py  # psss/did SDK wrapper
 │       ├── workday.py          # Workday client (Playwright automation)
@@ -73,8 +76,8 @@ iptax-reporter/
 │   └── fixtures/
 ├── docs/
 │   ├── project.md              # Main entry point
-│   ├── requirements.md         # This file
-│   ├── architecture.md         # Technical design
+│   ├── requirements.md         # Requirements
+│   ├── architecture.md         # Technical design (this file)
 │   ├── workflows.md            # Workflow steps
 │   ├── testing.md              # Testing strategy
 │   ├── implementation.md       # Development phases
