@@ -271,14 +271,11 @@ class TestDidConfigValidation:
             # Restore permissions for cleanup
             did_config.chmod(0o600)
 
-    def test_validate_did_config_convenience_function(self, tmp_path, monkeypatch):
+    def test_validate_did_config_convenience_function(self, isolated_home):
         """Test validate_did_config() convenience function."""
-        did_config = tmp_path / ".did" / "config"
+        did_config = isolated_home / ".did" / "config"
         did_config.parent.mkdir(parents=True)
         did_config.write_text("[general]\n")
-
-        # Set HOME environment variable instead of monkeypatching Path.home
-        monkeypatch.setenv("HOME", str(tmp_path))
 
         result = validate_did_config()
 
@@ -358,18 +355,15 @@ type = gitlab
 
         assert "Failed to parse did config" in str(exc_info.value)
 
-    def test_list_did_providers_convenience_function(self, tmp_path, monkeypatch):
+    def test_list_did_providers_convenience_function(self, isolated_home):
         """Test list_did_providers() convenience function."""
-        did_config_file = tmp_path / ".did" / "config"
+        did_config_file = isolated_home / ".did" / "config"
         did_config_file.parent.mkdir(parents=True)
         config_content = """[general]
 [github]
 type = github
 """
         did_config_file.write_text(config_content)
-
-        # Set HOME environment variable instead of monkeypatching Path.home
-        monkeypatch.setenv("HOME", str(tmp_path))
 
         providers = list_did_providers()
 
@@ -681,28 +675,22 @@ class TestCreateInteractiveConfig:
 class TestCreateDefaultConfig:
     """Test create_default_config convenience function."""
 
-    def test_create_default_config_non_interactive(self, tmp_path, monkeypatch):
+    def test_create_default_config_non_interactive(self, isolated_home):
         """Test create_default_config() in non-interactive mode."""
         # Setup paths
-        did_config_file = tmp_path / ".did" / "config"
+        did_config_file = isolated_home / ".did" / "config"
         did_config_file.parent.mkdir(parents=True)
         did_config_file.write_text("[general]\n[github]\ntype = github\n")
 
-        config_dir = tmp_path / ".config" / "iptax"
-
-        # Set HOME environment variable instead of monkeypatching Path.home
-        monkeypatch.setenv("HOME", str(tmp_path))
+        config_dir = isolated_home / ".config" / "iptax"
 
         create_default_config(interactive=False)
 
         settings_file = config_dir / "settings.yaml"
         assert settings_file.exists()
 
-    def test_create_default_config_without_did(self, tmp_path, monkeypatch):
+    def test_create_default_config_without_did(self, isolated_home):
         """Test create_default_config() exits when did not configured."""
-        # Set HOME environment variable instead of monkeypatching Path.home
-        monkeypatch.setenv("HOME", str(tmp_path))
-
         with pytest.raises(SystemExit):
             create_default_config(interactive=False)
 
