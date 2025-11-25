@@ -18,6 +18,24 @@ def pytest_configure(config: Config) -> None:
 
 
 @pytest.fixture
+def isolated_home(tmp_path: Path, monkeypatch) -> Path:
+    """Set up isolated HOME environment for testing.
+
+    This fixture ensures that HOME is set to a temp directory and that
+    XDG_CONFIG_HOME is unset to avoid interference from the CI environment.
+    This is critical for tests that rely on default path resolution.
+
+    Returns:
+        Path: The temporary home directory
+    """
+    # Clear XDG_CONFIG_HOME to ensure HOME is used
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    # Set HOME to temp directory
+    monkeypatch.setenv("HOME", str(tmp_path))
+    return tmp_path
+
+
+@pytest.fixture
 def tmp_config_dir(tmp_path: Path) -> Generator[Path, None, None]:
     """Provide a temporary config directory for testing."""
     config_dir = tmp_path / "config" / "iptax"

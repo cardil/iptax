@@ -42,6 +42,12 @@ jobs:
           restore-keys: |
             playwright-${{ runner.os }}-
       
+      - name: Install system dependencies
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libkrb5-dev
+          version: 1.0
+      
       - name: Run code quality checks
         run: make check
 
@@ -77,6 +83,12 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             playwright-${{ runner.os }}-
+      
+      - name: Install system dependencies
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libkrb5-dev
+          version: 1.0
       
       - name: Run unit tests
         run: make unit
@@ -121,6 +133,12 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             playwright-${{ runner.os }}-
+      
+      - name: Install system dependencies
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libkrb5-dev
+          version: 1.0
       
       - name: Run full verification
         run: make verify
