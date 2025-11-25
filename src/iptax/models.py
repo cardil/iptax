@@ -4,7 +4,7 @@ This module defines all data models used throughout the iptax application,
 including configuration settings, report data, and AI filtering structures.
 """
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -558,7 +558,7 @@ class AIJudgment(BaseModel):
         description="Product name this judgment is for",
     )
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.utcnow(),
+        default_factory=lambda: datetime.now(UTC),
         description="When this judgment was made (UTC)",
     )
     ai_provider: str = Field(
@@ -651,6 +651,10 @@ class ReportData(BaseModel):
 
         Returns:
             Tuple of (English name, Polish name)
+
+        Note:
+            This file must be saved with UTF-8 encoding to properly handle
+            Polish characters in month names.
         """
         month_names = {
             "01": ("January", "Styczeń"),

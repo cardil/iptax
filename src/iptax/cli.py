@@ -68,7 +68,7 @@ def config(show: bool, validate: bool, path: bool) -> None:
     # Handle --validate flag
     if validate:
         try:
-            settings = load_settings()
+            load_settings()
             click.secho("✓ Configuration is valid", fg="green")
             click.echo(f"Configuration file: {config_path}")
         except ConfigError as e:

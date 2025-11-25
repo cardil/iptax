@@ -6,7 +6,6 @@ with the did configuration.
 """
 
 import os
-import sys
 from pathlib import Path
 
 import questionary
@@ -197,10 +196,9 @@ class Configurator:
             # Try to import did SDK
             try:
                 from did.base import Config as DidConfig
-            except ImportError as e:
-                raise DidConfigError(
-                    "did SDK not installed. Please install it:\n" "  pip install did"
-                ) from e
+            except ImportError:
+                # did SDK not available - fall back to manual parsing
+                return self._parse_did_config_manual()
 
             # Load did config using the SDK (pass path as keyword argument)
             did_config = DidConfig(path=str(self.did_config_path))
@@ -227,10 +225,9 @@ class Configurator:
 
             return providers
 
-        except ImportError:
-            # did SDK not available - fall back to manual parsing
-            return self._parse_did_config_manual()
         except Exception as e:
+            if isinstance(e, DidConfigError):
+                raise
             raise DidConfigError(
                 f"Failed to parse did config: {e}\n\n"
                 f"Please check {self.did_config_path} for syntax errors."
@@ -277,11 +274,7 @@ class Configurator:
             ConfigError: If configuration creation fails
         """
         # First validate that did is configured
-        try:
-            self.validate_did_config()
-        except DidConfigError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
+        self.validate_did_config()
 
         # Create config directory if it doesn't exist
         self.settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -326,14 +319,14 @@ class Configurator:
         # Employee Information
         questionary.print("Employee Information:", style="bold")
 
-        default_name = defaults.employee.name if defaults else ""
+        default_name = defaults.employee.name if defaults and defaults.employee else ""
         employee_name = questionary.text(
             "Employee name:",
             default=default_name,
             validate=lambda x: len(x.strip()) > 0 or "Name cannot be empty",
         ).ask()
 
-        default_supervisor = defaults.employee.supervisor if defaults else ""
+        default_supervisor = defaults.employee.supervisor if defaults and defaults.employee else ""
         supervisor_name = questionary.text(
             "Supervisor name:",
             default=default_supervisor,
@@ -469,9 +462,8 @@ class Configurator:
             for provider in selected_providers:
                 questionary.print(f"  ✓ {provider}", style="green")
 
-        except DidConfigError as e:
-            questionary.print(f"\nError: {e}", style="bold red")
-            sys.exit(1)
+        except DidConfigError:
+            raise
 
         did = DidConfig(
             config_path=did_config_path,

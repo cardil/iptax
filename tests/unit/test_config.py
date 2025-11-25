@@ -4,6 +4,8 @@ Tests configuration management including path resolution, loading,
 validation, and creation.
 """
 
+import os
+import sys
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -254,6 +256,11 @@ class TestDidConfigValidation:
 
         assert "is not a file" in str(exc_info.value)
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="chmod(0o000) unreliable on Windows")
+    @pytest.mark.skipif(
+        os.geteuid() == 0 if hasattr(os, "geteuid") else False,
+        reason="Test unreliable when run as root",
+    )
     def test_validate_did_config_with_unreadable_file(self, tmp_path):
         """Test validate_did_config() raises error for unreadable file."""
         did_config = tmp_path / "did-config"
@@ -424,8 +431,8 @@ class TestCreateMinimalConfig:
             did_config_path=missing_did,
         )
 
-        # Should exit with error
-        with pytest.raises(SystemExit):
+        # Should raise DidConfigError
+        with pytest.raises(DidConfigError):
             configurator.create(interactive=False)
 
 
@@ -690,8 +697,8 @@ class TestCreateDefaultConfig:
         assert settings_file.exists()
 
     def test_create_default_config_without_did(self, isolated_home):
-        """Test create_default_config() exits when did not configured."""
-        with pytest.raises(SystemExit):
+        """Test create_default_config() raises DidConfigError when did not configured."""
+        with pytest.raises(DidConfigError):
             create_default_config(interactive=False)
 
 
