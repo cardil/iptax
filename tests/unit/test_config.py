@@ -466,6 +466,7 @@ class TestCreateInteractiveConfig:
             patch("iptax.config.questionary.checkbox") as mock_checkbox,
             patch("iptax.config.questionary.print"),
         ):
+
             # Setup text mock
             def text_side_effect(prompt, **kwargs):
                 mock = Mock()
@@ -524,6 +525,7 @@ class TestCreateInteractiveConfig:
             patch("iptax.config.questionary.checkbox") as mock_checkbox,
             patch("iptax.config.questionary.print"),
         ):
+
             # Mock text inputs
             mock_text_instance = Mock()
             mock_text_instance.ask.side_effect = [
@@ -581,6 +583,7 @@ class TestCreateInteractiveConfig:
             patch("iptax.config.questionary.checkbox") as mock_checkbox,
             patch("iptax.config.questionary.print"),
         ):
+
             # Mock text inputs
             mock_text_instance = Mock()
             mock_text_instance.ask.side_effect = [
@@ -639,6 +642,7 @@ class TestCreateInteractiveConfig:
             patch("iptax.config.questionary.checkbox") as mock_checkbox,
             patch("iptax.config.questionary.print"),
         ):
+
             # Mock text inputs
             mock_text_instance = Mock()
             mock_text_instance.ask.side_effect = [

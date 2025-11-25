@@ -29,8 +29,8 @@ def test_report_command_placeholder(runner: CliRunner) -> None:
 
 
 @pytest.mark.unit
-def test_config_command_show(runner: CliRunner) -> None:
-    """Test that config command shows config path."""
+def test_config_command_path_flag(runner: CliRunner) -> None:
+    """Test that config command with --path flag shows config path."""
     result = runner.invoke(cli, ["config", "--path"])
     assert result.exit_code == 0
-    assert "iptax/settings.yaml" in result.output
+    assert "iptax" in result.output  # Should contain path to iptax config

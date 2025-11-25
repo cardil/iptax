@@ -158,7 +158,7 @@ module = [
     "playwright.*",
     "weasyprint.*",
     "litellm.*",
-    "did.*"
+    "did.*",
 ]
 ignore_missing_imports = true
 

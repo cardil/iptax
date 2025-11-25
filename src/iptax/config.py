@@ -191,7 +191,7 @@ class Configurator:
                 from did.base import Config as DidConfig
             except ImportError as e:
                 raise DidConfigError(
-                    "did SDK not installed. Please install it:\n  pip install did"
+                    "did SDK not installed. Please install it:\n" "  pip install did"
                 ) from e
 
             # Load did config using the SDK (pass path as keyword argument)
