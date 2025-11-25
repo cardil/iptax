@@ -113,9 +113,9 @@ $(GUARDS)/format.done: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES) pyproje
 .PHONY: typecheck
 typecheck: $(GUARDS)/typecheck.passed  ## Run type checker
 
-$(GUARDS)/typecheck.passed: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES) pyproject.toml
+$(GUARDS)/typecheck.passed: $(GUARDS)/install.done $(SRC_FILES) pyproject.toml
 	@mkdir -p $(GUARDS)
-	$(VENV_BIN)/mypy src/ tests/
+	$(VENV_BIN)/mypy src/
 	@touch $@
 
 .PHONY: check

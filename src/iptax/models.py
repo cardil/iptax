@@ -271,7 +271,8 @@ class DidConfig(BaseModel):
                 f"did config file not found at {path}. "
                 "Please configure did first: https://github.com/psss/did#setup"
             )
-        return handler(v)
+        result: str = handler(v)
+        return result
 
     @field_validator("providers", mode="wrap")
     @classmethod
@@ -281,7 +282,8 @@ class DidConfig(BaseModel):
         """Validate that at least one provider is specified."""
         if not v:
             raise ValueError("At least one provider must be specified")
-        return handler(v)
+        result: list[str] = handler(v)
+        return result
 
     def get_config_path(self) -> Path:
         """Get the resolved config file path.
