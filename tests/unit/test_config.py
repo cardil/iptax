@@ -464,14 +464,14 @@ class TestCreateInteractiveConfig:
         }
 
         with (
-            patch("iptax.config.questionary.text") as mock_text,
-            patch("iptax.config.questionary.confirm") as mock_confirm,
-            patch("iptax.config.questionary.checkbox") as mock_checkbox,
-            patch("iptax.config.questionary.print"),
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
         ):
 
             # Setup text mock
-            def text_side_effect(prompt, **kwargs):
+            def text_side_effect(prompt: str, **kwargs: object) -> Mock:
                 mock = Mock()
                 for key, value in mock_responses.items():
                     if key in prompt:
@@ -484,7 +484,7 @@ class TestCreateInteractiveConfig:
             mock_text.side_effect = text_side_effect
 
             # Setup confirm mock
-            def confirm_side_effect(prompt, **kwargs):
+            def confirm_side_effect(prompt: str, **kwargs: object) -> Mock:
                 mock = Mock()
                 for key, value in mock_responses.items():
                     if key in prompt:
@@ -522,11 +522,11 @@ class TestCreateInteractiveConfig:
         )
 
         with (
-            patch("iptax.config.questionary.text") as mock_text,
-            patch("iptax.config.questionary.confirm") as mock_confirm,
-            patch("iptax.config.questionary.select") as mock_select,
-            patch("iptax.config.questionary.checkbox") as mock_checkbox,
-            patch("iptax.config.questionary.print"),
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.select") as mock_select,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
         ):
 
             # Mock text inputs
@@ -580,11 +580,11 @@ class TestCreateInteractiveConfig:
         )
 
         with (
-            patch("iptax.config.questionary.text") as mock_text,
-            patch("iptax.config.questionary.confirm") as mock_confirm,
-            patch("iptax.config.questionary.select") as mock_select,
-            patch("iptax.config.questionary.checkbox") as mock_checkbox,
-            patch("iptax.config.questionary.print"),
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.select") as mock_select,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
         ):
 
             # Mock text inputs
@@ -640,10 +640,10 @@ class TestCreateInteractiveConfig:
         )
 
         with (
-            patch("iptax.config.questionary.text") as mock_text,
-            patch("iptax.config.questionary.confirm") as mock_confirm,
-            patch("iptax.config.questionary.checkbox") as mock_checkbox,
-            patch("iptax.config.questionary.print"),
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
         ):
 
             # Mock text inputs

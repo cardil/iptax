@@ -123,21 +123,41 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "TRY",  # tryceratops - exception handling
+    "S",    # flake8-bandit - security
+    "PL",   # pylint
+    "RUF",  # ruff-specific rules
+    "ANN",  # flake8-annotations
+    "SIM",  # flake8-simplify
+    "PTH",  # flake8-use-pathlib
+    "T20",  # flake8-print
+    "Q",    # flake8-quotes
+    "RSE",  # flake8-raise
+    "RET",  # flake8-return
+    "ICN",  # flake8-import-conventions
 ]
 ignore = [
-    "E501",  # line too long, handled by black
-    "B008",  # do not perform function calls in argument defaults
+    "E501",    # line too long, handled by black
+    "B008",    # do not perform function calls in argument defaults
+    "S101",    # use of assert detected (pytest uses assert)
+    "TRY003",  # avoid specifying long messages outside exception class
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+"tests/**/*.py" = [
+    "ANN001",  # missing type annotations for function arguments (pytest fixtures)
+    "ANN201",  # missing return type annotations (tests return None implicitly)
+    "PLR2004", # magic values (common in test assertions)
+    "PLC0415", # import at top-level (lazy imports in tests are acceptable)
+]
 
 [tool.mypy]
 python_version = "3.11"

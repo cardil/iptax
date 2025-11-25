@@ -42,6 +42,21 @@ TEST_FILES := $(shell find tests -type f -name '*.py' 2>/dev/null)
 
 ##@ Installation
 
+.PHONY: install
+install:  ## Install iptax to system or user environment
+	@echo -e "$(BLUE)$(GEAR) Installing iptax...$(RESET)"
+	@if [ -w /usr/local ]; then \
+		echo -e "$(GREEN)Installing to system location (/usr/local)...$(RESET)"; \
+		$(PIP) install .; \
+	else \
+		echo -e "$(YELLOW)No root permissions, installing to user location (~/.local)...$(RESET)"; \
+		$(PIP) install --user .; \
+	fi
+	@echo -e "$(GREEN)$(CHECK) iptax installed successfully$(RESET)"
+	@echo -e "$(CYAN)Run 'iptax --help' to get started$(RESET)"
+
+##@ Development Setup
+
 $(VENV): $(GUARDS)/venv.done
 $(GUARDS)/venv.done: pyproject.toml
 	@mkdir -p $(GUARDS)
@@ -49,10 +64,10 @@ $(GUARDS)/venv.done: pyproject.toml
 	$(VENV_PIP) install --upgrade pip setuptools wheel
 	@touch $@
 
-.PHONY: install
-install: $(GUARDS)/install.done  ## Install dependencies (idempotent)
+.PHONY: init
+init: $(GUARDS)/init.done  ## Initialize development environment (install deps)
 
-$(GUARDS)/install.done: $(GUARDS)/venv.done pyproject.toml
+$(GUARDS)/init.done: $(GUARDS)/venv.done pyproject.toml
 	@mkdir -p $(GUARDS)
 	$(VENV_PIP) install -e ".[dev]"
 	$(VENV_PYTHON) -m playwright install chromium
@@ -66,7 +81,7 @@ test: unit e2e  ## Run all tests
 .PHONY: unit
 unit: $(GUARDS)/unit.passed  ## Run unit tests
 
-$(GUARDS)/unit.passed: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES)
+$(GUARDS)/unit.passed: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES)
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/pytest tests/unit/ -v
 	@touch $@
@@ -74,13 +89,13 @@ $(GUARDS)/unit.passed: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES)
 .PHONY: e2e
 e2e: $(GUARDS)/e2e.passed  ## Run end-to-end tests
 
-$(GUARDS)/e2e.passed: $(GUARDS)/install.done $(GUARDS)/unit.passed $(SRC_FILES) $(TEST_FILES)
+$(GUARDS)/e2e.passed: $(GUARDS)/init.done $(GUARDS)/unit.passed $(SRC_FILES) $(TEST_FILES)
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/pytest tests/e2e/ -v
 	@touch $@
 
 .PHONY: test-watch
-test-watch: $(GUARDS)/install.done  ## Run tests in watch mode
+test-watch: $(GUARDS)/init.done  ## Run tests in watch mode
 	$(VENV_BIN)/pytest-watch
 
 ##@ Code Quality
@@ -88,13 +103,13 @@ test-watch: $(GUARDS)/install.done  ## Run tests in watch mode
 .PHONY: lint
 lint: $(GUARDS)/lint.passed  ## Run linter (idempotent)
 
-$(GUARDS)/lint.passed: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES) pyproject.toml .editorconfig
+$(GUARDS)/lint.passed: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) pyproject.toml .editorconfig
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/ruff check src/ tests/
 	@touch $@
 
 .PHONY: format
-format: $(GUARDS)/install.done  ## Format code
+format: $(GUARDS)/init.done  ## Format code
 	$(VENV_BIN)/black src/ tests/
 	$(VENV_BIN)/ruff check --fix src/ tests/
 	@echo -e "$(GREEN)$(CHECK) Code formatted$(RESET)"
@@ -102,7 +117,7 @@ format: $(GUARDS)/install.done  ## Format code
 .PHONY: format-check
 format-check: $(GUARDS)/format.done  ## Check if code formatting is correct (idempotent)
 
-$(GUARDS)/format.done: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES) pyproject.toml .editorconfig
+$(GUARDS)/format.done: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) pyproject.toml .editorconfig
 	@mkdir -p $(GUARDS)
 	@echo -e "$(BLUE)$(GEAR) Checking code formatting...$(RESET)"
 	@$(VENV_BIN)/black --check --diff src/ tests/
@@ -113,7 +128,7 @@ $(GUARDS)/format.done: $(GUARDS)/install.done $(SRC_FILES) $(TEST_FILES) pyproje
 .PHONY: typecheck
 typecheck: $(GUARDS)/typecheck.passed  ## Run type checker
 
-$(GUARDS)/typecheck.passed: $(GUARDS)/install.done $(SRC_FILES) pyproject.toml
+$(GUARDS)/typecheck.passed: $(GUARDS)/init.done $(SRC_FILES) pyproject.toml
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/mypy src/
 	@touch $@
@@ -154,7 +169,7 @@ distclean: clean  ## Complete cleanup including venv
 	@echo -e "$(GREEN)$(CHECK) Complete cleanup done$(RESET)"
 
 .PHONY: coverage
-coverage: $(GUARDS)/install.done  ## Run tests with coverage report
+coverage: $(GUARDS)/init.done  ## Run tests with coverage report
 	@echo -e "$(BLUE)$(TEST) Running tests with coverage...$(RESET)"
 	@$(VENV_BIN)/pytest --cov=iptax --cov-report=html --cov-report=term
 	@echo -e "$(GREEN)$(CHECK) Coverage report: htmlcov/index.html$(RESET)"
@@ -162,17 +177,17 @@ coverage: $(GUARDS)/install.done  ## Run tests with coverage report
 ##@ Utilities
 
 .PHONY: shell
-shell: $(GUARDS)/install.done  ## Start interactive Python shell
+shell: $(GUARDS)/init.done  ## Start interactive Python shell
 	$(VENV_BIN)/python
 
 .PHONY: run
-run: $(GUARDS)/install.done  ## Run the CLI tool
+run: $(GUARDS)/init.done  ## Run the CLI tool
 	$(VENV_BIN)/iptax
 
 .PHONY: config
-config: $(GUARDS)/install.done  ## Run configuration wizard
+config: $(GUARDS)/init.done  ## Run configuration wizard
 	$(VENV_BIN)/iptax config
 
 .PHONY: report
-report: $(GUARDS)/install.done  ## Generate report for current month
+report: $(GUARDS)/init.done  ## Generate report for current month
 	$(VENV_BIN)/iptax report
