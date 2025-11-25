@@ -1,6 +1,7 @@
 # Architecture & Design
 
-This document describes the technical architecture and design decisions for the iptax tool.
+This document describes the technical architecture and design decisions for the iptax
+tool.
 
 **See also:**
 
@@ -181,7 +182,7 @@ generated_at = "2024-10-26T14:30:00Z"
       "user_decision": "INCLUDE",
       "reasoning": "Implements serverless feature X",
       "user_reasoning": null,
-      "product": "Red Hat OpenShift Serverless",
+      "product": "Acme Fungear",
       "timestamp": "2024-11-01T10:30:00Z"
     }
   }

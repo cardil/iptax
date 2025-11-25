@@ -17,7 +17,8 @@ ______________________________________________________________________
 ## Executive Summary
 
 **Tool Name:** `iptax`\
-**Purpose:** Automate monthly IP tax report generation for Polish software developers participating in the IP tax deduction program (50% tax deduction for copyright income).
+**Purpose:** Automate monthly IP tax report generation for Polish software developers
+participating in the IP tax deduction program (50% tax deduction for copyright income).
 
 **Key Features:**
 
@@ -28,7 +29,8 @@ ______________________________________________________________________
 - Maintains history to prevent duplicate reporting
 - Interactive configuration and review workflow
 
-**Primary Users:** Polish software developers working on open-source/FOSS projects for Red Hat or similar companies, who need to file monthly IP tax reports.
+**Primary Users:** Polish software developers working on open-source/FOSS projects who
+need to file monthly IP tax reports.
 
 ______________________________________________________________________
 
@@ -36,7 +38,9 @@ ______________________________________________________________________
 
 ### Background
 
-Polish tax law provides a 50% tax deduction for copyright income. Software developers contributing to FOSS projects can claim this deduction by submitting monthly reports documenting their creative work. This tool automates the tedious process of:
+Polish tax law provides a 50% tax deduction for copyright income. Software developers
+contributing to FOSS projects can claim this deduction by submitting monthly reports
+documenting their creative work. This tool automates the tedious process of:
 
 1. Collecting all merged code contributions from multiple repositories
 1. Filtering contributions relevant to a specific product
@@ -93,8 +97,8 @@ Generate monthly IP tax reports for the Polish IP tax deduction program by:
 
 #### psss/did Integration
 
-**Repository:** [psss/did](https://github.com/psss/did)
-**Version Required:** PR #311 (until merged into main)
+**Repository:** [psss/did](https://github.com/psss/did) **Version Required:** PR #311
+(until merged into main)
 
 **Purpose:** Fetch merged PRs/MRs from GitHub/GitLab instances.
 
@@ -118,12 +122,12 @@ Generate monthly IP tax reports for the Polish IP tax deduction program by:
 
 **Important Behavioral Rules:**
 
-1. **Detect Existing Report:** Before generating, check if report for current month already exists
+1. **Detect Existing Report:** Before generating, check if report for current month
+   already exists
 1. **User Confirmation:** If exists, ask user if they want to regenerate/continue
 1. **No Config Cut-off:** Do NOT store cut-off day in config (removed based on feedback)
 
-**Output Format:**
-The did SDK will return structured data (not markdown), containing:
+**Output Format:** The did SDK will return structured data (not markdown), containing:
 
 - List of changes (PRs/MRs) with descriptions, URLs, and metadata
 - List of unique repositories
@@ -165,8 +169,7 @@ workday:
 - Absence days (vacation, sick leave)
 - Total working hours (typically `working_days × 8`)
 
-**Fallback Mode:**
-If Workday integration is not configured or fails:
+**Fallback Mode:** If Workday integration is not configured or fails:
 
 1. Prompt user: "Enter number of working days in \[reporting period\]:"
 1. Prompt user: "Enter total working hours (or press Enter for [calculated default]):"
@@ -188,15 +191,16 @@ If Workday integration is not configured or fails:
 
 #### AI Provider Integration
 
-**Purpose:** Automatically filter changes to match the configured product using AI judgment.
+**Purpose:** Automatically filter changes to match the configured product using AI
+judgment.
 
 **Supported Providers:**
 
-1. **GCP Vertex AI** (recommended for Red Hat users with GCP access)
-1. **Google Gemini API** (recommended for personal use)
+1. **GCP Vertex AI**
+1. **Google Gemini API**
 
-**Provider-Agnostic Wrapper:**
-Use LiteLLM or LangChain to support multiple providers with a unified interface.
+**Provider-Agnostic Wrapper:** Use LiteLLM or LangChain to support multiple providers
+with a unified interface.
 
 **Batch Filtering Workflow:**
 
@@ -204,9 +208,9 @@ Use LiteLLM or LangChain to support multiple providers with a unified interface.
 1. Load judgment history/cache
 2. Collect all changes from did
 3. Build batch prompt with:
-   - Product name
-   - Judgment history (past AI decisions AND human overrides with reasoning)
-   - All current changes with full details
+  - Product name
+  - Judgment history (past AI decisions AND human overrides with reasoning)
+  - All current changes with full details
 4. Send single batch request to AI
 5. AI judges all changes at once (not in a loop)
 6. Parse AI response for all decisions
@@ -222,7 +226,8 @@ Use LiteLLM or LangChain to support multiple providers with a unified interface.
 Product: {product_name}
 
 Previous Judgment History (for context and learning):
-AI decisions and human overrides (with reasoning) are crucial for performance improvement.
+AI decisions and human overrides (with reasoning) are crucial for
+performance improvement.
 
 Past Decisions:
 - [description] (owner/repo#123)
@@ -234,18 +239,20 @@ Past Decisions:
   AI Decision: INCLUDE
   Human Decision: EXCLUDE
   AI Reasoning: infrastructure change
-  Human Reasoning: This is internal tooling, not product work (human override)
+  Human Reasoning: This is internal tooling, not product work
+  (human override)
 
 Current Changes to Judge:
 1. owner/repo#789
-   URL: https://github.com/owner/repo/pull/789
-   Description: [full PR/MR description]
+  URL: https://github.com/owner/repo/pull/789
+  Description: [full PR/MR description]
 
 2. owner/repo#790
-   URL: https://github.com/owner/repo/pull/790
-   Description: [full PR/MR description]
+  URL: https://github.com/owner/repo/pull/790
+  Description: [full PR/MR description]
 
-Question: For each change above, determine if it's related to "{product_name}".
+Question: For each change above, determine if it's related to
+"{product_name}".
 
 Respond in YAML format (token-efficient):
 ---
@@ -262,11 +269,9 @@ Decision Rules:
 - INCLUDE: change directly contributes to this product
 - EXCLUDE: change is unrelated to this product
 - UNCERTAIN: cannot determine with confidence
-- NOTE: Do NOT use ERROR - that's only for system errors
 ```
 
-**Judgment Cache:**
-Location: `~/.cache/iptax/ai_cache.json` (or `.toml` or `.yaml`)
+**Judgment Cache:** Location: `~/.cache/iptax/ai_cache.json` (or `.toml` or `.yaml`)
 
 **Configuration:**
 
@@ -304,19 +309,20 @@ ai:
 
 **Location:** `~/.config/iptax/settings.yaml`
 
-**Purpose:** Store user preferences and integration settings (excluding cut-off dates, which are tracked in history).
+**Purpose:** Store user preferences and integration settings (excluding cut-off dates,
+which are tracked in history).
 
 **Full Schema:**
 
 ```yaml
 # Employee Information
 employee:
-  name: "Krzysztof Suszyński"
-  supervisor: "Vaclav Tunka"
+  name: "Jane Smith"
+  supervisor: "John Doe"
 
 # Product Configuration
 product:
-  name: "Red Hat OpenShift Serverless"
+  name: "Acme Fungear"
 
 # Report Generation Settings
 report:
@@ -350,7 +356,8 @@ did:
 
 **Validation Rules:**
 
-- [`employee.name`](../pyproject.toml:13) and `employee.supervisor` must be non-empty strings
+- [`employee.name`](../pyproject.toml:13) and `employee.supervisor` must be non-empty
+  strings
 - `product.name` must be non-empty string
 - `report.creative_work_percentage` must be between 0-100
 - `report.output_dir` must be valid path with optional `{year}` placeholder
@@ -364,11 +371,13 @@ did:
 
 **Location:** `~/.cache/iptax/history.toml`
 
-**Purpose:** Track cut-off dates for each monthly report to prevent duplicate or missing changes.
+**Purpose:** Track cut-off dates for each monthly report to prevent duplicate or missing
+changes.
 
 **Critical Concept - Cut-off Date Tracking:**
 
-The history file is the **single source of truth** for determining date ranges for each report.
+The history file is the **single source of truth** for determining date ranges for each
+report.
 
 **Simplified History Schema:**
 
@@ -385,7 +394,8 @@ regenerated_at = "2024-11-30T11:00:00Z"  # Optional: if regenerated
 
 ### Report Output
 
-The tool generates three output files from a single source of truth (the filtered changes from did):
+The tool generates three output files from a single source of truth (the filtered
+changes from did):
 
 #### Output Location
 
@@ -402,8 +412,8 @@ report:
 
 #### Text Processing Rules
 
-**GitHub Emoji/Icon Removal:**
-Remove all GitHub emoji codes (pattern: `:[a-z_]+:`) from PR/MR titles.
+**GitHub Emoji/Icon Removal:** Remove all GitHub emoji codes (pattern: `:[a-z_]+:`) from
+PR/MR titles.
 
 #### Markdown Report
 
@@ -444,7 +454,8 @@ Remove all GitHub emoji codes (pattern: `:[a-z_]+:`) from PR/MR titles.
 **Filename:** `YYYY-MM IP TAX Raport.pdf`\
 **Location:** `{output_dir}/YYYY-MM IP TAX Raport.pdf`
 
-**Purpose:** Official monthly report for tax authorities documenting creative work hours and copyright transfer.
+**Purpose:** Official monthly report for tax authorities documenting creative work hours
+and copyright transfer.
 
 **Required Sections (Bilingual):**
 

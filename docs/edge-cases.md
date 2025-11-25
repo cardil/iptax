@@ -92,8 +92,9 @@ Enter Gemini API key (or 'skip' to configure later):
 
 ```python
 def test_invalid_ai_credentials(monkeypatch):
-    monkeypatch.setattr('litellm.completion',
-                       Mock(side_effect=AuthenticationError()))
+    monkeypatch.setattr(
+        'litellm.completion', Mock(side_effect=AuthenticationError())
+    )
 
     result = runner.invoke(cli, ['config'],
                           input='gemini\nINVALID_KEY\nskip\n')
@@ -542,7 +543,7 @@ ______________________________________________________________________
 
 ### Non-ASCII Characters in Names
 
-**Scenario:** Employee name is "Krzysztof Suszyński" (Polish chars)
+**Scenario:** Employee name is "Jane Smith" (Polish chars)
 
 **Behavior:**
 
@@ -638,10 +639,12 @@ ______________________________________________________________________
 ### When All Else Fails
 
 1. Create issue with:
-   - Full error message
-   - Steps to reproduce
-   - Configuration (sanitized)
-   - Environment details
+
+- Full error message
+- Steps to reproduce
+- Configuration (sanitized)
+- Environment details
+
 1. Use verbose mode: `iptax report --verbose`
 1. Check existing issues: `gh issue list`
 1. Ask in discussions: `gh discussion list`

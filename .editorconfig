@@ -17,11 +17,13 @@ indent_size = 2
 [*.py]
 indent_size = 4
 
-# LICENSE file - preserve original formatting
 [LICENSE]
 indent_size = unset
 max_line_length = off
 
-# Makefile
 [Makefile]
 indent_style = tab
+
+[*.md]
+# mdformat handle this
+indent_size = unset

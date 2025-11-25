@@ -1,6 +1,7 @@
 # Implementation Phases
 
-This document describes the implementation phases, timeline, and development workflow for the iptax tool.
+This document describes the implementation phases, timeline, and development workflow
+for the iptax tool.
 
 **See also:**
 
@@ -16,7 +17,8 @@ ______________________________________________________________________
 
 ## Phase Overview
 
-The project will be implemented in 4 phases, each delivering incremental value and building on the previous phase.
+The project will be implemented in 4 phases, each delivering incremental value and
+building on the previous phase.
 
 ______________________________________________________________________
 
@@ -216,7 +218,7 @@ git push origin feature/your-feature-name
 
 # 10. Create pull request using GitHub CLI
 gh pr create --title "Add batch AI filtering" \
-             --body "Implements batch filtering with YAML responses and TUI review"
+  --body "Implements batch filtering with YAML responses and TUI review"
 
 # Or use interactive mode:
 gh pr create

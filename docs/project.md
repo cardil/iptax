@@ -2,7 +2,8 @@
 
 **Status:** Approved
 
-Welcome to the iptax project documentation! This tool automates monthly IP tax report generation for Polish software developers participating in the IP tax deduction program.
+Welcome to the iptax project documentation! This tool automates monthly IP tax report
+generation for Polish software developers participating in the IP tax deduction program.
 
 ______________________________________________________________________
 
@@ -10,13 +11,19 @@ ______________________________________________________________________
 
 ### 📚 Core Documentation
 
-- **[Requirements & Core Features](requirements.md)** - Detailed requirements, data sources, and core features
-- **[Architecture & Design](architecture.md)** - Technical architecture, design decisions, and technology stack
+- **[Requirements & Core Features](requirements.md)** - Detailed requirements, data
+  sources, and core features
+- **[Architecture & Design](architecture.md)** - Technical architecture, design
+  decisions, and technology stack
 - **[Workflows](workflows.md)** - CLI interface design and detailed workflow steps
-- **[Testing Strategy](testing.md)** - Testing approach, tools, and make-based orchestration
-- **[Implementation Phases](implementation.md)** - Development phases, timeline, and workflow
-- **[Edge Cases & Error Handling](edge-cases.md)** - Comprehensive error scenarios and recovery strategies
-- **[Configuration & Examples](examples.md)** - Sample configurations, commands, and usage patterns
+- **[Testing Strategy](testing.md)** - Testing approach, tools, and make-based
+  orchestration
+- **[Implementation Phases](implementation.md)** - Development phases, timeline, and
+  workflow
+- **[Edge Cases & Error Handling](edge-cases.md)** - Comprehensive error scenarios and
+  recovery strategies
+- **[Configuration & Examples](examples.md)** - Sample configurations, commands, and
+  usage patterns
 
 ### 🔗 Quick Links
 
@@ -31,7 +38,8 @@ ______________________________________________________________________
 
 **Tool Name:** `iptax`
 
-**Purpose:** Automate monthly IP tax report generation for Polish software developers by:
+**Purpose:** Automate monthly IP tax report generation for Polish software developers
+by:
 
 - Fetching merged code contributions from GitHub/GitLab via psss/did
 - AI-assisted filtering of changes to match configured product
@@ -39,7 +47,8 @@ ______________________________________________________________________
 - Generating bilingual (Polish/English) PDF reports
 - Maintaining history to prevent duplicate reporting
 
-**Primary Users:** Polish software developers working on FOSS projects who need to file monthly IP tax reports for the 50% tax deduction program.
+**Primary Users:** Polish software developers working on FOSS projects who need to file
+monthly IP tax reports for the 50% tax deduction program.
 
 ______________________________________________________________________
 
@@ -93,19 +102,19 @@ The tool generates three output files:
 
 1. **Markdown Report** (`YYYY-MM IP TAX Report.md`)
 
-   - List of all included changes with links
-   - List of repositories worked on
+- List of all included changes with links
+- List of repositories worked on
 
 1. **Work Card PDF** (`YYYY-MM IP TAX Work Card.pdf`)
 
-   - Bilingual document describing the creative work
-   - Required for tax authorities
+- Bilingual document describing the creative work
+- Required for tax authorities
 
 1. **Tax Report PDF** (`YYYY-MM IP TAX Raport.pdf`)
 
-   - Official monthly report with work hours calculation
-   - Copyright transfer declaration
-   - Bilingual (Polish/English)
+- Official monthly report with work hours calculation
+- Copyright transfer declaration
+- Bilingual (Polish/English)
 
 ______________________________________________________________________
 
@@ -141,21 +150,21 @@ ______________________________________________________________________
 ## Project Structure
 
 ```
-iptax-reporter/
-├── src/iptax/           # Source code
-├── tests/               # Test suite
-├── docs/                # Documentation (you are here)
-│   ├── project.md       # This file - main entry point
-│   ├── requirements.md  # Detailed requirements
-│   ├── architecture.md  # Technical design
-│   ├── workflows.md     # CLI and workflows
-│   ├── testing.md       # Testing strategy
+iptax/
+├── src/iptax/            # Source code
+├── tests/                # Test suite
+├── docs/                 # Documentation (you are here)
+│   ├── project.md        # This file - main entry point
+│   ├── requirements.md   # Detailed requirements
+│   ├── architecture.md   # Technical design
+│   ├── workflows.md      # CLI and workflows
+│   ├── testing.md        # Testing strategy
 │   ├── implementation.md # Development phases
-│   ├── edge-cases.md    # Error handling
-│   └── examples.md      # Usage examples
-├── pyproject.toml       # Project configuration
-├── Makefile             # Build orchestration
-└── README.md            # Project README
+│   ├── edge-cases.md     # Error handling
+│   └── examples.md       # Usage examples
+├── pyproject.toml        # Project configuration
+├── Makefile              # Build orchestration
+└── README.md             # Project README
 ```
 
 ______________________________________________________________________
@@ -263,8 +272,10 @@ ______________________________________________________________________
 
 ### Documentation
 
-- **Installation Issues:** See [Examples - Troubleshooting](examples.md#troubleshooting-examples)
-- **Configuration Help:** Check [Examples - Configuration](examples.md#sample-configuration-files)
+- **Installation Issues:** See
+  [Examples - Troubleshooting](examples.md#troubleshooting-examples)
+- **Configuration Help:** Check
+  [Examples - Configuration](examples.md#sample-configuration-files)
 - **Error Messages:** Review [Edge Cases](edge-cases.md)
 - **Testing Problems:** Consult [Testing Guide](testing.md)
 

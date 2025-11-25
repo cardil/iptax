@@ -69,7 +69,7 @@ class ProductConfig(BaseModel):
 
     name: NonEmptyProductName = Field(
         ...,
-        description="Name of the product (e.g., 'Red Hat OpenShift Serverless')",
+        description="Name of the product (e.g., 'Acme Fungear')",
     )
 
 
@@ -83,8 +83,7 @@ class ReportConfig(BaseModel):
     output_dir: str = Field(
         default="~/Documents/iptax/{year}/",
         description=(
-            "Output directory for reports. "
-            "{year} will be replaced with report year"
+            "Output directory for reports. " "{year} will be replaced with report year"
         ),
     )
     creative_work_percentage: int = Field(
@@ -137,8 +136,7 @@ class AIProviderConfigBase(BaseModel):
     max_tokens: int | None = Field(
         default=None,
         description=(
-            "Maximum tokens for AI responses "
-            "(provider-specific defaults if None)"
+            "Maximum tokens for AI responses " "(provider-specific defaults if None)"
         ),
     )
 
@@ -433,7 +431,7 @@ class Repository(BaseModel):
 
     host: str = Field(
         ...,
-        description="Repository host (e.g., github.com, gitlab.cee.redhat.com)",
+        description="Repository host (e.g., github.com, gitlab.example.org)",
     )
     path: str = Field(
         ...,

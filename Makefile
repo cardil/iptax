@@ -21,7 +21,8 @@ BOOK := 📚
 .PHONY: help
 help:  ## Show this help
 	@echo -e "$(CYAN)$(BOOK) Available targets:$(RESET)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[0;36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[0;36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # Guard files directory
 GUARDS := .make
@@ -38,7 +39,8 @@ VENV_PIP := $(VENV_PYTHON) -m pip
 
 # Source tracking
 SRC_FILES := $(shell find src -type f -name '*.py' 2>/dev/null)
-TEST_FILES := $(shell find tests -type f -name '*.py' 2>/dev/null)
+TEST_FILES := $(shell find tests scripts -type f -name '*.py' 2>/dev/null)
+MD_FILES := $(shell find docs -type f -name '*.md' 2>/dev/null) README.md
 
 ##@ Installation
 
@@ -49,7 +51,8 @@ install:  ## Install iptax to system or user environment
 		echo -e "$(GREEN)Installing to system location (/usr/local)...$(RESET)"; \
 		$(PIP) install .; \
 	else \
-		echo -e "$(YELLOW)No root permissions, installing to user location (~/.local)...$(RESET)"; \
+		echo -e "$(YELLOW)No root permissions, installing to user location" \
+			"(~/.local)...$(RESET)"; \
 		$(PIP) install --user .; \
 	fi
 	@echo -e "$(GREEN)$(CHECK) iptax installed successfully$(RESET)"
@@ -89,21 +92,23 @@ $(GUARDS)/unit.passed: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES)
 .PHONY: e2e
 e2e: $(GUARDS)/e2e.passed  ## Run end-to-end tests
 
-$(GUARDS)/e2e.passed: $(GUARDS)/init.done $(GUARDS)/unit.passed $(SRC_FILES) $(TEST_FILES)
+$(GUARDS)/e2e.passed: $(GUARDS)/init.done $(GUARDS)/unit.passed \
+	$(SRC_FILES) $(TEST_FILES)
 	@mkdir -p $(GUARDS)
-	$(VENV_BIN)/pytest tests/e2e/ -v
+	$(VENV_BIN)/pytest tests/e2e/ -v --no-cov
 	@touch $@
 
 .PHONY: test-watch
 test-watch: $(GUARDS)/init.done  ## Run tests in watch mode
-	$(VENV_BIN)/pytest-watch
+	$(VENV_BIN)/pytest-watch tests/unit/
 
 ##@ Code Quality
 
 .PHONY: lint
 lint: $(GUARDS)/lint.passed  ## Run linter (idempotent)
 
-$(GUARDS)/lint.passed: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) pyproject.toml .editorconfig
+$(GUARDS)/lint.passed: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) \
+	$(MD_FILES) pyproject.toml .editorconfig
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/ruff check src/ tests/
 	$(VENV_BIN)/ec
@@ -113,19 +118,20 @@ $(GUARDS)/lint.passed: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) pyproject.
 format: $(GUARDS)/init.done  ## Format code and markdown
 	$(VENV_BIN)/black src/ tests/
 	$(VENV_BIN)/ruff check --fix src/ tests/
-	$(VENV_BIN)/mdformat docs/ README.md
+	$(VENV_BIN)/mdformat --wrap 88 docs/ README.md
 	$(VENV_PYTHON) scripts/fix_whitespace.py
 	@echo -e "$(GREEN)$(CHECK) Code and markdown formatted$(RESET)"
 
 .PHONY: format-check
-format-check: $(GUARDS)/format.done  ## Check if code formatting is correct (idempotent)
+format-check: $(GUARDS)/format.done  ## Check if code formatting is correct
 
-$(GUARDS)/format.done: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) pyproject.toml .editorconfig
+$(GUARDS)/format.done: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) \
+	$(MD_FILES) pyproject.toml .editorconfig
 	@mkdir -p $(GUARDS)
 	@echo -e "$(BLUE)$(GEAR) Checking code formatting...$(RESET)"
 	@$(VENV_BIN)/black --check --diff src/ tests/
 	@$(VENV_BIN)/ruff check src/ tests/
-	@$(VENV_BIN)/mdformat --check docs/ README.md
+	@$(VENV_BIN)/mdformat --wrap 88 --check docs/ README.md
 	@echo -e "$(GREEN)$(CHECK) Code and markdown formatting is correct$(RESET)"
 	@touch $@
 
@@ -138,13 +144,13 @@ $(GUARDS)/typecheck.passed: $(GUARDS)/init.done $(SRC_FILES) pyproject.toml
 	@touch $@
 
 .PHONY: check
-check: lint format-check typecheck  ## Run all code quality checks (lint + format + typecheck)
+check: lint format-check typecheck  ## Run all code quality checks
 	@echo -e "$(GREEN)$(CHECK) All code quality checks passed$(RESET)"
 
 ##@ Verification
 
 .PHONY: verify
-verify: $(GUARDS)/lint.passed $(GUARDS)/format.done test  ## Run full verification (lint + format + tests)
+verify: $(GUARDS)/lint.passed $(GUARDS)/format.done test  ## Full verification
 	@echo -e "$(GREEN)$(ROCKET) All verifications passed$(RESET)"
 
 ##@ Development
@@ -172,26 +178,9 @@ distclean: clean  ## Complete cleanup including venv
 	@rm -rf $(VENV)
 	@echo -e "$(GREEN)$(CHECK) Complete cleanup done$(RESET)"
 
-.PHONY: coverage
-coverage: $(GUARDS)/init.done  ## Run tests with coverage report
-	@echo -e "$(BLUE)$(TEST) Running tests with coverage...$(RESET)"
-	@$(VENV_BIN)/pytest --cov=iptax --cov-report=html --cov-report=term
-	@echo -e "$(GREEN)$(CHECK) Coverage report: htmlcov/index.html$(RESET)"
 
 ##@ Utilities
 
 .PHONY: shell
 shell: $(GUARDS)/init.done  ## Start interactive Python shell
 	$(VENV_BIN)/python
-
-.PHONY: run
-run: $(GUARDS)/init.done  ## Run the CLI tool
-	$(VENV_BIN)/iptax
-
-.PHONY: config
-config: $(GUARDS)/init.done  ## Run configuration wizard
-	$(VENV_BIN)/iptax config
-
-.PHONY: report
-report: $(GUARDS)/init.done  ## Generate report for current month
-	$(VENV_BIN)/iptax report

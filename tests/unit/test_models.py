@@ -90,9 +90,9 @@ class TestProductConfig:
 
     def test_valid_product_config(self):
         """Test creating ProductConfig with valid data."""
-        product = ProductConfig(name="Red Hat OpenShift Serverless")
+        product = ProductConfig(name="Acme Fungear")
 
-        assert product.name == "Red Hat OpenShift Serverless"
+        assert product.name == "Acme Fungear"
 
     def test_product_name_strips_whitespace(self):
         """Test that product name is stripped of whitespace."""
@@ -505,12 +505,12 @@ class TestRepository:
     def test_gitlab_repository_creation(self):
         """Test creating a GitLab repository."""
         repo = Repository(
-            host="gitlab.cee.redhat.com",
+            host="gitlab.example.org",
             path="group/subgroup/repo",
             provider_type="gitlab",
         )
 
-        assert repo.host == "gitlab.cee.redhat.com"
+        assert repo.host == "gitlab.example.org"
         assert repo.path == "group/subgroup/repo"
         assert repo.provider_type == "gitlab"
 
@@ -541,14 +541,14 @@ class TestRepository:
     def test_gitlab_url_generation(self):
         """Test URL generation for GitLab repositories."""
         repo = Repository(
-            host="gitlab.cee.redhat.com",
+            host="gitlab.example.org",
             path="group/subgroup/repo",
             provider_type="gitlab",
         )
 
         url = repo.get_url()
 
-        assert url == "https://gitlab.cee.redhat.com/group/subgroup/repo"
+        assert url == "https://gitlab.example.org/group/subgroup/repo"
 
     def test_github_display_name_formatting(self):
         """Test display name formatting for GitHub (simple path)."""
@@ -565,7 +565,7 @@ class TestRepository:
     def test_gitlab_display_name_formatting(self):
         """Test display name formatting for GitLab (nested path)."""
         repo = Repository(
-            host="gitlab.cee.redhat.com",
+            host="gitlab.example.org",
             path="group/subgroup/repo",
             provider_type="gitlab",
         )
@@ -663,7 +663,7 @@ class TestChange:
     def test_gitlab_change_url_generation(self):
         """Test URL generation for GitLab changes (merge requests)."""
         repo = Repository(
-            host="gitlab.cee.redhat.com",
+            host="gitlab.example.org",
             path="group/repo",
             provider_type="gitlab",
         )
@@ -676,7 +676,7 @@ class TestChange:
 
         url = change.get_url()
 
-        assert url == "https://gitlab.cee.redhat.com/group/repo/-/merge_requests/456"
+        assert url == "https://gitlab.example.org/group/repo/-/merge_requests/456"
 
     def test_get_change_id(self):
         """Test unique change identifier generation."""

@@ -248,9 +248,9 @@ def test_complete_report_generation(mock_environment, mock_did, mock_ai):
 
     # Step 1: Configure
     config_result = runner.invoke(cli, ['config'], input="""
-    Krzysztof Suszyński
-    Vaclav Tunka
-    Red Hat OpenShift Serverless
+    Jane Smith
+    John Doe
+    Acme Fungear
     80
     y
     gemini

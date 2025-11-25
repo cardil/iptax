@@ -1,6 +1,7 @@
 # Configuration & Usage Examples
 
-This document provides practical examples of configurations, workflows, and usage patterns for the iptax tool.
+This document provides practical examples of configurations, workflows, and usage
+patterns for the iptax tool.
 
 **See also:**
 
@@ -23,12 +24,12 @@ ______________________________________________________________________
 ```yaml
 # Employee Information
 employee:
-  name: "Krzysztof Suszyński"
-  supervisor: "Vaclav Tunka"
+  name: "Jane Smith"
+  supervisor: "John Doe"
 
 # Product Configuration
 product:
-  name: "Red Hat OpenShift Serverless"
+  name: "Acme Fungear"
 
 # Report Generation Settings
 report:
@@ -290,19 +291,23 @@ ______________________________________________________________________
 
 **File:** `2024-11 IP TAX Report.md`
 
+<!-- editorconfig-checker-disable -->
+
 ```markdown
 ## Changes
 
-* [Add serverless function runtime (redhat/openshift-serverless#1234)](https://github.com/redhat/openshift-serverless/pull/1234)
-* [Implement Knative eventing support (redhat/openshift-serverless#1256)](https://github.com/redhat/openshift-serverless/pull/1256)
-* [Add Knative eventing documentation (redhat/docs#9012)](https://github.com/redhat/docs/pull/9012)
-* [Fix memory leak in event dispatcher (redhat/openshift-serverless#1278)](https://github.com/redhat/openshift-serverless/pull/1278)
+* [WASM driver (redhat/serverless#1234)](https://github.com/redhat/serverless/pull/1234)
+* [Knative eventing (redhat/serverless#1256)](https://github.com/redhat/serverless/pull/1256)
+* [Knative documentation (redhat/docs#9012)](https://github.com/redhat/docs/pull/9012)
+* [Fix memory leak (redhat/openshift-serverless#1278)](https://github.com/redhat/openshift-serverless/pull/1278)
 
 ## Projects
 
-* [redhat / openshift-serverless](https://github.com/redhat/openshift-serverless)
+* [redhat / serverless](https://github.com/redhat/serverless)
 * [redhat / docs](https://github.com/redhat/docs)
 ```
+
+<!-- editorconfig-checker-enable -->
 
 ### History File
 
@@ -331,14 +336,14 @@ generated_at = "2024-12-27T10:15:00Z"
 {
   "cache_version": "1.0",
   "judgments": {
-    "redhat/openshift-serverless#1234": {
-      "url": "https://github.com/redhat/openshift-serverless/pull/1234",
+    "redhat/serverless#1234": {
+      "url": "https://github.com/redhat/serverless/pull/1234",
       "description": "Add serverless function runtime",
       "decision": "INCLUDE",
       "user_decision": "INCLUDE",
       "reasoning": "Directly implements new runtime for OpenShift Serverless",
       "user_reasoning": null,
-      "product": "Red Hat OpenShift Serverless",
+      "product": "Acme Fungear",
       "timestamp": "2024-11-26T09:30:00Z",
       "ai_provider": "gemini-1.5-pro"
     },
@@ -349,7 +354,7 @@ generated_at = "2024-12-27T10:15:00Z"
       "user_decision": "EXCLUDE",
       "reasoning": "Infrastructure change, seems related",
       "user_reasoning": "This is community work, not product development",
-      "product": "Red Hat OpenShift Serverless",
+      "product": "Acme Fungear",
       "timestamp": "2024-11-26T09:32:00Z",
       "ai_provider": "gemini-1.5-pro"
     }

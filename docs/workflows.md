@@ -240,14 +240,14 @@ Welcome to iptax configuration!
 
 Employee Information:
   Employee name: [current or empty]
-  > Krzysztof Suszyński
+  > Jane Smith
 
   Supervisor name: [current or empty]
-  > Vaclav Tunka
+  > John Doe
 
 Product Configuration:
   Product name: [current or empty]
-  > Red Hat OpenShift Serverless
+  > Acme Fungear
 
 Report Settings:
   Creative work percentage (0-100) [80]:
@@ -373,7 +373,7 @@ Description:
 ────────────────────────────────────────────────────
 AI Decision: UNCERTAIN
 AI Reasoning: Cannot access internal GitLab to determine
-             if this relates to the product
+              if this relates to the product
 
 Current Decision: UNCERTAIN ← needs your input
 ────────────────────────────────────────────────────
