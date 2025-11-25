@@ -277,7 +277,8 @@ class TestDidConfigValidation:
         did_config.parent.mkdir(parents=True)
         did_config.write_text("[general]\n")
 
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        # Set HOME environment variable instead of monkeypatching Path.home
+        monkeypatch.setenv("HOME", str(tmp_path))
 
         result = validate_did_config()
 
@@ -367,7 +368,8 @@ type = github
 """
         did_config_file.write_text(config_content)
 
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        # Set HOME environment variable instead of monkeypatching Path.home
+        monkeypatch.setenv("HOME", str(tmp_path))
 
         providers = list_did_providers()
 
@@ -688,7 +690,8 @@ class TestCreateDefaultConfig:
 
         config_dir = tmp_path / ".config" / "iptax"
 
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        # Set HOME environment variable instead of monkeypatching Path.home
+        monkeypatch.setenv("HOME", str(tmp_path))
 
         create_default_config(interactive=False)
 
@@ -697,7 +700,8 @@ class TestCreateDefaultConfig:
 
     def test_create_default_config_without_did(self, tmp_path, monkeypatch):
         """Test create_default_config() exits when did not configured."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        # Set HOME environment variable instead of monkeypatching Path.home
+        monkeypatch.setenv("HOME", str(tmp_path))
 
         with pytest.raises(SystemExit):
             create_default_config(interactive=False)

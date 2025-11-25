@@ -149,6 +149,8 @@ Thumbs.db
 # Project specific
 .project/
 AGENTS.md
+CLAUDE.md
+.claude/
 .make/
 *.pdf
 *.docx
