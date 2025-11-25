@@ -11,8 +11,10 @@ def fix_file(filepath: Path) -> bool:
 
         # Fix trailing whitespace on each line
         lines = content.splitlines(keepends=True)
-        fixed_lines = [line.rstrip() + ('\n' if line.endswith(('\n', '\r\n', '\r')) else '')
-                      for line in lines]
+        fixed_lines = [
+            line.rstrip() + ('\n' if line.endswith(('\n', '\r\n', '\r')) else '')
+            for line in lines
+        ]
         content = ''.join(fixed_lines)
 
         # Ensure final newline
@@ -30,7 +32,10 @@ def fix_file(filepath: Path) -> bool:
 def main():
     """Fix whitespace in all relevant files."""
     patterns = ['*.md', '*.yml', '*.yaml', '*.toml', 'Makefile', '*.py']
-    exclude_dirs = {'.venv', '.git', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache'}
+    exclude_dirs = {
+        '.venv', '.git', '__pycache__',
+        '.pytest_cache', '.mypy_cache', '.ruff_cache'
+    }
 
     root = Path('.')
     modified = []

@@ -82,7 +82,10 @@ class ReportConfig(BaseModel):
 
     output_dir: str = Field(
         default="~/Documents/iptax/{year}/",
-        description="Output directory for reports. {year} will be replaced with report year",
+        description=(
+            "Output directory for reports. "
+            "{year} will be replaced with report year"
+        ),
     )
     creative_work_percentage: int = Field(
         default=80,
@@ -133,7 +136,10 @@ class AIProviderConfigBase(BaseModel):
     )
     max_tokens: int | None = Field(
         default=None,
-        description="Maximum tokens for AI responses (provider-specific defaults if None)",
+        description=(
+            "Maximum tokens for AI responses "
+            "(provider-specific defaults if None)"
+        ),
     )
 
 
@@ -156,7 +162,10 @@ class GeminiProviderConfig(AIProviderConfigBase):
     )
     api_key_file: str | None = Field(
         default=None,
-        description="Path to .env file containing the API key (optional, uses system env if not specified)",
+        description=(
+            "Path to .env file containing the API key "
+            "(optional, uses system env if not specified)"
+        ),
     )
 
     @field_validator("api_key_file")
@@ -192,7 +201,10 @@ class VertexAIProviderConfig(AIProviderConfigBase):
     )
     credentials_file: str | None = Field(
         default=None,
-        description="Path to GCP service account credentials JSON file (uses default credentials if None)",
+        description=(
+            "Path to GCP service account credentials JSON file "
+            "(uses default credentials if None)"
+        ),
     )
 
     @field_validator("credentials_file")
@@ -324,7 +336,10 @@ class Settings(BaseModel):
     )
     ai: AIProviderConfig = Field(
         default=DisabledAIConfig(),
-        description="AI provider configuration (use discriminated union based on provider type)",
+        description=(
+            "AI provider configuration "
+            "(use discriminated union based on provider type)"
+        ),
     )
     workday: WorkdayConfig = Field(
         default_factory=WorkdayConfig,
@@ -394,7 +409,10 @@ class HistoryEntry(BaseModel):
 
     last_cutoff_date: date = Field(
         ...,
-        description="The end date used for this report (start date for next report will be this + 1 day)",
+        description=(
+            "The end date used for this report "
+            "(start date for next report will be this + 1 day)"
+        ),
     )
     generated_at: datetime = Field(
         ...,
@@ -419,7 +437,10 @@ class Repository(BaseModel):
     )
     path: str = Field(
         ...,
-        description="Repository path (e.g., 'owner/repo' or 'group/subgroup/repo' for GitLab)",
+        description=(
+            "Repository path "
+            "(e.g., 'owner/repo' or 'group/subgroup/repo' for GitLab)"
+        ),
     )
     provider_type: Literal["github", "gitlab"] = Field(
         ...,

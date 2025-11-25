@@ -80,13 +80,17 @@ def sample_did_output() -> str:
     """Provide sample output from the did tool."""
     return """# Changes
 
-* [feat: Add new feature (knative-extensions/kn-plugin-event#421)](https://github.com/knative-extensions/kn-plugin-event/pull/421)
-* [fix: Fix bug in handler (cncf/toolbox#040)](https://github.com/cncf/toolbox/pull/40)
-* [docs: Update documentation (knative/docs#1290)](https://github.com/knative/docs/pull/1290)
+* [feat: Add new feature (knative-extensions/kn-plugin-event#421)](\
+https://github.com/knative-extensions/kn-plugin-event/pull/421)
+* [fix: Fix bug in handler (cncf/toolbox#040)](\
+https://github.com/cncf/toolbox/pull/40)
+* [docs: Update documentation (knative/docs#1290)](\
+https://github.com/knative/docs/pull/1290)
 
 # Projects
 
-* [knative-extensions / kn-plugin-event](https://github.com/knative-extensions/kn-plugin-event)
+* [knative-extensions / kn-plugin-event](\
+https://github.com/knative-extensions/kn-plugin-event)
 * [cncf / toolbox](https://github.com/cncf/toolbox)
 * [knative / docs](https://github.com/knative/docs)
 """

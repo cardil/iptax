@@ -16,7 +16,8 @@ from iptax.config import (
 @click.group()
 @click.version_option()
 def cli() -> None:
-    """IP Tax Reporter - Automated tax report generator for Polish IP tax deduction program."""
+    """IP Tax Reporter - Automated tax report generator for Polish IP tax
+    deduction program."""
     pass
 
 

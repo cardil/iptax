@@ -65,11 +65,11 @@ class Configurator:
         """Initialize configuration manager.
 
         Args:
-            settings_path: Path to iptax settings.yaml. If None, uses default
-                          location (~/.config/iptax/settings.yaml or
-                          $XDG_CONFIG_HOME/iptax/settings.yaml)
+            settings_path: Path to iptax settings.yaml. If None, uses
+                default location (~/.config/iptax/settings.yaml
+                or $XDG_CONFIG_HOME/iptax/settings.yaml)
             did_config_path: Path to did config. If None, uses default
-                            location (~/.did/config)
+                location (~/.did/config)
         """
         self.settings_path = (
             Path(settings_path) if settings_path else self._get_default_settings_path()
@@ -174,7 +174,8 @@ class Configurator:
 
         if not os.access(self.did_config_path, os.R_OK):
             raise DidConfigError(
-                f"{self.did_config_path} is not readable. Please check file permissions."
+                f"{self.did_config_path} is not readable. "
+                "Please check file permissions."
             )
 
         return True

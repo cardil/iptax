@@ -462,7 +462,9 @@ class TestCreateInteractiveConfig:
             "Supervisor name:": "Jane Smith",
             "Product name:": "Test Product",
             "Creative work percentage (0-100) [80]:": "80",
-            "Output directory [~/Documents/iptax/{year}/]:": "~/Documents/iptax/{year}/",
+            "Output directory [~/Documents/iptax/{year}/]:": (
+                "~/Documents/iptax/{year}/"
+            ),
             "Enable AI filtering?": False,
             "Enable Workday integration?": False,
             "did config path [~/.did/config]:": str(did_config_file),
@@ -702,9 +704,11 @@ class TestCreateDefaultConfig:
         assert settings_file.exists()
 
     def test_create_default_config_without_did(
-        self, isolated_home  # noqa: ARG002 - fixture sets up environment
+        self,
+        isolated_home,  # noqa: ARG002 - fixture sets up environment
     ):
-        """Test create_default_config() raises DidConfigError when did not configured."""
+        """Test create_default_config() raises DidConfigError when did
+        not configured."""
         with pytest.raises(DidConfigError):
             create_default_config(interactive=False)
 
