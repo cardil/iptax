@@ -3,6 +3,7 @@
 This document describes the testing approach, tools, and strategies for the iptax tool.
 
 **See also:**
+
 - [Main Documentation](project.md) - Project overview and onboarding
 - [Requirements](requirements.md) - Detailed requirements
 - [Architecture](architecture.md) - Technical design
@@ -11,18 +12,19 @@ This document describes the testing approach, tools, and strategies for the ipta
 - [Edge Cases](edge-cases.md) - Error handling scenarios
 - [Examples](examples.md) - Configuration and usage examples
 
----
+______________________________________________________________________
 
 ## Testing Approach
 
 **Overall Philosophy:**
+
 - Test-driven development where appropriate
 - Focus on critical path and error handling
 - Mock external dependencies (AI, Workday, did)
 - Use fixtures for sample data
 - Make-based orchestration with guard files for idempotent builds
 
----
+______________________________________________________________________
 
 ## Make-Based Test Orchestration
 
@@ -46,6 +48,7 @@ verify: lint format test    ## Run full verification
 **Purpose:** Enable idempotent builds - skip unnecessary work if nothing changed.
 
 **How it works:**
+
 ```bash
 # First run - executes
 $ make init
@@ -65,6 +68,7 @@ touch .make/init.done
 ```
 
 **Dependency Graph:**
+
 ```text
 verify
 ├── lint → init
@@ -102,7 +106,7 @@ make coverage
 make clean verify
 ```
 
----
+______________________________________________________________________
 
 ## Unit Tests
 
@@ -111,6 +115,7 @@ make clean verify
 ### Key Areas to Test
 
 #### 1. Configuration Management ([`test_config.py`](../tests/unit/test_cli.py))
+
 - Settings loading and validation
 - Provider selection parsing
 - Config file creation
@@ -118,6 +123,7 @@ make clean verify
 - Default value handling
 
 #### 2. History Tracking (`test_history.py`)
+
 - Date range calculation
 - History file creation and updates
 - Cutoff date tracking
@@ -125,6 +131,7 @@ make clean verify
 - Regeneration scenarios
 
 #### 3. did Integration (`test_did_integration.py`)
+
 - SDK initialization
 - Change extraction
 - Repository parsing
@@ -132,6 +139,7 @@ make clean verify
 - Provider filtering
 
 #### 4. AI Filtering (`test_ai_filter.py`)
+
 - Batch prompt generation
 - Response parsing (YAML/TOML)
 - Judgment cache operations
@@ -139,12 +147,14 @@ make clean verify
 - User override handling
 
 #### 5. Report Compiler (`test_report_compiler.py`)
+
 - Markdown formatting
 - Emoji removal
 - Project extraction
 - Data aggregation
 
 #### 6. PDF Generator (`test_pdf_generator.py`)
+
 - Template rendering
 - Bilingual text handling
 - PDF creation
@@ -176,7 +186,7 @@ def test_cached_judgment_reused():
     assert filter.api_calls == 0
 ```
 
----
+______________________________________________________________________
 
 ## End-to-End Tests
 
@@ -185,14 +195,17 @@ def test_cached_judgment_reused():
 ### Critical Paths
 
 #### 1. First-Time Setup
+
 - No config exists → interactive setup → report generation
 - Validates: config created, reports generated, history updated
 
 #### 2. Regular Monthly Report
+
 - Config exists → fetch changes → AI filter → generate reports
 - Validates: correct date range, reports created, history updated
 
 #### 3. Regeneration Flow
+
 - Report exists → confirm regeneration → overwrite files
 - Validates: files updated, history regenerated_at set
 
@@ -211,9 +224,9 @@ def mock_environment(tmp_path, monkeypatch):
     cache_dir = tmp_path / ".cache" / "iptax"
     config_dir.mkdir(parents=True)
     cache_dir.mkdir(parents=True)
-    
+
     monkeypatch.setenv("HOME", str(tmp_path))
-    
+
     # Create did config
     did_config = tmp_path / ".did" / "config"
     did_config.parent.mkdir()
@@ -222,7 +235,7 @@ def mock_environment(tmp_path, monkeypatch):
     type = github
     url = https://github.com
     """)
-    
+
     return {
         "config_dir": config_dir,
         "cache_dir": cache_dir,
@@ -232,7 +245,7 @@ def mock_environment(tmp_path, monkeypatch):
 def test_complete_report_generation(mock_environment, mock_did, mock_ai):
     """Test complete workflow from config to report generation"""
     runner = CliRunner()
-    
+
     # Step 1: Configure
     config_result = runner.invoke(cli, ['config'], input="""
     Krzysztof Suszyński
@@ -245,7 +258,7 @@ def test_complete_report_generation(mock_environment, mock_did, mock_ai):
     n
     """)
     assert config_result.exit_code == 0
-    
+
     # Step 2: Generate report
     mock_did.return_value.get_changes.return_value = [
         MockChange(
@@ -254,23 +267,23 @@ def test_complete_report_generation(mock_environment, mock_did, mock_ai):
             url="https://github.com/test/repo/pull/1"
         )
     ]
-    
+
     mock_ai.return_value = """
     judgments:
       - change_url: "https://github.com/test/repo/pull/1"
         decision: "INCLUDE"
         rationale: "Product feature"
     """
-    
+
     report_result = runner.invoke(
-        cli, 
+        cli,
         ['report', '--month', '2024-11'],
         input='160\n'  # Manual hours
     )
-    
+
     assert report_result.exit_code == 0
     assert "Report generated successfully" in report_result.output
-    
+
     # Verify outputs exist
     output_dir = mock_environment["config_dir"] / "output"
     assert (output_dir / "2024-11 IP TAX Report.md").exists()
@@ -278,7 +291,7 @@ def test_complete_report_generation(mock_environment, mock_did, mock_ai):
     assert (output_dir / "2024-11 IP TAX Raport.pdf").exists()
 ```
 
----
+______________________________________________________________________
 
 ## Test Fixtures
 
@@ -292,7 +305,7 @@ tests/fixtures/
 └── sample_ai_cache.json        # Pre-filled AI judgment cache
 ```
 
----
+______________________________________________________________________
 
 ## Test Execution
 
@@ -349,11 +362,12 @@ pytest -v
 pytest -m "not slow"
 ```
 
----
+______________________________________________________________________
 
 ## Test Coverage
 
 **Target Metrics:**
+
 - Unit test coverage: >80% for core logic
 - Integration test coverage: >60%
 - All critical paths tested (e2e)
@@ -362,6 +376,7 @@ pytest -m "not slow"
 **Coverage Configuration:**
 
 See [`pyproject.toml`](../pyproject.toml:183):
+
 ```toml
 [tool.coverage.run]
 source = ["src"]
@@ -385,17 +400,17 @@ exclude_lines = [
 ]
 ```
 
----
+______________________________________________________________________
 
 ## Mocking Strategy
 
 ### External Dependencies to Mock
 
 1. **did SDK:** Mock PR/MR fetching
-2. **AI Provider (LiteLLM):** Mock API calls and responses
-3. **Workday (Playwright):** Mock browser automation
-4. **File System:** Use temporary directories (pytest tmp_path)
-5. **Network Calls:** Mock HTTP requests
+1. **AI Provider (LiteLLM):** Mock API calls and responses
+1. **Workday (Playwright):** Mock browser automation
+1. **File System:** Use temporary directories (pytest tmp_path)
+1. **Network Calls:** Mock HTTP requests
 
 ### Example Mocks
 
@@ -428,7 +443,7 @@ def mock_playwright(mocker):
     return mock
 ```
 
----
+______________________________________________________________________
 
 ## Continuous Integration
 
@@ -457,17 +472,19 @@ jobs:
 ```
 
 **CI Success Criteria:**
+
 - All tests pass
 - Linting passes
 - Type checking passes
 - Code formatting is correct
 - Test coverage meets minimum threshold
 
----
+______________________________________________________________________
 
 ## Test Quality Checklist
 
 Before merging:
+
 - [ ] All tests pass locally (`make verify`)
 - [ ] New features have unit tests
 - [ ] Critical paths have e2e tests

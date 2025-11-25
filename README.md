@@ -24,7 +24,6 @@ TBD
 
 The tool will prepare:
 
- * Markdown report of reporitories and project changes
- * Work Card PDF listing product changes
- * Report PDF with work card reference, number of creative work hous, and co-authors searches
-
+- Markdown report of reporitories and project changes
+- Work Card PDF listing product changes
+- Report PDF with work card reference, number of creative work hous, and co-authors searches

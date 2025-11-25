@@ -14,7 +14,9 @@ def pytest_configure(config: Config) -> None:
     config.addinivalue_line("markers", "e2e: End-to-end tests")
     config.addinivalue_line("markers", "slow: Slow running tests")
     config.addinivalue_line("markers", "requires_did: Tests requiring did installation")
-    config.addinivalue_line("markers", "requires_workday: Tests requiring Workday access")
+    config.addinivalue_line(
+        "markers", "requires_workday: Tests requiring Workday access"
+    )
 
 
 @pytest.fixture

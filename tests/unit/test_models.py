@@ -147,14 +147,18 @@ class TestReportConfig:
         with pytest.raises(ValidationError) as exc_info:
             ReportConfig(creative_work_percentage=-1)
 
-        assert "Creative work percentage must be between 0 and 100" in str(exc_info.value)
+        assert "Creative work percentage must be between 0 and 100" in str(
+            exc_info.value
+        )
 
     def test_percentage_validation_maximum(self):
         """Test that percentage cannot be greater than 100."""
         with pytest.raises(ValidationError) as exc_info:
             ReportConfig(creative_work_percentage=101)
 
-        assert "Creative work percentage must be between 0 and 100" in str(exc_info.value)
+        assert "Creative work percentage must be between 0 and 100" in str(
+            exc_info.value
+        )
 
     def test_percentage_validation_boundary_values(self):
         """Test that boundary values 0 and 100 are valid."""
@@ -173,7 +177,7 @@ class TestReportConfig:
         assert "{year}" not in str(path)
         assert "2024" in str(path)
 
-    def test_get_output_path_expands_home(self, tmp_path):
+    def test_get_output_path_expands_home(self):
         """Test that get_output_path() expands ~ to home directory."""
         report = ReportConfig(output_dir="~/test/{year}")
 

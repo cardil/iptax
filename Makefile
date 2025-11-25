@@ -106,13 +106,16 @@ lint: $(GUARDS)/lint.passed  ## Run linter (idempotent)
 $(GUARDS)/lint.passed: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) pyproject.toml .editorconfig
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/ruff check src/ tests/
+	$(VENV_BIN)/ec
 	@touch $@
 
 .PHONY: format
-format: $(GUARDS)/init.done  ## Format code
+format: $(GUARDS)/init.done  ## Format code and markdown
 	$(VENV_BIN)/black src/ tests/
 	$(VENV_BIN)/ruff check --fix src/ tests/
-	@echo -e "$(GREEN)$(CHECK) Code formatted$(RESET)"
+	$(VENV_BIN)/mdformat docs/ README.md
+	$(VENV_PYTHON) scripts/fix_whitespace.py
+	@echo -e "$(GREEN)$(CHECK) Code and markdown formatted$(RESET)"
 
 .PHONY: format-check
 format-check: $(GUARDS)/format.done  ## Check if code formatting is correct (idempotent)
@@ -122,7 +125,8 @@ $(GUARDS)/format.done: $(GUARDS)/init.done $(SRC_FILES) $(TEST_FILES) pyproject.
 	@echo -e "$(BLUE)$(GEAR) Checking code formatting...$(RESET)"
 	@$(VENV_BIN)/black --check --diff src/ tests/
 	@$(VENV_BIN)/ruff check src/ tests/
-	@echo -e "$(GREEN)$(CHECK) Code formatting is correct$(RESET)"
+	@$(VENV_BIN)/mdformat --check docs/ README.md
+	@echo -e "$(GREEN)$(CHECK) Code and markdown formatting is correct$(RESET)"
 	@touch $@
 
 .PHONY: typecheck

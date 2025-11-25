@@ -3,6 +3,7 @@
 This document describes the technical architecture and design decisions for the iptax tool.
 
 **See also:**
+
 - [Main Documentation](project.md) - Project overview and onboarding
 - [Requirements](requirements.md) - Detailed requirements
 - [Workflows](workflows.md) - Detailed workflow steps
@@ -11,7 +12,7 @@ This document describes the technical architecture and design decisions for the 
 - [Edge Cases](edge-cases.md) - Error handling scenarios
 - [Examples](examples.md) - Configuration and usage examples
 
----
+______________________________________________________________________
 
 ## Technical Architecture
 
@@ -20,6 +21,7 @@ This document describes the technical architecture and design decisions for the 
 **Language:** Python 3.11+
 
 **Rationale:**
+
 - Native integration with psss/did (Python project)
 - Rich ecosystem for CLI, PDF generation, browser automation, AI providers
 - Excellent type hints support for maintainability
@@ -30,6 +32,7 @@ This document describes the technical architecture and design decisions for the 
 See [`pyproject.toml`](../pyproject.toml:1) for the complete dependency list.
 
 **Key Dependencies:**
+
 - **CLI Framework:** `click>=8.1.7`
 - **Terminal UI:** `rich>=13.7.0`, `questionary>=2.0.1`
 - **Configuration:** `pyyaml>=6.0.1`, `pydantic>=2.5.0`
@@ -39,7 +42,7 @@ See [`pyproject.toml`](../pyproject.toml:1) for the complete dependency list.
 - **HTTP Client:** `httpx>=0.25.0`
 - **Date/Time:** `python-dateutil>=2.8.2`
 - **Markdown:** `markdown>=3.5.0`
-- **did Integration:** `did` (git+https://github.com/psss/did.git@...)
+- **did Integration:** `did @ git+https://github.com/psss/did.git@refs/pull/311/head`
 
 ### Project Structure
 
@@ -85,13 +88,15 @@ iptax-reporter/
 ### Key Design Decisions
 
 #### 1. Click vs Typer for CLI
+
 - **Choice:** Click
 - **Rationale:** Mature, stable, excellent documentation, better pytest integration
 - **Alternative:** Typer (newer, type-hint based, but less mature ecosystem)
 
 #### 2. WeasyPrint vs ReportLab for PDFs
+
 - **Choice:** WeasyPrint
-- **Rationale:** 
+- **Rationale:**
   - Pure Python (no external dependencies)
   - Excellent CSS support for layout
   - Can render HTML templates directly
@@ -99,6 +104,7 @@ iptax-reporter/
 - **Alternative:** ReportLab (more control but harder complex layouts)
 
 #### 3. Playwright vs Selenium for Browser Automation
+
 - **Choice:** Playwright
 - **Rationale:**
   - Modern, actively maintained
@@ -108,6 +114,7 @@ iptax-reporter/
 - **Alternative:** Selenium (older, less ergonomic API)
 
 #### 4. LiteLLM vs LangChain for AI Provider
+
 - **Choice:** LiteLLM
 - **Rationale:**
   - Simple, focused on provider abstraction
@@ -117,6 +124,7 @@ iptax-reporter/
 - **Alternative:** LangChain (more features than needed, heavier)
 
 #### 5. Rich vs Textual for TUI
+
 - **Choice:** Rich
 - **Rationale:**
   - Simpler API for our needs
@@ -130,20 +138,22 @@ iptax-reporter/
 ### Configuration Flow
 
 1. **First Run:** Check for `~/.config/iptax/settings.yaml`
-2. **If Missing:** Run interactive questionnaire ([`iptax config`](../src/iptax/cli.py))
-3. **Validate:** Check did config, AI provider, etc.
-4. **Save:** Write validated configuration
+1. **If Missing:** Run interactive questionnaire ([`iptax config`](../src/iptax/cli.py))
+1. **Validate:** Check did config, AI provider, etc.
+1. **Save:** Write validated configuration
 
 ### History Tracking
 
 **Location:** `~/.cache/iptax/history.toml`
 
 **Purpose:**
+
 - Track cut-off dates for each monthly report
 - Prevent duplicate or missing changes
 - Enable regeneration of past reports
 
 **Schema:**
+
 ```toml
 ["2024-10"]
 last_cutoff_date = "2024-10-26"
@@ -155,11 +165,13 @@ generated_at = "2024-10-26T14:30:00Z"
 **Location:** `~/.cache/iptax/ai_cache.json`
 
 **Purpose:**
+
 - Cache AI filtering decisions
 - Learn from user overrides
 - Reduce API calls
 
 **Schema:**
+
 ```json
 {
   "cache_version": "1.0",
@@ -181,19 +193,20 @@ generated_at = "2024-10-26T14:30:00Z"
 ### Credential Management
 
 1. **Never Store Passwords:** Use environment variables or system authentication
-2. **API Keys:** Load from environment variables only
-3. **Browser Sessions:** Keep in memory, clear after use
-4. **File Permissions:** Settings files should be `600` (user-only)
+1. **API Keys:** Load from environment variables only
+1. **Browser Sessions:** Keep in memory, clear after use
+1. **File Permissions:** Settings files should be `600` (user-only)
 
 ### Data Privacy
 
 1. **Local Only:** All data stored locally on user's machine
-2. **No Cloud Storage:** PDFs and reports stay on local filesystem
-3. **AI Requests:** Only PR/MR descriptions sent to AI (no personal data)
+1. **No Cloud Storage:** PDFs and reports stay on local filesystem
+1. **AI Requests:** Only PR/MR descriptions sent to AI (no personal data)
 
 ### Security Tools
 
 The project uses ruff with security checks enabled:
+
 - **S (flake8-bandit):** Security vulnerability scanner
 - **TRY:** Exception handling best practices
 
@@ -201,37 +214,37 @@ The project uses ruff with security checks enabled:
 
 ### Target Metrics
 
-- **Startup time:** <2 seconds
-- **Config load time:** <100ms
-- **did fetch time:** <30 seconds (network dependent)
-- **AI batch filtering:** <20 seconds for 50 changes
-- **PDF generation:** <10 seconds total
-- **Memory usage:** <500MB peak
+- **Startup time:** \<2 seconds
+- **Config load time:** \<100ms
+- **did fetch time:** \<30 seconds (network dependent)
+- **AI batch filtering:** \<20 seconds for 50 changes
+- **PDF generation:** \<10 seconds total
+- **Memory usage:** \<500MB peak
 
 ### Optimization Strategies
 
 1. **Caching:** AI judgments, did responses
-2. **Batch Processing:** AI filtering in single request
-3. **Lazy Loading:** Import heavy dependencies only when needed
-4. **Streaming:** Process large datasets iteratively
+1. **Batch Processing:** AI filtering in single request
+1. **Lazy Loading:** Import heavy dependencies only when needed
+1. **Streaming:** Process large datasets iteratively
 
 ## Error Handling Philosophy
 
 ### Principles
 
 1. **Clear Error Messages:** Always explain what went wrong
-2. **Suggest Solutions:** Provide actionable recovery steps
-3. **Graceful Degradation:** Fall back to manual input when automation fails
-4. **Preserve Data:** Never lose user work on errors
-5. **Logging:** Detailed logs for debugging
+1. **Suggest Solutions:** Provide actionable recovery steps
+1. **Graceful Degradation:** Fall back to manual input when automation fails
+1. **Preserve Data:** Never lose user work on errors
+1. **Logging:** Detailed logs for debugging
 
 ### Error Categories
 
 1. **Configuration Errors:** Missing or invalid settings
-2. **Integration Errors:** did, Workday, AI provider failures
-3. **File System Errors:** Permission denied, disk full
-4. **Network Errors:** Timeouts, connection failures
-5. **User Input Errors:** Invalid dates, malformed data
+1. **Integration Errors:** did, Workday, AI provider failures
+1. **File System Errors:** Permission denied, disk full
+1. **Network Errors:** Timeouts, connection failures
+1. **User Input Errors:** Invalid dates, malformed data
 
 See [Edge Cases](edge-cases.md) for detailed error scenarios and handling.
 
@@ -252,6 +265,7 @@ class Settings(BaseModel):
 ```
 
 **Tools:**
+
 - **mypy:** Static type checker
 - **pydantic:** Runtime type validation
 - **ruff (ANN):** Enforce type annotations
@@ -261,6 +275,7 @@ class Settings(BaseModel):
 See [Testing](testing.md) for detailed testing strategy.
 
 **Key Points:**
+
 - Unit tests for business logic
 - E2E tests for critical paths
 - Mocking external dependencies (AI, Workday, did)

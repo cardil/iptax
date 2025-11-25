@@ -3,6 +3,7 @@
 This document contains the detailed requirements and core features of the iptax tool.
 
 **See also:**
+
 - [Main Documentation](project.md) - Project overview and onboarding
 - [Architecture](architecture.md) - Technical design and structure
 - [Workflows](workflows.md) - Detailed workflow steps
@@ -11,14 +12,15 @@ This document contains the detailed requirements and core features of the iptax 
 - [Edge Cases](edge-cases.md) - Error handling scenarios
 - [Examples](examples.md) - Configuration and usage examples
 
----
+______________________________________________________________________
 
 ## Executive Summary
 
-**Tool Name:** `iptax`  
+**Tool Name:** `iptax`\
 **Purpose:** Automate monthly IP tax report generation for Polish software developers participating in the IP tax deduction program (50% tax deduction for copyright income).
 
 **Key Features:**
+
 - Integrates with psss/did to automatically fetch merged PRs/MRs
 - AI-assisted filtering of changes to match configured product
 - Optional Workday integration for work hours retrieval
@@ -28,7 +30,7 @@ This document contains the detailed requirements and core features of the iptax 
 
 **Primary Users:** Polish software developers working on open-source/FOSS projects for Red Hat or similar companies, who need to file monthly IP tax reports.
 
----
+______________________________________________________________________
 
 ## Project Overview
 
@@ -37,13 +39,14 @@ This document contains the detailed requirements and core features of the iptax 
 Polish tax law provides a 50% tax deduction for copyright income. Software developers contributing to FOSS projects can claim this deduction by submitting monthly reports documenting their creative work. This tool automates the tedious process of:
 
 1. Collecting all merged code contributions from multiple repositories
-2. Filtering contributions relevant to a specific product
-3. Calculating creative work hours
-4. Generating legally compliant bilingual reports
+1. Filtering contributions relevant to a specific product
+1. Calculating creative work hours
+1. Generating legally compliant bilingual reports
 
 ### Problem Statement
 
 Manual report generation involves:
+
 - Running multiple CLI commands to extract PR/MR data
 - Manually filtering changes to match product scope
 - Calculating work hours from Workday or timesheets
@@ -55,6 +58,7 @@ This process takes 2-4 hours monthly and is error-prone.
 ### Solution Scope
 
 The `iptax` tool will:
+
 - ✅ Automate data collection from GitHub/GitLab via psss/did
 - ✅ Use AI to filter changes matching the configured product
 - ✅ Integrate with Workday to retrieve work hours (or accept manual input)
@@ -63,12 +67,13 @@ The `iptax` tool will:
 - ✅ Provide interactive configuration and review workflows
 
 The tool will NOT:
+
 - ❌ Submit reports to tax authorities (manual submission required)
 - ❌ Perform tax calculations beyond creative work hours
 - ❌ Validate legal compliance (assumes user understands requirements)
 - ❌ Modify or commit code changes on behalf of the user
 
----
+______________________________________________________________________
 
 ## Core Requirements
 
@@ -76,12 +81,13 @@ The tool will NOT:
 
 **CLI Command:** `iptax`
 
-**Purpose:**  
+**Purpose:**\
 Generate monthly IP tax reports for the Polish IP tax deduction program by:
+
 1. Fetching merged code contributions from configured repositories
-2. Filtering changes to match a specific product using AI assistance
-3. Calculating creative work hours
-4. Generating bilingual PDF reports with all required legal elements
+1. Filtering changes to match a specific product using AI assistance
+1. Calculating creative work hours
+1. Generating bilingual PDF reports with all required legal elements
 
 ### Data Sources Integration
 
@@ -93,31 +99,37 @@ Generate monthly IP tax reports for the Polish IP tax deduction program by:
 **Purpose:** Fetch merged PRs/MRs from GitHub/GitLab instances.
 
 **Integration Approach:**
+
 - **Use did as a project dependency** (add to [`pyproject.toml`](../pyproject.toml:1))
 - **Call did SDK directly** instead of shell-outs
 - Avoid markdown parsing by using did's Python API directly
 
 **Configuration Requirements:**
+
 - User must have `~/.did/config` configured with GitHub/GitLab credentials
 - Tool reads this config to determine which providers are enabled
 - If no providers configured, guide user to configure did first
 
 **Date Range Calculation:**
+
 - **Start Date:** Last report's `last_cutoff_date` + 1 day (from history file)
 - **End Date:** Current date when tool is executed
 - For first report: prompt user for previous month cut-off date (default: 25th)
 
 **Important Behavioral Rules:**
+
 1. **Detect Existing Report:** Before generating, check if report for current month already exists
-2. **User Confirmation:** If exists, ask user if they want to regenerate/continue
-3. **No Config Cut-off:** Do NOT store cut-off day in config (removed based on feedback)
+1. **User Confirmation:** If exists, ask user if they want to regenerate/continue
+1. **No Config Cut-off:** Do NOT store cut-off day in config (removed based on feedback)
 
 **Output Format:**
 The did SDK will return structured data (not markdown), containing:
+
 - List of changes (PRs/MRs) with descriptions, URLs, and metadata
 - List of unique repositories
 
 **Error Handling:**
+
 - did SDK not installed → should not happen (project dependency)
 - `~/.did/config` missing → guide user to configure did
 - No providers configured → guide user to add providers
@@ -130,6 +142,7 @@ The did SDK will return structured data (not markdown), containing:
 **Approach:** Headless browser automation (Playwright recommended)
 
 **Authentication:**
+
 ```yaml
 workday:
   enabled: true
@@ -138,31 +151,36 @@ workday:
 ```
 
 **Authentication Flow:**
+
 1. Navigate to Workday URL (from config)
-2. Handle SAML authentication via company Keycloak
-3. Navigate to timesheet/absence calendar
-4. Extract working hours for date range
-5. Calculate total working hours
-6. Close browser
+1. Handle SAML authentication via company Keycloak
+1. Navigate to timesheet/absence calendar
+1. Extract working hours for date range
+1. Calculate total working hours
+1. Close browser
 
 **Data Needed:**
+
 - Working days in the reporting period
 - Absence days (vacation, sick leave)
 - Total working hours (typically `working_days × 8`)
 
 **Fallback Mode:**
 If Workday integration is not configured or fails:
-1. Prompt user: "Enter number of working days in [reporting period]:"
-2. Prompt user: "Enter total working hours (or press Enter for [calculated default]):"
-3. Calculate creative work hours based on configured percentage
+
+1. Prompt user: "Enter number of working days in \[reporting period\]:"
+1. Prompt user: "Enter total working hours (or press Enter for [calculated default]):"
+1. Calculate creative work hours based on configured percentage
 
 **Security Considerations:**
+
 - Never store passwords in config files
 - Use system authentication (Kerberos/SAML)
 - Browser session data stored only in memory, not persisted
 - Clear session data after retrieval
 
 **Error Handling:**
+
 - Navigation timeout → fall back to manual input
 - Authentication failure → fall back to manual input
 - Element not found → fall back to manual input
@@ -173,13 +191,15 @@ If Workday integration is not configured or fails:
 **Purpose:** Automatically filter changes to match the configured product using AI judgment.
 
 **Supported Providers:**
+
 1. **GCP Vertex AI** (recommended for Red Hat users with GCP access)
-2. **Google Gemini API** (recommended for personal use)
+1. **Google Gemini API** (recommended for personal use)
 
 **Provider-Agnostic Wrapper:**
 Use LiteLLM or LangChain to support multiple providers with a unified interface.
 
 **Batch Filtering Workflow:**
+
 ```
 1. Load judgment history/cache
 2. Collect all changes from did
@@ -197,6 +217,7 @@ Use LiteLLM or LangChain to support multiple providers with a unified interface.
 ```
 
 **AI Batch Prompt Template:**
+
 ```
 Product: {product_name}
 
@@ -208,7 +229,7 @@ Past Decisions:
   AI Decision: INCLUDE
   Human Decision: INCLUDE
   AI Reasoning: implements feature X
-  
+
 - [description] (owner/repo#456)
   AI Decision: INCLUDE
   Human Decision: EXCLUDE
@@ -219,7 +240,7 @@ Current Changes to Judge:
 1. owner/repo#789
    URL: https://github.com/owner/repo/pull/789
    Description: [full PR/MR description]
-   
+
 2. owner/repo#790
    URL: https://github.com/owner/repo/pull/790
    Description: [full PR/MR description]
@@ -232,14 +253,14 @@ judgments:
   - change_id: owner/repo#789
     decision: INCLUDE  # or EXCLUDE or UNCERTAIN
     reasoning: brief explanation
-    
+
   - change_id: owner/repo#790
     decision: EXCLUDE
     reasoning: brief explanation
 
 Decision Rules:
 - INCLUDE: change directly contributes to this product
-- EXCLUDE: change is unrelated to this product  
+- EXCLUDE: change is unrelated to this product
 - UNCERTAIN: cannot determine with confidence
 - NOTE: Do NOT use ERROR - that's only for system errors
 ```
@@ -248,18 +269,20 @@ Decision Rules:
 Location: `~/.cache/iptax/ai_cache.json` (or `.toml` or `.yaml`)
 
 **Configuration:**
+
 ```yaml
 ai:
   provider: "gemini"  # or "vertex"
   model: "gemini-1.5-pro"  # or "gemini-1.5-flash"
   api_key_env: "GEMINI_API_KEY"  # environment variable name
-  
+
   # For Vertex AI:
   # project_id: "my-gcp-project"
   # location: "us-central1"
 ```
 
 **Interactive Review Process:**
+
 - **IMPORTANT:** This is the ONLY interactive review step
 - User reviews AI decisions about which changes to INCLUDE/EXCLUDE
 - User does NOT add or remove changes beyond what `did` provided
@@ -267,6 +290,7 @@ ai:
 - Changes list comes exclusively from the `did` SDK output
 
 **Error Handling (System-Level):**
+
 - API rate limits → mark affected changes with ERROR status, let user decide via TUI
 - API errors → mark affected changes with ERROR status, let user decide via TUI
 - Invalid API key → prompt user to configure provider before TUI
@@ -283,6 +307,7 @@ ai:
 **Purpose:** Store user preferences and integration settings (excluding cut-off dates, which are tracked in history).
 
 **Full Schema:**
+
 ```yaml
 # Employee Information
 employee:
@@ -292,28 +317,28 @@ employee:
 # Product Configuration
 product:
   name: "Red Hat OpenShift Serverless"
-  
+
 # Report Generation Settings
 report:
   output_dir: "~/Documents/iptax/{year}/"  # {year} will be replaced with YYYY
   creative_work_percentage: 80  # Percentage of work considered creative (0-100)
-  
+
 # AI Provider Configuration
 ai:
   provider: "gemini"  # Options: "gemini", "vertex"
   model: "gemini-1.5-pro"
   api_key_env: "GEMINI_API_KEY"
-  
+
   # Vertex AI specific (uncomment if using Vertex AI)
   # project_id: "my-gcp-project"
   # location: "us-central1"
-  
+
 # Work Hours Provider
 workday:
   enabled: false  # Set to true to enable Workday integration
   url: ""  # Company Workday URL
   auth: "saml"  # Only SAML supported for now
-  
+
 # psss/did Configuration
 did:
   config_path: "~/.did/config"  # Path to did config file
@@ -324,6 +349,7 @@ did:
 ```
 
 **Validation Rules:**
+
 - [`employee.name`](../pyproject.toml:13) and `employee.supervisor` must be non-empty strings
 - `product.name` must be non-empty string
 - `report.creative_work_percentage` must be between 0-100
@@ -345,6 +371,7 @@ did:
 The history file is the **single source of truth** for determining date ranges for each report.
 
 **Simplified History Schema:**
+
 ```toml
 ["2024-10"]
 last_cutoff_date = "2024-10-26"
@@ -363,6 +390,7 @@ The tool generates three output files from a single source of truth (the filtere
 #### Output Location
 
 **Configurable Directory:**
+
 ```yaml
 # In settings.yaml
 report:
@@ -379,10 +407,11 @@ Remove all GitHub emoji codes (pattern: `:[a-z_]+:`) from PR/MR titles.
 
 #### Markdown Report
 
-**Filename:** `YYYY-MM IP TAX Report.md`  
+**Filename:** `YYYY-MM IP TAX Report.md`\
 **Location:** `{output_dir}/YYYY-MM IP TAX Report.md`
 
 **Format:**
+
 ```markdown
 ## Changes
 
@@ -397,12 +426,13 @@ Remove all GitHub emoji codes (pattern: `:[a-z_]+:`) from PR/MR titles.
 
 #### Work Card PDF
 
-**Filename:** `YYYY-MM IP TAX Work Card.pdf`  
+**Filename:** `YYYY-MM IP TAX Work Card.pdf`\
 **Location:** `{output_dir}/YYYY-MM IP TAX Work Card.pdf`
 
 **Purpose:** Document the creative work product (changes made during the period).
 
 **Required Sections (Bilingual):**
+
 - Header with work card number and preparation date
 - Author Information
 - Project List
@@ -411,12 +441,13 @@ Remove all GitHub emoji codes (pattern: `:[a-z_]+:`) from PR/MR titles.
 
 #### Tax Report PDF
 
-**Filename:** `YYYY-MM IP TAX Raport.pdf`  
+**Filename:** `YYYY-MM IP TAX Raport.pdf`\
 **Location:** `{output_dir}/YYYY-MM IP TAX Raport.pdf`
 
 **Purpose:** Official monthly report for tax authorities documenting creative work hours and copyright transfer.
 
 **Required Sections (Bilingual):**
+
 - Header with period
 - Employee Information
 - Work Hours Calculation

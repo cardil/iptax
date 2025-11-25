@@ -3,6 +3,7 @@
 This document describes the implementation phases, timeline, and development workflow for the iptax tool.
 
 **See also:**
+
 - [Main Documentation](project.md) - Project overview and onboarding
 - [Requirements](requirements.md) - Detailed requirements
 - [Architecture](architecture.md) - Technical design
@@ -11,32 +12,35 @@ This document describes the implementation phases, timeline, and development wor
 - [Edge Cases](edge-cases.md) - Error handling scenarios
 - [Examples](examples.md) - Configuration and usage examples
 
----
+______________________________________________________________________
 
 ## Phase Overview
 
 The project will be implemented in 4 phases, each delivering incremental value and building on the previous phase.
 
----
+______________________________________________________________________
 
 ## Phase 1: Foundation & Core Infrastructure (Week 1-2)
 
 **Goal:** Establish project structure, configuration system, and basic CLI
 
 ### Deliverables
+
 1. Project structure setup (src/, tests/, docs/)
-2. Configuration management (settings.yaml loading, validation)
-3. History tracking (history.toml operations)
-4. Basic CLI framework (Click commands, help system)
-5. Unit tests for config and history
+1. Configuration management (settings.yaml loading, validation)
+1. History tracking (history.toml operations)
+1. Basic CLI framework (Click commands, help system)
+1. Unit tests for config and history
 
 ### Success Criteria
+
 - `iptax config` creates and validates settings
 - `iptax history` displays (empty) history
 - `make unit` passes all config/history tests
 - Documentation in place
 
 ### Key Files
+
 - [`src/iptax/cli.py`](../src/iptax/cli.py) - CLI entry point
 - `src/iptax/config/` - Configuration management package
   - `base.py` - Settings loading and validation
@@ -46,21 +50,23 @@ The project will be implemented in 4 phases, each delivering incremental value a
 - [`Makefile`](../Makefile:1) - Build orchestration
 - [`pyproject.toml`](../pyproject.toml:1) - Dependencies
 
----
+______________________________________________________________________
 
 ## Phase 2: Data Collection & Integration (Week 3-4)
 
 **Goal:** Integrate with did SDK and implement change fetching
 
 ### Deliverables
+
 1. did SDK integration
-2. Change extraction and parsing
-3. Date range calculation logic
-4. Provider selection from ~/.did/config
-5. Emoji cleaning from PR titles
-6. Unit and integration tests
+1. Change extraction and parsing
+1. Date range calculation logic
+1. Provider selection from ~/.did/config
+1. Emoji cleaning from PR titles
+1. Unit and integration tests
 
 ### Success Criteria
+
 - Can fetch changes from configured did providers
 - Date range calculated correctly from history
 - Changes properly extracted with metadata
@@ -68,25 +74,28 @@ The project will be implemented in 4 phases, each delivering incremental value a
 - `make unit` passes all did integration tests
 
 ### Key Files
+
 - `src/iptax/did_integration.py` - did SDK wrapper
 - `tests/unit/test_did_integration.py` - Tests
 - `tests/fixtures/sample_did_output.py` - Mock data
 
----
+______________________________________________________________________
 
 ## Phase 3: AI Filtering & Review (Week 5-6)
 
 **Goal:** Implement AI-assisted filtering with TUI review
 
 ### Deliverables
+
 1. AI provider integration (LiteLLM)
-2. Batch judgment processing
-3. Judgment cache system
-4. TUI-based review interface (Rich)
-5. User override and reasoning
-6. Comprehensive tests with mocked AI
+1. Batch judgment processing
+1. Judgment cache system
+1. TUI-based review interface (Rich)
+1. User override and reasoning
+1. Comprehensive tests with mocked AI
 
 ### Success Criteria
+
 - AI batch filtering works for multiple providers
 - Cache correctly stores and retrieves judgments
 - TUI displays compact list and detail views
@@ -95,26 +104,29 @@ The project will be implemented in 4 phases, each delivering incremental value a
 - `make unit` and `make e2e` pass
 
 ### Key Files
+
 - `src/iptax/ai_filter.py` - AI filtering logic
 - `src/iptax/tui.py` - TUI components
 - `tests/unit/test_ai_filter.py` - Tests
 - `tests/fixtures/sample_ai_cache.json` - Mock cache
 
----
+______________________________________________________________________
 
 ## Phase 4: Report Generation & Polish (Week 7-8)
 
 **Goal:** Complete report generation and finalize all features
 
 ### Deliverables
+
 1. Workday integration (Playwright) with fallback
-2. Report compiler (Markdown formatting)
-3. PDF generation (WeasyPrint, bilingual templates)
-4. Work hours calculation
-5. Complete e2e tests
-6. Documentation (installation, usage, troubleshooting)
+1. Report compiler (Markdown formatting)
+1. PDF generation (WeasyPrint, bilingual templates)
+1. Work hours calculation
+1. Complete e2e tests
+1. Documentation (installation, usage, troubleshooting)
 
 ### Success Criteria
+
 - Can generate all 3 output files (MD + 2 PDFs)
 - PDFs are bilingual and properly formatted
 - Workday integration works or falls back gracefully
@@ -123,6 +135,7 @@ The project will be implemented in 4 phases, each delivering incremental value a
 - User documentation complete
 
 ### Key Files
+
 - `src/iptax/workday.py` - Workday client
 - `src/iptax/report_compiler.py` - Report compilation
 - `src/iptax/pdf_generator.py` - PDF generation
@@ -130,7 +143,7 @@ The project will be implemented in 4 phases, each delivering incremental value a
 - `tests/e2e/test_full_workflow.py` - E2E tests
 - `docs/` - User documentation
 
----
+______________________________________________________________________
 
 ## Timeline & Milestones
 
@@ -157,7 +170,7 @@ Week 7-8: Phase 4 - Reports & Polish
 └── M4.4: Ready for release
 ```
 
----
+______________________________________________________________________
 
 ## Development Workflow
 
@@ -258,39 +271,45 @@ git branch -d feature/your-feature-name
 - All review conversations resolved
 - Documentation updated if needed
 
----
+______________________________________________________________________
 
 ## Risk Mitigation
 
 ### Technical Risks
 
 #### 1. did SDK API Changes
+
 - **Mitigation:** Pin specific version, monitor upstream
 - **Fallback:** Wrapper layer isolates SDK changes
 
 #### 2. AI Provider Rate Limits
+
 - **Mitigation:** Aggressive caching, exponential backoff
 - **Fallback:** Manual review mode (`--skip-ai`)
 
 #### 3. Workday UI Changes
+
 - **Mitigation:** Flexible selectors, error handling
 - **Fallback:** Manual hours input always available
 
 #### 4. PDF Generation Complexity
+
 - **Mitigation:** Start with simple templates, iterate
 - **Fallback:** Focus on Markdown first, PDFs later
 
 ### Schedule Risks
 
 #### 1. Feature Creep
+
 - **Mitigation:** Strict phase boundaries, MVP focus
 - **Response:** Defer non-critical features to v2
 
 #### 2. Integration Challenges
+
 - **Mitigation:** Early integration tests, mocking
 - **Buffer:** Week 8 has built-in buffer time
 
----
+______________________________________________________________________
 
 ## Definition of Done
 
@@ -313,7 +332,7 @@ git branch -d feature/your-feature-name
 - README with quick start guide
 - GitHub release created with notes
 
----
+______________________________________________________________________
 
 ## Success Metrics
 
@@ -321,17 +340,17 @@ git branch -d feature/your-feature-name
 
 - `make verify` pass rate: 100%
 - Test coverage: >80% for core logic
-- Build time: <2 minutes
-- CI pipeline duration: <5 minutes
+- Build time: \<2 minutes
+- CI pipeline duration: \<5 minutes
 
 ### User Metrics
 
-- Time to first successful report: <10 minutes
-- Report generation time: <3 minutes
+- Time to first successful report: \<10 minutes
+- Report generation time: \<3 minutes
 - Configuration completion rate: >90%
 - User satisfaction: >4/5
 
----
+______________________________________________________________________
 
 ## Post-Release Plan
 
@@ -353,20 +372,20 @@ git branch -d feature/your-feature-name
 - Report submission automation
 - Analytics and insights
 
----
+______________________________________________________________________
 
 ## Getting Help
 
 ### For Development Issues
 
 1. Check existing issues: `gh issue list`
-2. Search documentation: `docs/`
-3. Ask in discussions: `gh discussion list`
-4. Create new issue: `gh issue create`
+1. Search documentation: `docs/`
+1. Ask in discussions: `gh discussion list`
+1. Create new issue: `gh issue create`
 
 ### For Testing Issues
 
 1. Run with verbose: `pytest -v`
-2. Check logs: `pytest --log-cli-level=DEBUG`
-3. Review test fixtures: `tests/fixtures/`
-4. Consult [Testing](testing.md) documentation
+1. Check logs: `pytest --log-cli-level=DEBUG`
+1. Review test fixtures: `tests/fixtures/`
+1. Consult [Testing](testing.md) documentation

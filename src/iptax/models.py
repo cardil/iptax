@@ -86,7 +86,7 @@ class ReportConfig(BaseModel):
     )
     creative_work_percentage: int = Field(
         default=80,
-        description="Percentage of work considered creative (0-100)",
+        description=f"Percentage of work considered creative (0-{MAX_PERCENTAGE})",
     )
 
     @field_validator("creative_work_percentage")
@@ -94,7 +94,9 @@ class ReportConfig(BaseModel):
     def validate_percentage(cls, v: int) -> int:
         """Validate percentage is in valid range."""
         if not 0 <= v <= MAX_PERCENTAGE:
-            raise ValueError(f"Creative work percentage must be between 0 and {MAX_PERCENTAGE}")
+            raise ValueError(
+                f"Creative work percentage must be between 0 and {MAX_PERCENTAGE}"
+            )
         return v
 
     def get_output_path(self, year: int) -> Path:
@@ -267,7 +269,9 @@ class DidConfig(BaseModel):
 
     @field_validator("config_path", mode="wrap")
     @classmethod
-    def validate_config_path_exists(cls, v: str, handler: ValidatorFunctionWrapHandler) -> str:
+    def validate_config_path_exists(
+        cls, v: str, handler: ValidatorFunctionWrapHandler
+    ) -> str:
         """Validate that did config file exists."""
         path = Path(v).expanduser()
         if not path.exists():
@@ -352,7 +356,9 @@ class Settings(BaseModel):
             data = yaml.safe_load(f)
 
         if not isinstance(data, dict):
-            raise TypeError(f"Invalid settings file format in {path}: expected a mapping")
+            raise TypeError(
+                f"Invalid settings file format in {path}: expected a mapping"
+            )
 
         return cls(**data)
 

@@ -65,7 +65,10 @@ class TestConfiguratorInitialization:
         """Test Configurator initialization with default paths."""
         configurator = Configurator()
 
-        assert configurator.settings_path == Path.home() / ".config" / "iptax" / "settings.yaml"
+        assert (
+            configurator.settings_path
+            == Path.home() / ".config" / "iptax" / "settings.yaml"
+        )
         assert configurator.did_config_path == Path.home() / ".did" / "config"
 
     def test_init_with_custom_settings_path(self, tmp_path):
@@ -256,7 +259,9 @@ class TestDidConfigValidation:
 
         assert "is not a file" in str(exc_info.value)
 
-    @pytest.mark.skipif(sys.platform == "win32", reason="chmod(0o000) unreliable on Windows")
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="chmod(0o000) unreliable on Windows"
+    )
     @pytest.mark.skipif(
         os.geteuid() == 0 if hasattr(os, "geteuid") else False,
         reason="Test unreliable when run as root",
@@ -696,7 +701,9 @@ class TestCreateDefaultConfig:
         settings_file = config_dir / "settings.yaml"
         assert settings_file.exists()
 
-    def test_create_default_config_without_did(self, isolated_home):
+    def test_create_default_config_without_did(
+        self, isolated_home  # noqa: ARG002 - fixture sets up environment
+    ):
         """Test create_default_config() raises DidConfigError when did not configured."""
         with pytest.raises(DidConfigError):
             create_default_config(interactive=False)

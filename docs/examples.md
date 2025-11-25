@@ -3,6 +3,7 @@
 This document provides practical examples of configurations, workflows, and usage patterns for the iptax tool.
 
 **See also:**
+
 - [Main Documentation](project.md) - Project overview and onboarding
 - [Requirements](requirements.md) - Detailed requirements
 - [Architecture](architecture.md) - Technical design
@@ -11,7 +12,7 @@ This document provides practical examples of configurations, workflows, and usag
 - [Implementation](implementation.md) - Development phases
 - [Edge Cases](edge-cases.md) - Error handling scenarios
 
----
+______________________________________________________________________
 
 ## Sample Configuration Files
 
@@ -28,7 +29,7 @@ employee:
 # Product Configuration
 product:
   name: "Red Hat OpenShift Serverless"
-  
+
 # Report Generation Settings
 report:
   output_dir: "~/Documents/iptax/{year}/"
@@ -119,7 +120,7 @@ did:
     - "gitlab.cee"
 ```
 
----
+______________________________________________________________________
 
 ## Command Examples
 
@@ -201,7 +202,7 @@ iptax history --format json
 iptax history --format yaml
 ```
 
----
+______________________________________________________________________
 
 ## Workflow Examples
 
@@ -281,7 +282,7 @@ iptax report --month 2024-10
 # - Update history with regenerated_at timestamp
 ```
 
----
+______________________________________________________________________
 
 ## Sample Outputs
 
@@ -356,18 +357,20 @@ generated_at = "2024-12-27T10:15:00Z"
 }
 ```
 
----
+______________________________________________________________________
 
 ## Troubleshooting Examples
 
 ### Problem: did Not Configured
 
 **Error:**
+
 ```
 Error: ~/.did/config not found
 ```
 
 **Solution:**
+
 ```bash
 # Configure did first
 did --config ~/.did/config
@@ -379,11 +382,13 @@ iptax config
 ### Problem: Invalid AI API Key
 
 **Error:**
+
 ```
 Error: Invalid Gemini API key
 ```
 
 **Solution:**
+
 ```bash
 # Get a new API key from:
 # https://aistudio.google.com/app/apikey
@@ -398,11 +403,13 @@ iptax config --validate
 ### Problem: Workday Authentication Fails
 
 **Error:**
+
 ```
 Error: Workday authentication failed
 ```
 
 **Solution:**
+
 ```bash
 # Renew Kerberos ticket
 kinit username@REALM
@@ -414,11 +421,13 @@ iptax report --skip-workday
 ### Problem: No Changes Found
 
 **Error:**
+
 ```
 No changes found for 2024-11-26 to 2024-12-25
 ```
 
 **Solution:**
+
 ```bash
 # Check did configuration
 cat ~/.did/config
@@ -430,7 +439,7 @@ did --since 2024-11-26 --until 2024-12-25
 iptax config --show
 ```
 
----
+______________________________________________________________________
 
 ## Development Examples
 
@@ -497,7 +506,7 @@ git push origin feature/my-feature
 gh pr create
 ```
 
----
+______________________________________________________________________
 
 ## Environment Variable Examples
 
@@ -519,7 +528,7 @@ export IPTAX_DEBUG="1"
 export IPTAX_LOG_LEVEL="DEBUG"
 ```
 
----
+______________________________________________________________________
 
 ## Directory Structure Examples
 
@@ -589,7 +598,7 @@ iptax-reporter/
 └── LICENSE
 ```
 
----
+______________________________________________________________________
 
 ## Integration Examples
 
@@ -643,39 +652,39 @@ echo "Pre-commit checks passed!"
 exit 0
 ```
 
----
+______________________________________________________________________
 
 ## Quick Reference
 
 ### Common Commands
 
-| Command | Description |
-|---------|-------------|
-| `iptax` | Generate report for current month |
+| Command                        | Description                        |
+| ------------------------------ | ---------------------------------- |
+| `iptax`                        | Generate report for current month  |
 | `iptax report --month YYYY-MM` | Generate report for specific month |
-| `iptax config` | Interactive configuration |
-| `iptax config --show` | Show current configuration |
-| `iptax history` | Show report history |
-| `make init` | Initialize development environment |
-| `make verify` | Run all checks and tests |
-| `make format` | Format code |
-| `make unit` | Run unit tests |
+| `iptax config`                 | Interactive configuration          |
+| `iptax config --show`          | Show current configuration         |
+| `iptax history`                | Show report history                |
+| `make init`                    | Initialize development environment |
+| `make verify`                  | Run all checks and tests           |
+| `make format`                  | Format code                        |
+| `make unit`                    | Run unit tests                     |
 
 ### Important Files
 
-| File | Purpose |
-|------|---------|
+| File                            | Purpose            |
+| ------------------------------- | ------------------ |
 | `~/.config/iptax/settings.yaml` | Main configuration |
-| `~/.cache/iptax/history.toml` | Report history |
-| `~/.cache/iptax/ai_cache.json` | AI judgment cache |
-| `~/.did/config` | did configuration |
-| `~/Documents/iptax/{year}/` | Generated reports |
+| `~/.cache/iptax/history.toml`   | Report history     |
+| `~/.cache/iptax/ai_cache.json`  | AI judgment cache  |
+| `~/.did/config`                 | did configuration  |
+| `~/Documents/iptax/{year}/`     | Generated reports  |
 
 ### Common Paths
 
-| Path | Description |
-|------|-------------|
-| `~/.config/iptax/` | Configuration directory |
-| `~/.cache/iptax/` | Cache directory |
+| Path                 | Description              |
+| -------------------- | ------------------------ |
+| `~/.config/iptax/`   | Configuration directory  |
+| `~/.cache/iptax/`    | Cache directory          |
 | `~/Documents/iptax/` | Default output directory |
-| `~/.did/config` | did configuration file |
+| `~/.did/config`      | did configuration file   |

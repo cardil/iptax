@@ -3,6 +3,7 @@
 This document describes edge cases and error handling strategies for the iptax tool.
 
 **See also:**
+
 - [Main Documentation](project.md) - Project overview and onboarding
 - [Requirements](requirements.md) - Detailed requirements
 - [Architecture](architecture.md) - Technical design
@@ -11,19 +12,19 @@ This document describes edge cases and error handling strategies for the iptax t
 - [Implementation](implementation.md) - Development phases
 - [Examples](examples.md) - Configuration and usage examples
 
----
+______________________________________________________________________
 
 ## Error Handling Philosophy
 
 ### Principles
 
 1. **Clear Error Messages:** Always explain what went wrong
-2. **Suggest Solutions:** Provide actionable recovery steps
-3. **Graceful Degradation:** Fall back to manual input when automation fails
-4. **Preserve Data:** Never lose user work on errors
-5. **Logging:** Detailed logs for debugging
+1. **Suggest Solutions:** Provide actionable recovery steps
+1. **Graceful Degradation:** Fall back to manual input when automation fails
+1. **Preserve Data:** Never lose user work on errors
+1. **Logging:** Detailed logs for debugging
 
----
+______________________________________________________________________
 
 ## Configuration Edge Cases
 
@@ -32,6 +33,7 @@ This document describes edge cases and error handling strategies for the iptax t
 **Scenario:** User runs `iptax` without configuring did first
 
 **Behavior:**
+
 ```bash
 Error: ~/.did/config not found
 
@@ -42,6 +44,7 @@ Then run 'iptax config' to configure iptax.
 ```
 
 **Test Case:**
+
 ```python
 def test_missing_did_config(tmp_path, monkeypatch):
     monkeypatch.setenv('HOME', str(tmp_path))
@@ -55,6 +58,7 @@ def test_missing_did_config(tmp_path, monkeypatch):
 **Scenario:** did config exists but has no providers configured
 
 **Behavior:**
+
 ```bash
 Error: No providers configured in ~/.did/config
 
@@ -72,6 +76,7 @@ Then run 'iptax config' again.
 **Scenario:** User provides AI credentials that fail validation
 
 **Behavior:**
+
 ```bash
 Error: Invalid Gemini API key
 
@@ -84,18 +89,19 @@ Enter Gemini API key (or 'skip' to configure later):
 ```
 
 **Test Case:**
+
 ```python
 def test_invalid_ai_credentials(monkeypatch):
-    monkeypatch.setattr('litellm.completion', 
+    monkeypatch.setattr('litellm.completion',
                        Mock(side_effect=AuthenticationError()))
-    
-    result = runner.invoke(cli, ['config'], 
+
+    result = runner.invoke(cli, ['config'],
                           input='gemini\nINVALID_KEY\nskip\n')
     assert "Invalid Gemini API key" in result.output
     assert result.exit_code == 0
 ```
 
----
+______________________________________________________________________
 
 ## History Tracking Edge Cases
 
@@ -104,6 +110,7 @@ def test_invalid_ai_credentials(monkeypatch):
 **Scenario:** User runs `iptax report` for the first time
 
 **Behavior:**
+
 ```bash
 This is your first report. To calculate the date range,
 I need to know when your previous report ended.
@@ -116,6 +123,7 @@ Enter the last cutoff date (YYYY-MM-DD) [2024-11-25]:
 **Scenario:** User skipped November, now generating December report
 
 **Behavior:**
+
 ```bash
 Warning: Date range spans 61 days (2024-10-26 to 2024-12-25)
 
@@ -136,6 +144,7 @@ Choice:
 **Scenario:** User wants to regenerate October report
 
 **Behavior:**
+
 ```bash
 Report for October 2024 already exists.
 
@@ -153,6 +162,7 @@ Choice:
 **Scenario:** history.toml has invalid TOML syntax
 
 **Behavior:**
+
 ```bash
 Error: Cannot parse ~/.cache/iptax/history.toml
 
@@ -166,7 +176,7 @@ Options:
 Choice:
 ```
 
----
+______________________________________________________________________
 
 ## did Integration Edge Cases
 
@@ -175,6 +185,7 @@ Choice:
 **Scenario:** did returns empty results for the date range
 
 **Behavior:**
+
 ```bash
 No changes found for 2024-11-26 to 2024-12-25
 
@@ -197,6 +208,7 @@ Choice:
 **Scenario:** GitHub provider returns 401 Unauthorized
 
 **Behavior:**
+
 ```bash
 Error: GitHub authentication failed
 
@@ -223,12 +235,14 @@ Required scopes: repo, read:org
 **Scenario:** PR title is "🎉 feat: Add new feature 🚀"
 
 **Behavior:**
+
 - Extract PR title from did response
 - Clean emoji using regex or emoji library
 - Store cleaned title: "feat: Add new feature"
 - Preserve URL and metadata
 
 **Test Case:**
+
 ```python
 def test_emoji_cleaning():
     title = "🎉 feat: Add feature 🚀"
@@ -237,7 +251,7 @@ def test_emoji_cleaning():
     assert not any(c in cleaned for c in '🎉🚀')
 ```
 
----
+______________________________________________________________________
 
 ## AI Filtering Edge Cases
 
@@ -246,6 +260,7 @@ def test_emoji_cleaning():
 **Scenario:** AI returns UNCERTAIN for every change
 
 **Behavior:**
+
 ```bash
 AI Review Results: 0 included, 0 excluded, 25 uncertain
 
@@ -262,6 +277,7 @@ Press any key to start review...
 **Scenario:** AI request takes >60 seconds and times out
 
 **Behavior:**
+
 ```bash
 Error: AI request timed out
 
@@ -280,6 +296,7 @@ Choice:
 **Scenario:** AI returns malformed YAML that can't be parsed
 
 **Behavior:**
+
 ```bash
 Error: AI returned invalid response
 
@@ -300,6 +317,7 @@ Choice:
 **Scenario:** ai_cache.json has invalid JSON syntax
 
 **Behavior:**
+
 ```bash
 Warning: AI cache is corrupted
 
@@ -313,7 +331,7 @@ Error: JSON decode error on line 42
 Choice:
 ```
 
----
+______________________________________________________________________
 
 ## Workday Integration Edge Cases
 
@@ -322,6 +340,7 @@ Choice:
 **Scenario:** Kerberos ticket expired, can't authenticate
 
 **Behavior:**
+
 ```bash
 Error: Workday authentication failed
 
@@ -344,6 +363,7 @@ Or, enter working hours manually:
 **Scenario:** Workday updated UI, selectors no longer work
 
 **Behavior:**
+
 ```bash
 Error: Cannot extract hours from Workday
 
@@ -364,6 +384,7 @@ For now, enter hours manually:
 **Scenario:** Playwright not installed or browser missing
 
 **Behavior:**
+
 ```bash
 Error: Playwright browser not installed
 
@@ -375,7 +396,7 @@ Or, skip Workday and enter hours manually:
   Enter total working hours [168]:
 ```
 
----
+______________________________________________________________________
 
 ## Report Generation Edge Cases
 
@@ -384,6 +405,7 @@ Or, skip Workday and enter hours manually:
 **Scenario:** User's output directory has no write permissions
 
 **Behavior:**
+
 ```bash
 Error: Cannot write to ~/Documents/iptax/2024/
 
@@ -405,6 +427,7 @@ Choice:
 **Scenario:** No space left on device when writing PDFs
 
 **Behavior:**
+
 ```bash
 Error: Not enough disk space
 
@@ -427,6 +450,7 @@ generate quickly on next run.
 **Scenario:** WeasyPrint fails to render template
 
 **Behavior:**
+
 ```bash
 Error: PDF generation failed
 
@@ -443,7 +467,7 @@ Please install required fonts or use fallback:
 Choice:
 ```
 
----
+______________________________________________________________________
 
 ## Date & Time Edge Cases
 
@@ -452,6 +476,7 @@ Choice:
 **Scenario:** Report generated on last day vs first day of next month
 
 **Example:**
+
 - Previous: 2024-10-25
 - Current: Generate on 2024-11-01
 - Date range: 2024-10-26 to 2024-11-01 (7 days)
@@ -460,6 +485,7 @@ Choice:
 ### Timezone Handling
 
 **Behavior:**
+
 - Always use local timezone for date calculations
 - Store dates in history as YYYY-MM-DD (no timezone)
 - Store timestamps in history as UTC ISO 8601
@@ -468,11 +494,12 @@ Choice:
 ### Leap Year Handling
 
 **Behavior:**
+
 - Use standard library datetime for all date math
 - Python automatically handles leap years
 - No special code needed
 
----
+______________________________________________________________________
 
 ## Command Line Edge Cases
 
@@ -481,6 +508,7 @@ Choice:
 **Scenario:** User types `iptax report --month November`
 
 **Behavior:**
+
 ```bash
 Error: Invalid month format 'November'
 
@@ -496,6 +524,7 @@ Or omit --month to generate for current month.
 **Scenario:** User asks for report for next month
 
 **Behavior:**
+
 ```bash
 Error: Cannot generate future report
 
@@ -507,7 +536,7 @@ You can only generate reports for:
   - Past months (2024-10, 2024-09, ...)
 ```
 
----
+______________________________________________________________________
 
 ## Internationalization Edge Cases
 
@@ -516,6 +545,7 @@ You can only generate reports for:
 **Scenario:** Employee name is "Krzysztof Suszyński" (Polish chars)
 
 **Behavior:**
+
 - Store name as UTF-8 in settings.yaml
 - Render correctly in PDFs using Unicode fonts
 - Ensure WeasyPrint uses UTF-8 encoding
@@ -525,11 +555,12 @@ You can only generate reports for:
 **Scenario:** Generate report for October (Październik in Polish)
 
 **Behavior:**
+
 - Maintain month name mapping in code
 - Render both in PDF: "October / Październik 2024"
 - Ensure correct declension for Polish
 
----
+______________________________________________________________________
 
 ## Performance Edge Cases
 
@@ -538,25 +569,27 @@ You can only generate reports for:
 **Scenario:** User has 250 merged PRs in the period
 
 **Behavior:**
+
 - Fetch all changes from did (may take 30-60s)
 - Display progress indicator
-- AI batch filtering (single request, <30s)
+- AI batch filtering (single request, \<30s)
 - TUI paginated view (show 20 at a time)
 - Generate report with all changes
-- Monitor memory usage (<500MB)
+- Monitor memory usage (\<500MB)
 
 ### Slow Network Connection
 
 **Scenario:** did fetch takes 2+ minutes due to slow network
 
 **Behavior:**
+
 - Show progress spinner during fetch
 - Allow user to cancel (Ctrl+C)
 - Handle KeyboardInterrupt gracefully
 - Clean up partial data
 - Exit with code 130
 
----
+______________________________________________________________________
 
 ## Security Edge Cases
 
@@ -565,12 +598,14 @@ You can only generate reports for:
 **Scenario:** Error occurs while using AI, traceback might expose key
 
 **Behavior:**
+
 - Catch all exceptions globally
 - Sanitize error messages before display
 - Never log full API keys
-- Use key prefix for identification (e.g., "sk-***")
+- Use key prefix for identification (e.g., "sk-\*\*\*")
 
 **Implementation:**
+
 ```python
 def sanitize_error(msg: str) -> str:
     """Remove potential API keys from error messages"""
@@ -582,22 +617,23 @@ def sanitize_error(msg: str) -> str:
 **Scenario:** Settings file created with wrong permissions (777)
 
 **Behavior:**
+
 - Create config directory with 700 permissions
 - Create settings.yaml with 600 permissions
 - Verify permissions on load
 - Warn if insecure permissions detected
 
----
+______________________________________________________________________
 
 ## Recovery Strategies
 
 ### General Recovery Steps
 
 1. **Check Logs:** Review error messages and logs
-2. **Verify Config:** Run `iptax config --validate`
-3. **Check Dependencies:** Ensure did, AI provider configured
-4. **Clean Cache:** Remove `~/.cache/iptax/` and retry
-5. **Fresh Install:** `make clean install`
+1. **Verify Config:** Run `iptax config --validate`
+1. **Check Dependencies:** Ensure did, AI provider configured
+1. **Clean Cache:** Remove `~/.cache/iptax/` and retry
+1. **Fresh Install:** `make clean install`
 
 ### When All Else Fails
 
@@ -606,17 +642,17 @@ def sanitize_error(msg: str) -> str:
    - Steps to reproduce
    - Configuration (sanitized)
    - Environment details
-2. Use verbose mode: `iptax report --verbose`
-3. Check existing issues: `gh issue list`
-4. Ask in discussions: `gh discussion list`
+1. Use verbose mode: `iptax report --verbose`
+1. Check existing issues: `gh issue list`
+1. Ask in discussions: `gh discussion list`
 
----
+______________________________________________________________________
 
 ## Error Code Reference
 
-| Exit Code | Meaning |
-|-----------|---------|
-| 0 | Success |
-| 1 | General error |
-| 2 | Invalid usage (wrong arguments) |
-| 130 | User cancelled (Ctrl+C) |
+| Exit Code | Meaning                         |
+| --------- | ------------------------------- |
+| 0         | Success                         |
+| 1         | General error                   |
+| 2         | Invalid usage (wrong arguments) |
+| 130       | User cancelled (Ctrl+C)         |

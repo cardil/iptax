@@ -75,7 +75,9 @@ class Configurator:
             Path(settings_path) if settings_path else self._get_default_settings_path()
         )
         self.did_config_path = (
-            Path(did_config_path) if did_config_path else self._get_default_did_config_path()
+            Path(did_config_path)
+            if did_config_path
+            else self._get_default_did_config_path()
         )
 
     @staticmethod
@@ -270,7 +272,9 @@ class Configurator:
         # Save configuration
         try:
             settings.to_yaml_file(self.settings_path)
-            questionary.print(f"\n✓ Configuration saved to {self.settings_path}", style="green")
+            questionary.print(
+                f"\n✓ Configuration saved to {self.settings_path}", style="green"
+            )
         except Exception as e:
             raise ConfigError(f"Failed to save configuration: {e}") from e
 
@@ -303,7 +307,6 @@ class Configurator:
         """
         return run_interactive_wizard(
             defaults=defaults,
-            did_config_path=self.did_config_path,
             list_providers_fn=self._list_providers_for_path,
         )
 

@@ -11,6 +11,7 @@ import questionary
 from questionary.prompts.common import Choice
 
 from iptax.models import (
+    MAX_PERCENTAGE,
     AIProviderConfig,
     DidConfig,
     DisabledAIConfig,
@@ -23,20 +24,15 @@ from iptax.models import (
     WorkdayConfig,
 )
 
-# Constants
-MAX_PERCENTAGE = 100
-
 
 def run_interactive_wizard(
     defaults: Settings | None,
-    did_config_path: Path,
     list_providers_fn: Callable[[Path], list[str]],
 ) -> Settings:
     """Run interactive configuration wizard.
 
     Args:
         defaults: Optional existing settings to use as defaults
-        did_config_path: Path to did config file
         list_providers_fn: Function to list did providers (callable)
 
     Returns:
@@ -50,7 +46,7 @@ def run_interactive_wizard(
     report = _get_report_config(defaults)
     ai = _get_ai_config(defaults)
     workday = _get_workday_config(defaults)
-    did = _get_did_config(defaults, did_config_path, list_providers_fn)
+    did = _get_did_config(defaults, list_providers_fn)
 
     return Settings(
         employee=employee,
@@ -73,7 +69,9 @@ def _get_employee_info(defaults: Settings | None) -> EmployeeInfo:
         validate=lambda x: len(x.strip()) > 0 or "Name cannot be empty",
     ).ask()
 
-    default_supervisor = defaults.employee.supervisor if defaults and defaults.employee else ""
+    default_supervisor = (
+        defaults.employee.supervisor if defaults and defaults.employee else ""
+    )
     supervisor_name = questionary.text(
         "Supervisor name:",
         default=default_supervisor,
@@ -105,7 +103,9 @@ def _get_report_config(defaults: Settings | None) -> ReportConfig:
     if defaults:
         default_percentage = defaults.report.creative_work_percentage
     else:
-        default_percentage = ReportConfig.model_fields["creative_work_percentage"].default
+        default_percentage = ReportConfig.model_fields[
+            "creative_work_percentage"
+        ].default
 
     creative_percentage = questionary.text(
         f"Creative work percentage (0-{MAX_PERCENTAGE}) [{default_percentage}]:",
@@ -133,8 +133,12 @@ def _get_ai_config(defaults: Settings | None) -> AIProviderConfig:
     """Get AI configuration interactively."""
     questionary.print("\nAI Provider Configuration:", style="bold")
 
-    default_enable_ai = not isinstance(defaults.ai, DisabledAIConfig) if defaults else True
-    enable_ai = questionary.confirm("Enable AI filtering?", default=default_enable_ai).ask()
+    default_enable_ai = (
+        not isinstance(defaults.ai, DisabledAIConfig) if defaults else True
+    )
+    enable_ai = questionary.confirm(
+        "Enable AI filtering?", default=default_enable_ai
+    ).ask()
 
     if enable_ai:
         default_ai_config = defaults.ai if defaults else None
@@ -173,7 +177,9 @@ def _configure_ai_provider(
     if provider == "vertex":
         return _configure_vertex(default_config)
 
-    questionary.print(f"Unknown provider '{provider}', using disabled AI", style="yellow")
+    questionary.print(
+        f"Unknown provider '{provider}', using disabled AI", style="yellow"
+    )
     return DisabledAIConfig()
 
 
@@ -212,7 +218,8 @@ def _configure_gemini(default_config: AIProviderConfig | None) -> GeminiProvider
     if use_env_file:
         default_path = (
             str(default_config.api_key_file)
-            if isinstance(default_config, GeminiProviderConfig) and default_config.api_key_file
+            if isinstance(default_config, GeminiProviderConfig)
+            and default_config.api_key_file
             else ""
         )
         api_key_file = questionary.text(
@@ -243,7 +250,9 @@ def _configure_vertex(
         else VertexAIProviderConfig.model_fields["location"].default
     )
     default_project_id = (
-        default_config.project_id if isinstance(default_config, VertexAIProviderConfig) else ""
+        default_config.project_id
+        if isinstance(default_config, VertexAIProviderConfig)
+        else ""
     )
 
     model = questionary.text(f"Model [{default_model}]:", default=default_model).ask()
@@ -260,7 +269,8 @@ def _configure_vertex(
 
     default_credentials = (
         str(default_config.credentials_file)
-        if isinstance(default_config, VertexAIProviderConfig) and default_config.credentials_file
+        if isinstance(default_config, VertexAIProviderConfig)
+        and default_config.credentials_file
         else ""
     )
 
@@ -299,7 +309,6 @@ def _get_workday_config(defaults: Settings | None) -> WorkdayConfig:
 
 def _get_did_config(
     defaults: Settings | None,
-    did_config_path: Path,
     list_providers_fn: Callable[[Path], list[str]],
 ) -> DidConfig:
     """Get did configuration interactively."""
@@ -327,7 +336,9 @@ def _get_did_config(
         checked_providers = set(defaults.did.providers)
 
     # Let user select providers
-    choices = [Choice(title=p, checked=p in checked_providers) for p in available_providers]
+    choices = [
+        Choice(title=p, checked=p in checked_providers) for p in available_providers
+    ]
 
     selected_providers = questionary.checkbox(
         "Select providers to use:",

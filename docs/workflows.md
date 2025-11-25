@@ -3,15 +3,16 @@
 This document describes the detailed workflows and CLI design for the iptax tool.
 
 **See also:**
+
 - [Main Documentation](project.md) - Project overview and onboarding
-- [Requirements](requirements.md) - Detailed requirements  
+- [Requirements](requirements.md) - Detailed requirements
 - [Architecture](architecture.md) - Technical design
 - [Testing](testing.md) - Testing strategy
 - [Implementation](implementation.md) - Development phases
 - [Edge Cases](edge-cases.md) - Error handling scenarios
 - [Examples](examples.md) - Configuration and usage examples
 
----
+______________________________________________________________________
 
 ## Main Report Generation Workflow
 
@@ -47,7 +48,7 @@ The main `iptax report` command follows this workflow:
 2.1 Determine START date:
     - If history has previous month's report:
       start_date = previous_report.last_cutoff_date + 1 day
-      
+
     - If NO previous report (first run):
       Prompt user: "Enter cutoff date for previous month (YYYY-MM-DD):"
       start_date = user_input + 1 day
@@ -127,7 +128,7 @@ The main `iptax report` command follows this workflow:
 7.4 Final summary with next steps
 ```
 
----
+______________________________________________________________________
 
 ## CLI Design
 
@@ -138,6 +139,7 @@ iptax [COMMAND] [OPTIONS]
 ```
 
 **Available Commands:**
+
 - `(no command)` - Default, equivalent to `iptax report` for current month
 - `report` - Generate IP tax report
 - `config` - Configure settings interactively
@@ -148,12 +150,14 @@ iptax [COMMAND] [OPTIONS]
 ### Report Command
 
 **Usage:**
+
 ```bash
 iptax report [OPTIONS]
 iptax [OPTIONS]  # same as above
 ```
 
 **Options:**
+
 ```text
 --month YYYY-MM          Generate report for specific month (default: current)
 --skip-ai                Skip AI filtering, manually review all changes
@@ -199,11 +203,13 @@ iptax report --month 2024-10 --skip-ai --skip-workday --force
 ### Config Command
 
 **Usage:**
+
 ```bash
 iptax config [OPTIONS]
 ```
 
 **Options:**
+
 ```text
 --validate               Validate current configuration
 --show                   Display current configuration
@@ -228,6 +234,7 @@ iptax config --edit ai.provider
 ```
 
 **Interactive Questionnaire Flow:**
+
 ```text
 Welcome to iptax configuration!
 
@@ -286,11 +293,13 @@ Configuration saved to ~/.config/iptax/settings.yaml
 ### History Command
 
 **Usage:**
+
 ```bash
 iptax history [OPTIONS]
 ```
 
 **Options:**
+
 ```text
 --month YYYY-MM          Show specific month only
 --format FORMAT          Output format: table, json, yaml (default: table)
@@ -310,6 +319,7 @@ iptax history --format json
 ```
 
 **Example Output (Table Format):**
+
 ```text
 Report History
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -323,7 +333,7 @@ Month      Cutoff Date  Generated At         Regenerated
 Next report will start from: 2024-11-16
 ```
 
----
+______________________________________________________________________
 
 ## TUI Review Interface
 
@@ -376,6 +386,7 @@ Command: _
 ### Navigation Commands
 
 **List View:**
+
 - `↑↓` - Navigate up/down
 - `Enter` - View details for selected change
 - `f` - Flip decision (INCLUDE ↔ EXCLUDE)
@@ -383,6 +394,7 @@ Command: _
 - `q` - Quit (ask to save if changes made)
 
 **Detail View:**
+
 - `i` - Set decision to INCLUDE
 - `e` - Set decision to EXCLUDE
 - `r` - Add/edit reasoning for your decision
@@ -391,11 +403,12 @@ Command: _
 - `p` - Previous change details
 - `q` - Quit to list view
 
----
+______________________________________________________________________
 
 ## Error Handling Throughout Workflow
 
 **General Principles:**
+
 - Always validate user input
 - Provide clear error messages with suggested solutions
 - Allow graceful fallbacks (e.g., Workday → manual input)
