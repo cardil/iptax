@@ -90,9 +90,9 @@ class TestProductConfig:
 
     def test_valid_product_config(self):
         """Test creating ProductConfig with valid data."""
-        product = ProductConfig(name="Red Hat OpenShift Serverless")
+        product = ProductConfig(name="Acme Fungear")
 
-        assert product.name == "Red Hat OpenShift Serverless"
+        assert product.name == "Acme Fungear"
 
     def test_product_name_strips_whitespace(self):
         """Test that product name is stripped of whitespace."""
@@ -147,14 +147,18 @@ class TestReportConfig:
         with pytest.raises(ValidationError) as exc_info:
             ReportConfig(creative_work_percentage=-1)
 
-        assert "Creative work percentage must be between 0 and 100" in str(exc_info.value)
+        assert "Creative work percentage must be between 0 and 100" in str(
+            exc_info.value
+        )
 
     def test_percentage_validation_maximum(self):
         """Test that percentage cannot be greater than 100."""
         with pytest.raises(ValidationError) as exc_info:
             ReportConfig(creative_work_percentage=101)
 
-        assert "Creative work percentage must be between 0 and 100" in str(exc_info.value)
+        assert "Creative work percentage must be between 0 and 100" in str(
+            exc_info.value
+        )
 
     def test_percentage_validation_boundary_values(self):
         """Test that boundary values 0 and 100 are valid."""
@@ -173,7 +177,7 @@ class TestReportConfig:
         assert "{year}" not in str(path)
         assert "2024" in str(path)
 
-    def test_get_output_path_expands_home(self, tmp_path):
+    def test_get_output_path_expands_home(self):
         """Test that get_output_path() expands ~ to home directory."""
         report = ReportConfig(output_dir="~/test/{year}")
 
@@ -501,12 +505,12 @@ class TestRepository:
     def test_gitlab_repository_creation(self):
         """Test creating a GitLab repository."""
         repo = Repository(
-            host="gitlab.cee.redhat.com",
+            host="gitlab.example.org",
             path="group/subgroup/repo",
             provider_type="gitlab",
         )
 
-        assert repo.host == "gitlab.cee.redhat.com"
+        assert repo.host == "gitlab.example.org"
         assert repo.path == "group/subgroup/repo"
         assert repo.provider_type == "gitlab"
 
@@ -537,14 +541,14 @@ class TestRepository:
     def test_gitlab_url_generation(self):
         """Test URL generation for GitLab repositories."""
         repo = Repository(
-            host="gitlab.cee.redhat.com",
+            host="gitlab.example.org",
             path="group/subgroup/repo",
             provider_type="gitlab",
         )
 
         url = repo.get_url()
 
-        assert url == "https://gitlab.cee.redhat.com/group/subgroup/repo"
+        assert url == "https://gitlab.example.org/group/subgroup/repo"
 
     def test_github_display_name_formatting(self):
         """Test display name formatting for GitHub (simple path)."""
@@ -561,7 +565,7 @@ class TestRepository:
     def test_gitlab_display_name_formatting(self):
         """Test display name formatting for GitLab (nested path)."""
         repo = Repository(
-            host="gitlab.cee.redhat.com",
+            host="gitlab.example.org",
             path="group/subgroup/repo",
             provider_type="gitlab",
         )
@@ -659,7 +663,7 @@ class TestChange:
     def test_gitlab_change_url_generation(self):
         """Test URL generation for GitLab changes (merge requests)."""
         repo = Repository(
-            host="gitlab.cee.redhat.com",
+            host="gitlab.example.org",
             path="group/repo",
             provider_type="gitlab",
         )
@@ -672,7 +676,7 @@ class TestChange:
 
         url = change.get_url()
 
-        assert url == "https://gitlab.cee.redhat.com/group/repo/-/merge_requests/456"
+        assert url == "https://gitlab.example.org/group/repo/-/merge_requests/456"
 
     def test_get_change_id(self):
         """Test unique change identifier generation."""

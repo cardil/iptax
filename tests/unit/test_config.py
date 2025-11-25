@@ -65,7 +65,10 @@ class TestConfiguratorInitialization:
         """Test Configurator initialization with default paths."""
         configurator = Configurator()
 
-        assert configurator.settings_path == Path.home() / ".config" / "iptax" / "settings.yaml"
+        assert (
+            configurator.settings_path
+            == Path.home() / ".config" / "iptax" / "settings.yaml"
+        )
         assert configurator.did_config_path == Path.home() / ".did" / "config"
 
     def test_init_with_custom_settings_path(self, tmp_path):
@@ -256,7 +259,9 @@ class TestDidConfigValidation:
 
         assert "is not a file" in str(exc_info.value)
 
-    @pytest.mark.skipif(sys.platform == "win32", reason="chmod(0o000) unreliable on Windows")
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="chmod(0o000) unreliable on Windows"
+    )
     @pytest.mark.skipif(
         os.geteuid() == 0 if hasattr(os, "geteuid") else False,
         reason="Test unreliable when run as root",
@@ -457,21 +462,23 @@ class TestCreateInteractiveConfig:
             "Supervisor name:": "Jane Smith",
             "Product name:": "Test Product",
             "Creative work percentage (0-100) [80]:": "80",
-            "Output directory [~/Documents/iptax/{year}/]:": "~/Documents/iptax/{year}/",
+            "Output directory [~/Documents/iptax/{year}/]:": (
+                "~/Documents/iptax/{year}/"
+            ),
             "Enable AI filtering?": False,
             "Enable Workday integration?": False,
             "did config path [~/.did/config]:": str(did_config_file),
         }
 
         with (
-            patch("iptax.config.questionary.text") as mock_text,
-            patch("iptax.config.questionary.confirm") as mock_confirm,
-            patch("iptax.config.questionary.checkbox") as mock_checkbox,
-            patch("iptax.config.questionary.print"),
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
         ):
 
             # Setup text mock
-            def text_side_effect(prompt, **kwargs):
+            def text_side_effect(prompt: str, **kwargs: object) -> Mock:
                 mock = Mock()
                 for key, value in mock_responses.items():
                     if key in prompt:
@@ -484,7 +491,7 @@ class TestCreateInteractiveConfig:
             mock_text.side_effect = text_side_effect
 
             # Setup confirm mock
-            def confirm_side_effect(prompt, **kwargs):
+            def confirm_side_effect(prompt: str, **kwargs: object) -> Mock:
                 mock = Mock()
                 for key, value in mock_responses.items():
                     if key in prompt:
@@ -522,11 +529,11 @@ class TestCreateInteractiveConfig:
         )
 
         with (
-            patch("iptax.config.questionary.text") as mock_text,
-            patch("iptax.config.questionary.confirm") as mock_confirm,
-            patch("iptax.config.questionary.select") as mock_select,
-            patch("iptax.config.questionary.checkbox") as mock_checkbox,
-            patch("iptax.config.questionary.print"),
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.select") as mock_select,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
         ):
 
             # Mock text inputs
@@ -580,11 +587,11 @@ class TestCreateInteractiveConfig:
         )
 
         with (
-            patch("iptax.config.questionary.text") as mock_text,
-            patch("iptax.config.questionary.confirm") as mock_confirm,
-            patch("iptax.config.questionary.select") as mock_select,
-            patch("iptax.config.questionary.checkbox") as mock_checkbox,
-            patch("iptax.config.questionary.print"),
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.select") as mock_select,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
         ):
 
             # Mock text inputs
@@ -640,10 +647,10 @@ class TestCreateInteractiveConfig:
         )
 
         with (
-            patch("iptax.config.questionary.text") as mock_text,
-            patch("iptax.config.questionary.confirm") as mock_confirm,
-            patch("iptax.config.questionary.checkbox") as mock_checkbox,
-            patch("iptax.config.questionary.print"),
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
         ):
 
             # Mock text inputs
@@ -696,8 +703,12 @@ class TestCreateDefaultConfig:
         settings_file = config_dir / "settings.yaml"
         assert settings_file.exists()
 
-    def test_create_default_config_without_did(self, isolated_home):
-        """Test create_default_config() raises DidConfigError when did not configured."""
+    def test_create_default_config_without_did(
+        self,
+        isolated_home,  # noqa: ARG002 - fixture sets up environment
+    ):
+        """Test create_default_config() raises DidConfigError when did
+        not configured."""
         with pytest.raises(DidConfigError):
             create_default_config(interactive=False)
 

@@ -14,7 +14,9 @@ def pytest_configure(config: Config) -> None:
     config.addinivalue_line("markers", "e2e: End-to-end tests")
     config.addinivalue_line("markers", "slow: Slow running tests")
     config.addinivalue_line("markers", "requires_did: Tests requiring did installation")
-    config.addinivalue_line("markers", "requires_workday: Tests requiring Workday access")
+    config.addinivalue_line(
+        "markers", "requires_workday: Tests requiring Workday access"
+    )
 
 
 @pytest.fixture
@@ -78,13 +80,17 @@ def sample_did_output() -> str:
     """Provide sample output from the did tool."""
     return """# Changes
 
-* [feat: Add new feature (knative-extensions/kn-plugin-event#421)](https://github.com/knative-extensions/kn-plugin-event/pull/421)
-* [fix: Fix bug in handler (cncf/toolbox#040)](https://github.com/cncf/toolbox/pull/40)
-* [docs: Update documentation (knative/docs#1290)](https://github.com/knative/docs/pull/1290)
+* [feat: Add new feature (knative-extensions/kn-plugin-event#421)](\
+https://github.com/knative-extensions/kn-plugin-event/pull/421)
+* [fix: Fix bug in handler (cncf/toolbox#040)](\
+https://github.com/cncf/toolbox/pull/40)
+* [docs: Update documentation (knative/docs#1290)](\
+https://github.com/knative/docs/pull/1290)
 
 # Projects
 
-* [knative-extensions / kn-plugin-event](https://github.com/knative-extensions/kn-plugin-event)
+* [knative-extensions / kn-plugin-event](\
+https://github.com/knative-extensions/kn-plugin-event)
 * [cncf / toolbox](https://github.com/cncf/toolbox)
 * [knative / docs](https://github.com/knative/docs)
 """

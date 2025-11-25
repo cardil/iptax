@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
+import yaml
 from pydantic import (
     BaseModel,
     BeforeValidator,
@@ -17,6 +18,9 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+# Constants
+MAX_PERCENTAGE = 100
 
 
 def _validate_not_empty_string(v: str) -> str:
@@ -65,7 +69,7 @@ class ProductConfig(BaseModel):
 
     name: NonEmptyProductName = Field(
         ...,
-        description="Name of the product (e.g., 'Red Hat OpenShift Serverless')",
+        description="Name of the product (e.g., 'Acme Fungear')",
     )
 
 
@@ -78,19 +82,23 @@ class ReportConfig(BaseModel):
 
     output_dir: str = Field(
         default="~/Documents/iptax/{year}/",
-        description="Output directory for reports. {year} will be replaced with report year",
+        description=(
+            "Output directory for reports. " "{year} will be replaced with report year"
+        ),
     )
     creative_work_percentage: int = Field(
         default=80,
-        description="Percentage of work considered creative (0-100)",
+        description=f"Percentage of work considered creative (0-{MAX_PERCENTAGE})",
     )
 
     @field_validator("creative_work_percentage")
     @classmethod
     def validate_percentage(cls, v: int) -> int:
         """Validate percentage is in valid range."""
-        if not 0 <= v <= 100:
-            raise ValueError("Creative work percentage must be between 0 and 100")
+        if not 0 <= v <= MAX_PERCENTAGE:
+            raise ValueError(
+                f"Creative work percentage must be between 0 and {MAX_PERCENTAGE}"
+            )
         return v
 
     def get_output_path(self, year: int) -> Path:
@@ -127,7 +135,9 @@ class AIProviderConfigBase(BaseModel):
     )
     max_tokens: int | None = Field(
         default=None,
-        description="Maximum tokens for AI responses (provider-specific defaults if None)",
+        description=(
+            "Maximum tokens for AI responses " "(provider-specific defaults if None)"
+        ),
     )
 
 
@@ -150,7 +160,10 @@ class GeminiProviderConfig(AIProviderConfigBase):
     )
     api_key_file: str | None = Field(
         default=None,
-        description="Path to .env file containing the API key (optional, uses system env if not specified)",
+        description=(
+            "Path to .env file containing the API key "
+            "(optional, uses system env if not specified)"
+        ),
     )
 
     @field_validator("api_key_file")
@@ -186,7 +199,10 @@ class VertexAIProviderConfig(AIProviderConfigBase):
     )
     credentials_file: str | None = Field(
         default=None,
-        description="Path to GCP service account credentials JSON file (uses default credentials if None)",
+        description=(
+            "Path to GCP service account credentials JSON file "
+            "(uses default credentials if None)"
+        ),
     )
 
     @field_validator("credentials_file")
@@ -263,7 +279,9 @@ class DidConfig(BaseModel):
 
     @field_validator("config_path", mode="wrap")
     @classmethod
-    def validate_config_path_exists(cls, v: str, handler: ValidatorFunctionWrapHandler) -> str:
+    def validate_config_path_exists(
+        cls, v: str, handler: ValidatorFunctionWrapHandler
+    ) -> str:
         """Validate that did config file exists."""
         path = Path(v).expanduser()
         if not path.exists():
@@ -316,7 +334,10 @@ class Settings(BaseModel):
     )
     ai: AIProviderConfig = Field(
         default=DisabledAIConfig(),
-        description="AI provider configuration (use discriminated union based on provider type)",
+        description=(
+            "AI provider configuration "
+            "(use discriminated union based on provider type)"
+        ),
     )
     workday: WorkdayConfig = Field(
         default_factory=WorkdayConfig,
@@ -339,18 +360,18 @@ class Settings(BaseModel):
 
         Raises:
             FileNotFoundError: If the settings file doesn't exist
-            ValueError: If the YAML is invalid or validation fails
+            TypeError: If the YAML is invalid or validation fails
         """
-        import yaml
-
         if not path.exists():
             raise FileNotFoundError(f"Settings file not found: {path}")
 
-        with open(path, encoding="utf-8") as f:
+        with path.open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         if not isinstance(data, dict):
-            raise ValueError(f"Invalid settings file format in {path}: expected a mapping")
+            raise TypeError(
+                f"Invalid settings file format in {path}: expected a mapping"
+            )
 
         return cls(**data)
 
@@ -360,13 +381,11 @@ class Settings(BaseModel):
         Args:
             path: Path where the settings file should be saved
         """
-        import yaml
-
         # Create parent directory if it doesn't exist
         path.parent.mkdir(parents=True, exist_ok=True)
 
         # Convert to dict and write to file
-        with open(path, "w", encoding="utf-8") as f:
+        with path.open("w", encoding="utf-8") as f:
             yaml.safe_dump(
                 self.model_dump(mode="python", exclude_none=True),
                 f,
@@ -388,7 +407,10 @@ class HistoryEntry(BaseModel):
 
     last_cutoff_date: date = Field(
         ...,
-        description="The end date used for this report (start date for next report will be this + 1 day)",
+        description=(
+            "The end date used for this report "
+            "(start date for next report will be this + 1 day)"
+        ),
     )
     generated_at: datetime = Field(
         ...,
@@ -409,11 +431,14 @@ class Repository(BaseModel):
 
     host: str = Field(
         ...,
-        description="Repository host (e.g., github.com, gitlab.cee.redhat.com)",
+        description="Repository host (e.g., github.com, gitlab.example.org)",
     )
     path: str = Field(
         ...,
-        description="Repository path (e.g., 'owner/repo' or 'group/subgroup/repo' for GitLab)",
+        description=(
+            "Repository path "
+            "(e.g., 'owner/repo' or 'group/subgroup/repo' for GitLab)"
+        ),
     )
     provider_type: Literal["github", "gitlab"] = Field(
         ...,
@@ -509,8 +534,8 @@ class Change(BaseModel):
 
         if self.repository.provider_type == "github":
             return f"{base_url}/pull/{self.number}"
-        else:  # gitlab
-            return f"{base_url}/-/merge_requests/{self.number}"
+        # gitlab
+        return f"{base_url}/-/merge_requests/{self.number}"
 
     def get_display_reference(self) -> str:
         """Get a short display reference for the change.

@@ -17,15 +17,15 @@ jobs:
   checks:
     name: Code Quality Checks
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      
+
       - name: Cache virtual environment
         uses: actions/cache@v4
         with:
@@ -33,7 +33,7 @@ jobs:
           key: venv-${{ runner.os }}-3.11-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             venv-${{ runner.os }}-3.11-
-      
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
@@ -41,13 +41,13 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             playwright-${{ runner.os }}-
-      
+
       - name: Install system dependencies
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: libkrb5-dev
           version: 1.0
-      
+
       - name: Run code quality checks
         run: make check
 
@@ -59,23 +59,25 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      
+
       - name: Cache virtual environment
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
+          key: >-
+            venv-${{ runner.os }}-${{ matrix.python-version }}-${{
+            hashFiles('pyproject.toml') }}
           restore-keys: |
             venv-${{ runner.os }}-${{ matrix.python-version }}-
-      
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
@@ -83,20 +85,16 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             playwright-${{ runner.os }}-
-      
+
       - name: Install system dependencies
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: libkrb5-dev
           version: 1.0
-      
+
       - name: Run unit tests
         run: make unit
-      
-      - name: Generate coverage report
-        if: matrix.python-version == '3.11'
-        run: make coverage
-      
+
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'
         uses: codecov/codecov-action@v4
@@ -109,15 +107,15 @@ jobs:
     name: Full Verification
     needs: checks
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      
+
       - name: Cache virtual environment
         uses: actions/cache@v4
         with:
@@ -125,7 +123,7 @@ jobs:
           key: venv-${{ runner.os }}-3.11-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             venv-${{ runner.os }}-3.11-
-      
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
@@ -133,15 +131,15 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pyproject.toml') }}
           restore-keys: |
             playwright-${{ runner.os }}-
-      
+
       - name: Install system dependencies
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: libkrb5-dev
           version: 1.0
-      
+
       - name: Run full verification
         run: make verify
-      
+
       - name: Success notification
         run: echo "✓ All verifications passed"
