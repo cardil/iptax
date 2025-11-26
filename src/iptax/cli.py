@@ -1,8 +1,9 @@
 """Command-line interface for iptax."""
 
 import json
+import logging
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import click
 import yaml
@@ -15,7 +16,27 @@ from iptax.config import (
     get_config_path,
     load_settings,
 )
+from iptax.did import DidIntegrationError, fetch_changes
 from iptax.history import HistoryCorruptedError, HistoryManager, get_history_path
+from iptax.models import Change, Settings
+from iptax.utils.env import get_cache_dir
+
+
+def _setup_logging() -> None:
+    """Setup logging to user's cache directory."""
+    cache_dir = get_cache_dir()
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    # Setup root logger
+    log_file = cache_dir / "iptax.log"
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[
+            logging.FileHandler(log_file),
+        ],
+    )
 
 
 @click.group()
@@ -35,13 +56,115 @@ def cli() -> None:
     is_flag=True,
     help="Show what would be generated without creating files",
 )
-def report(month: str | None, skip_ai: bool, skip_workday: bool, dry_run: bool) -> None:
+def report(
+    month: str | None,
+    skip_ai: bool,  # noqa: ARG001
+    skip_workday: bool,  # noqa: ARG001
+    dry_run: bool,
+) -> None:
     """Generate IP tax report for the specified month (default: current month)."""
-    click.echo("Report generation not yet implemented")
-    click.echo(f"Month: {month or 'current'}")
-    click.echo(f"Skip AI: {skip_ai}")
-    click.echo(f"Skip Workday: {skip_workday}")
-    click.echo(f"Dry run: {dry_run}")
+    console = Console()
+
+    try:
+        settings = load_settings()
+        console.print("[cyan]✓[/cyan] Settings loaded")
+
+        manager = HistoryManager()
+        manager.load()
+        console.print("[cyan]✓[/cyan] History loaded")
+
+        # Get month key and date range
+        month_key = _get_month_key(month)
+        start_date, end_date = _get_date_range(month_key)
+        console.print(f"[cyan]📅[/cyan] Date range: {start_date} to {end_date}")
+
+        # Fetch and display changes
+        changes = _fetch_and_display_changes(console, settings, start_date, end_date)
+
+        if dry_run:
+            console.print("\n[yellow]Dry run - no files created[/yellow]")
+        elif changes:
+            console.print(
+                "\n[yellow]Note: Full report generation not yet implemented[/yellow]"
+            )
+
+    except ConfigError as e:
+        click.secho(f"Configuration error: {e}", fg="red", err=True)
+        click.echo("\nRun 'iptax config' to configure the application.")
+        sys.exit(1)
+    except DidIntegrationError as e:
+        click.secho(f"Did integration error: {e}", fg="red", err=True)
+        click.echo("\nCheck your did configuration and try again.")
+        sys.exit(1)
+    except HistoryCorruptedError as e:
+        click.secho(f"History error: {e}", fg="red", err=True)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n\n[yellow]Report generation cancelled[/yellow]")
+        sys.exit(1)
+
+
+def _get_month_key(month: str | None) -> str:
+    """Get month key from provided month or current month."""
+    if month:
+        try:
+            parsed_month = datetime.strptime(month, "%Y-%m")
+            return parsed_month.strftime("%Y-%m")
+        except ValueError:
+            click.secho(
+                f"Error: Invalid month format '{month}', expected YYYY-MM",
+                fg="red",
+                err=True,
+            )
+            sys.exit(1)
+    return datetime.now().strftime("%Y-%m")
+
+
+def _get_date_range(month_key: str) -> tuple[date, date]:
+    """Get start and end date for a month."""
+    year, month_num = month_key.split("-")
+    start_date = datetime(int(year), int(month_num), 1).date()
+
+    # Get last day of month
+    december = 12
+    if int(month_num) == december:
+        end_date = datetime(int(year), december, 31).date()
+    else:
+        next_month = datetime(int(year), int(month_num) + 1, 1).date()
+        end_date = next_month - timedelta(days=1)
+
+    return start_date, end_date
+
+
+def _fetch_and_display_changes(
+    console: Console, settings: Settings, start_date: date, end_date: date
+) -> list[Change]:
+    """Fetch changes and display them in the console."""
+    console.print("[cyan]🔍[/cyan] Fetching changes from did...")
+    changes = fetch_changes(settings, start_date, end_date)
+    console.print(f"[green]✓[/green] Found {len(changes)} changes")
+
+    if not changes:
+        console.print("[yellow]No changes found for this period[/yellow]")
+        return changes
+
+    # Display changes
+    console.print("\n[bold]Changes:[/bold]")
+    for i, change in enumerate(changes, 1):
+        console.print(f"\n[cyan]{i}.[/cyan] {change.title}")
+        console.print(f"   Repository: {change.repository.get_display_name()}")
+        console.print(f"   URL: {change.get_url()}")
+        if change.merged_at:
+            merged_str = change.merged_at.strftime("%Y-%m-%d %H:%M:%S")
+            console.print(f"   Merged: {merged_str}")
+
+    # Display summary
+    repositories = {change.repository.get_display_name() for change in changes}
+    console.print("\n[bold]Summary:[/bold]")
+    console.print(f"  Total changes: {len(changes)}")
+    console.print(f"  Repositories: {len(repositories)}")
+
+    return changes
 
 
 @cli.command()
@@ -241,6 +364,7 @@ def _output_yaml(entries: dict) -> None:
 
 def main() -> None:
     """Main entry point for the CLI."""
+    _setup_logging()
     cli()
 
 

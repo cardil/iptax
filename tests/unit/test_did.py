@@ -1,0 +1,792 @@
+"""Unit tests for did integration module."""
+
+import logging
+from datetime import date
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+import pytest
+
+from iptax.did import (
+    DidIntegrationError,
+    InvalidStatDataError,
+    _clean_emoji,
+    _convert_to_change,
+    _determine_provider_type,
+    _fetch_provider_changes,
+    fetch_changes,
+)
+from iptax.models import DidConfig, EmployeeInfo, ProductConfig, Settings
+
+
+class TestCleanEmoji:
+    """Test emoji cleaning functionality."""
+
+    def test_clean_simple_emoji(self) -> None:
+        """Test removing simple emoji code."""
+        assert _clean_emoji(":rocket: Add feature") == "Add feature"
+
+    def test_clean_multiple_emojis(self) -> None:
+        """Test removing multiple emoji codes."""
+        assert (
+            _clean_emoji(":bug: :rocket: Fix and add feature") == "Fix and add feature"
+        )
+
+    def test_clean_emoji_at_end(self) -> None:
+        """Test removing emoji at end of title."""
+        assert _clean_emoji("Add feature :sparkles:") == "Add feature"
+
+    def test_clean_no_emoji(self) -> None:
+        """Test title without emoji codes."""
+        assert _clean_emoji("Regular title") == "Regular title"
+
+    def test_clean_emoji_with_extra_spaces(self) -> None:
+        """Test removing emoji and collapsing spaces."""
+        assert _clean_emoji(":rocket:  Add   feature  :bug:") == "Add feature"
+
+    def test_clean_empty_after_emoji_removal(self) -> None:
+        """Test title that becomes empty after emoji removal."""
+        assert _clean_emoji(":rocket: :bug:") == ""
+
+    def test_clean_unicode_emoji_preserved(self) -> None:
+        """Test that actual unicode emoji are preserved."""
+        assert _clean_emoji("Add feature 🚀") == "Add feature 🚀"
+
+
+class TestDetermineProviderType:
+    """Test provider type determination."""
+
+    def test_github_com(self) -> None:
+        """Test identifying github.com."""
+        assert _determine_provider_type("github.com") == "github"
+
+    def test_github_enterprise(self) -> None:
+        """Test identifying GitHub Enterprise."""
+        assert _determine_provider_type("github.example.com") == "github"
+
+    def test_gitlab_com(self) -> None:
+        """Test identifying gitlab.com."""
+        assert _determine_provider_type("gitlab.com") == "gitlab"
+
+    def test_gitlab_self_hosted(self) -> None:
+        """Test identifying self-hosted GitLab."""
+        assert _determine_provider_type("gitlab.example.org") == "gitlab"
+
+    def test_unknown_raises_error(self) -> None:
+        """Test unknown hosts raise DidIntegrationError."""
+        with pytest.raises(
+            DidIntegrationError,
+            match=r"Cannot determine provider type from host 'git\.example\.com'",
+        ):
+            _determine_provider_type("git.example.com")
+
+    def test_case_insensitive(self) -> None:
+        """Test host matching is case insensitive."""
+        assert _determine_provider_type("GitHub.Com") == "github"
+        assert _determine_provider_type("GitLab.Com") == "gitlab"
+
+
+class TestDidIntegrationError:
+    """Test DidIntegrationError exception."""
+
+    def test_error_creation(self) -> None:
+        """Test creating DidIntegrationError."""
+        error = DidIntegrationError("Test error message")
+        assert str(error) == "Test error message"
+
+    def test_error_with_cause(self) -> None:
+        """Test creating DidIntegrationError with cause."""
+
+        def raise_with_cause() -> None:
+            cause = ValueError("Original error")
+            raise DidIntegrationError("Wrapper error") from cause
+
+        try:
+            raise_with_cause()
+        except DidIntegrationError as error:
+            assert str(error) == "Wrapper error"
+            assert isinstance(error.__cause__, ValueError)
+            assert str(error.__cause__) == "Original error"
+
+
+class TestInvalidStatDataError:
+    """Test InvalidStatDataError exception."""
+
+    def test_error_creation(self) -> None:
+        """Test creating InvalidStatDataError."""
+        error = InvalidStatDataError("Missing field")
+        assert str(error) == "Missing field"
+
+    def test_error_with_cause(self) -> None:
+        """Test creating InvalidStatDataError with cause."""
+
+        def raise_with_cause() -> None:
+            cause = ValueError("Bad value")
+            raise InvalidStatDataError("Invalid data") from cause
+
+        try:
+            raise_with_cause()
+        except InvalidStatDataError as error:
+            assert str(error) == "Invalid data"
+            assert isinstance(error.__cause__, ValueError)
+            assert str(error.__cause__) == "Bad value"
+
+
+class TestConvertToChange:
+    """Test _convert_to_change function."""
+
+    def test_convert_valid_github_stat(self) -> None:
+        """Test converting valid GitHub stat to Change."""
+        stat = Mock()
+        stat.owner = "octocat"
+        stat.project = "hello-world"
+        stat.id = "123"
+        stat.title = "Add new feature"
+
+        change = _convert_to_change(stat, "github.com")
+
+        assert change.title == "Add new feature"
+        assert change.repository.host == "github.com"
+        assert change.repository.path == "octocat/hello-world"
+        assert change.repository.provider_type == "github"
+        assert change.number == 123
+        assert change.merged_at is None
+
+    def test_convert_valid_gitlab_stat(self) -> None:
+        """Test converting valid GitLab stat to Change."""
+        stat = Mock()
+        stat.owner = "gitlab-org"
+        stat.project = "gitlab"
+        stat.id = "456"
+        stat.title = "Fix bug"
+
+        change = _convert_to_change(stat, "gitlab.com")
+
+        assert change.title == "Fix bug"
+        assert change.repository.host == "gitlab.com"
+        assert change.repository.path == "gitlab-org/gitlab"
+        assert change.repository.provider_type == "gitlab"
+        assert change.number == 456
+
+    def test_convert_with_emoji_in_title(self) -> None:
+        """Test converting stat with emoji in title."""
+        stat = Mock()
+        stat.owner = "user"
+        stat.project = "repo"
+        stat.id = "1"
+        stat.title = ":rocket: Add feature :sparkles:"
+
+        change = _convert_to_change(stat, "github.com")
+
+        assert change.title == "Add feature"
+
+    def test_convert_missing_owner(self) -> None:
+        """Test converting stat with missing owner raises error."""
+        stat = Mock()
+        stat.owner = None
+        stat.project = "repo"
+        stat.id = "1"
+        stat.title = "Title"
+
+        with pytest.raises(InvalidStatDataError, match="Missing owner"):
+            _convert_to_change(stat, "github.com")
+
+    def test_convert_missing_project(self) -> None:
+        """Test converting stat with missing project raises error."""
+        stat = Mock()
+        stat.owner = "owner"
+        stat.project = None
+        stat.id = "1"
+        stat.title = "Title"
+
+        with pytest.raises(InvalidStatDataError, match="Missing project"):
+            _convert_to_change(stat, "github.com")
+
+    def test_convert_missing_id(self) -> None:
+        """Test converting stat with missing id raises error."""
+        stat = Mock()
+        stat.owner = "owner"
+        stat.project = "repo"
+        stat.id = None
+        stat.title = "Title"
+
+        with pytest.raises(InvalidStatDataError, match="Missing id"):
+            _convert_to_change(stat, "github.com")
+
+    def test_convert_missing_title(self) -> None:
+        """Test converting stat with missing title raises error."""
+        stat = Mock()
+        stat.owner = "owner"
+        stat.project = "repo"
+        stat.id = "1"
+        stat.title = None
+
+        with pytest.raises(InvalidStatDataError, match="Missing title"):
+            _convert_to_change(stat, "github.com")
+
+    def test_convert_empty_title(self) -> None:
+        """Test converting stat with empty title raises error."""
+        stat = Mock()
+        stat.owner = "owner"
+        stat.project = "repo"
+        stat.id = "1"
+        stat.title = ""
+
+        with pytest.raises(InvalidStatDataError, match="Missing title"):
+            _convert_to_change(stat, "github.com")
+
+    def test_convert_invalid_id_type(self) -> None:
+        """Test converting stat with non-numeric id raises error."""
+        stat = Mock()
+        stat.owner = "owner"
+        stat.project = "repo"
+        stat.id = "not-a-number"
+        stat.title = "Title"
+
+        with pytest.raises(InvalidStatDataError, match="Invalid id"):
+            _convert_to_change(stat, "github.com")
+
+    def test_convert_zero_id(self) -> None:
+        """Test converting stat with zero id raises error."""
+        stat = Mock()
+        stat.owner = "owner"
+        stat.project = "repo"
+        stat.id = "0"
+        stat.title = "Title"
+
+        with pytest.raises(InvalidStatDataError, match="Non-positive id"):
+            _convert_to_change(stat, "github.com")
+
+    def test_convert_negative_id(self) -> None:
+        """Test converting stat with negative id raises error."""
+        stat = Mock()
+        stat.owner = "owner"
+        stat.project = "repo"
+        stat.id = "-5"
+        stat.title = "Title"
+
+        with pytest.raises(InvalidStatDataError, match="Non-positive id"):
+            _convert_to_change(stat, "github.com")
+
+
+class TestFetchProviderChanges:
+    """Test _fetch_provider_changes function."""
+
+    @patch("iptax.did.did.cli.main")
+    def test_fetch_github_provider(self, mock_did_main: Mock) -> None:
+        """Test fetching changes from GitHub provider."""
+        mock_stat = Mock()
+        mock_stat.owner = "owner"
+        mock_stat.project = "repo"
+        mock_stat.id = "1"
+        mock_stat.title = "PR title"
+
+        mock_merged_stats = Mock()
+        mock_merged_stats.__class__.__name__ = "PullRequestsMerged"
+        mock_merged_stats.stats = [mock_stat]
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = [mock_merged_stats]
+
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+
+        mock_did_main.return_value = ([mock_user],)
+
+        changes = _fetch_provider_changes(
+            "github.com",
+            date(2024, 1, 1),
+            date(2024, 1, 31),
+        )
+
+        assert len(changes) == 1
+        assert changes[0].title == "PR title"
+        assert changes[0].repository.provider_type == "github"
+
+    @patch("iptax.did.did.cli.main")
+    def test_fetch_gitlab_provider(self, mock_did_main: Mock) -> None:
+        """Test fetching changes from GitLab provider."""
+        mock_stat = Mock()
+        mock_stat.owner = "group"
+        mock_stat.project = "project"
+        mock_stat.id = "2"
+        mock_stat.title = "MR title"
+
+        mock_merged_stats = Mock()
+        mock_merged_stats.__class__.__name__ = "MergeRequestsMerged"
+        mock_merged_stats.stats = [mock_stat]
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = [mock_merged_stats]
+
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+
+        mock_did_main.return_value = ([mock_user],)
+
+        changes = _fetch_provider_changes(
+            "gitlab.example.com",
+            date(2024, 1, 1),
+            date(2024, 1, 31),
+        )
+
+        assert len(changes) == 1
+        assert changes[0].title == "MR title"
+        assert changes[0].repository.provider_type == "gitlab"
+
+    @patch("iptax.did.did.cli.main")
+    def test_fetch_empty_result(self, mock_did_main: Mock) -> None:
+        """Test fetching with empty result raises error."""
+        mock_did_main.return_value = ()
+
+        with pytest.raises(DidIntegrationError, match="Empty result"):
+            _fetch_provider_changes(
+                "github.com",
+                date(2024, 1, 1),
+                date(2024, 1, 31),
+            )
+
+    @patch("iptax.did.did.cli.main")
+    def test_fetch_no_user_stats(self, mock_did_main: Mock) -> None:
+        """Test fetching with no user stats raises error."""
+        mock_did_main.return_value = ([],)
+
+        with pytest.raises(DidIntegrationError, match="None or falsy"):
+            _fetch_provider_changes(
+                "github.com",
+                date(2024, 1, 1),
+                date(2024, 1, 31),
+            )
+
+    @patch("iptax.did.did.cli.main")
+    def test_fetch_no_provider_stats(self, mock_did_main: Mock) -> None:
+        """Test fetching with no provider stats."""
+        mock_user = Mock()
+        mock_user.stats = []
+
+        mock_did_main.return_value = ([mock_user],)
+
+        changes = _fetch_provider_changes(
+            "github.com",
+            date(2024, 1, 1),
+            date(2024, 1, 31),
+        )
+
+        assert changes == []
+
+    @patch("iptax.did.did.cli.main")
+    def test_fetch_no_merged_stats(self, mock_did_main: Mock) -> None:
+        """Test fetching with no merged stats raises error."""
+        mock_other_stats = Mock()
+        mock_other_stats.__class__.__name__ = "IssuesCreated"
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = [mock_other_stats]
+
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+
+        mock_did_main.return_value = ([mock_user],)
+
+        with pytest.raises(DidIntegrationError, match="Merged stats section not found"):
+            _fetch_provider_changes(
+                "github.com",
+                date(2024, 1, 1),
+                date(2024, 1, 31),
+            )
+
+    @patch("iptax.did.did.cli.main")
+    def test_fetch_multiple_changes(self, mock_did_main: Mock) -> None:
+        """Test fetching multiple changes."""
+        mock_stat1 = Mock()
+        mock_stat1.owner = "owner"
+        mock_stat1.project = "repo1"
+        mock_stat1.id = "1"
+        mock_stat1.title = "First PR"
+
+        mock_stat2 = Mock()
+        mock_stat2.owner = "owner"
+        mock_stat2.project = "repo2"
+        mock_stat2.id = "2"
+        mock_stat2.title = "Second PR"
+
+        mock_merged_stats = Mock()
+        mock_merged_stats.__class__.__name__ = "PullRequestsMerged"
+        mock_merged_stats.stats = [mock_stat1, mock_stat2]
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = [mock_merged_stats]
+
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+
+        mock_did_main.return_value = ([mock_user],)
+
+        changes = _fetch_provider_changes(
+            "github.com",
+            date(2024, 1, 1),
+            date(2024, 1, 31),
+        )
+
+        assert len(changes) == 2
+        assert changes[0].title == "First PR"
+        assert changes[1].title == "Second PR"
+
+    @patch("iptax.did.did.cli.main")
+    def test_fetch_filters_invalid_stats(self, mock_did_main: Mock) -> None:
+        """Test that invalid stats are filtered out with logging."""
+        mock_valid = Mock()
+        mock_valid.owner = "owner"
+        mock_valid.project = "repo"
+        mock_valid.id = "1"
+        mock_valid.title = "Valid PR"
+
+        mock_invalid = Mock()
+        mock_invalid.owner = None  # Missing owner
+        mock_invalid.project = "repo"
+        mock_invalid.id = "2"
+        mock_invalid.title = "Invalid PR"
+
+        mock_merged_stats = Mock()
+        mock_merged_stats.__class__.__name__ = "PullRequestsMerged"
+        mock_merged_stats.stats = [mock_valid, mock_invalid]
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = [mock_merged_stats]
+
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+
+        mock_did_main.return_value = ([mock_user],)
+
+        changes = _fetch_provider_changes(
+            "github.com",
+            date(2024, 1, 1),
+            date(2024, 1, 31),
+        )
+
+        assert len(changes) == 1
+        assert changes[0].title == "Valid PR"
+
+    @patch("iptax.did.did.cli.main")
+    def test_fetch_did_cli_exception(self, mock_did_main: Mock) -> None:
+        """Test handling exception from did.cli.main."""
+        mock_did_main.side_effect = RuntimeError("Did CLI error")
+
+        with pytest.raises(DidIntegrationError) as exc_info:
+            _fetch_provider_changes(
+                "github.com",
+                date(2024, 1, 1),
+                date(2024, 1, 31),
+            )
+
+        assert "Failed to call did.cli.main()" in str(exc_info.value)
+        assert isinstance(exc_info.value.__cause__, RuntimeError)
+
+
+class TestExtractMergedStats:
+    """Test _extract_merged_stats function."""
+
+    def test_extract_user_stats_missing_stats_attribute(self) -> None:
+        """Test error when user stats object missing stats attribute."""
+        from iptax.did import _extract_merged_stats
+
+        mock_user = Mock(spec=[])  # No 'stats' attribute
+        result = ([mock_user],)
+
+        with pytest.raises(
+            DidIntegrationError, match="User stats object missing 'stats' attribute"
+        ):
+            _extract_merged_stats(result)
+
+    def test_extract_user_stats_stats_not_list(self) -> None:
+        """Test error when user stats.stats is not a list."""
+        from iptax.did import _extract_merged_stats
+
+        mock_user = Mock()
+        mock_user.stats = "not a list"
+        result = ([mock_user],)
+
+        with pytest.raises(
+            DidIntegrationError, match=r"User stats\.stats is not a list"
+        ):
+            _extract_merged_stats(result)
+
+    def test_extract_provider_stats_missing_stats_attribute(self) -> None:
+        """Test error when provider stats group missing stats attribute."""
+        from iptax.did import _extract_merged_stats
+
+        mock_provider_group = Mock(spec=[])  # No 'stats' attribute
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+        result = ([mock_user],)
+
+        with pytest.raises(
+            DidIntegrationError, match="Provider stats group missing 'stats' attribute"
+        ):
+            _extract_merged_stats(result)
+
+    def test_extract_provider_stats_stats_not_list(self) -> None:
+        """Test error when provider stats.stats is not a list."""
+        from iptax.did import _extract_merged_stats
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = "not a list"
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+        result = ([mock_user],)
+
+        with pytest.raises(
+            DidIntegrationError, match=r"Provider stats\.stats is not a list"
+        ):
+            _extract_merged_stats(result)
+
+    def test_extract_provider_stats_empty_list(self) -> None:
+        """Test empty provider stats returns empty list."""
+        from iptax.did import _extract_merged_stats
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = []
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+        result = ([mock_user],)
+
+        assert _extract_merged_stats(result) == []
+
+    def test_extract_merged_stat_missing_stats_attribute(self) -> None:
+        """Test error when merged stat object missing stats attribute."""
+        from iptax.did import _extract_merged_stats
+
+        mock_merged_stat = Mock(spec=[])  # No 'stats' attribute
+        mock_merged_stat.__class__.__name__ = "PullRequestsMerged"
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = [mock_merged_stat]
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+        result = ([mock_user],)
+
+        # Mock without 'stats' won't pass _is_merged_stat check, falls through to end
+        with pytest.raises(
+            DidIntegrationError,
+            match="Merged stats section not found in did result",
+        ):
+            _extract_merged_stats(result)
+
+
+class TestValidateAndExtractUserStats:
+    """Test _validate_and_extract_user_stats function."""
+
+    def test_validate_non_tuple_result(self) -> None:
+        """Test error when result is not a tuple."""
+        from iptax.did import _validate_and_extract_user_stats
+
+        with pytest.raises(DidIntegrationError, match="Expected tuple"):
+            _validate_and_extract_user_stats([])  # List instead of tuple
+
+    def test_validate_empty_users_list(self) -> None:
+        """Test error when users list is empty."""
+        from iptax.did import _validate_and_extract_user_stats
+
+        result = ([],)  # Empty list is falsy
+
+        # Empty list is falsy, caught by line 220 check
+        with pytest.raises(
+            DidIntegrationError, match="First element of did result is None or falsy"
+        ):
+            _validate_and_extract_user_stats(result)
+
+
+class TestIsMergedStat:
+    """Test _is_merged_stat function."""
+
+    def test_is_merged_stat_no_stats_attribute(self) -> None:
+        """Test returns False when stat has no stats attribute."""
+        from iptax.did import _is_merged_stat
+
+        mock_stat = Mock(spec=[])  # No 'stats' attribute
+        assert _is_merged_stat(mock_stat) is False
+
+
+class TestCheckDidStderr:
+    """Test _check_did_stderr function."""
+
+    def test_check_stderr_with_error_keyword(self) -> None:
+        """Test raises error when stderr contains 'error' keyword."""
+        from iptax.did import _check_did_stderr
+
+        with pytest.raises(DidIntegrationError, match="did CLI reported errors"):
+            _check_did_stderr("Error: something went wrong", "github.com")
+
+    def test_check_stderr_with_fail_keyword(self) -> None:
+        """Test raises error when stderr contains 'fail' keyword."""
+        from iptax.did import _check_did_stderr
+
+        with pytest.raises(DidIntegrationError, match="did CLI reported errors"):
+            _check_did_stderr("Failed to connect", "github.com")
+
+    def test_check_stderr_with_exception_keyword(self) -> None:
+        """Test raises error when stderr contains 'exception' keyword."""
+        from iptax.did import _check_did_stderr
+
+        with pytest.raises(DidIntegrationError, match="did CLI reported errors"):
+            _check_did_stderr("Exception occurred", "github.com")
+
+    def test_check_stderr_with_warning_only(self, caplog) -> None:
+        """Test logs warning but doesn't raise when stderr has no error keywords."""
+        from iptax.did import _check_did_stderr
+
+        with caplog.at_level(logging.WARNING):
+            _check_did_stderr("Some warning message", "github.com")
+
+        assert "did CLI produced stderr output" in caplog.text
+        assert "github.com" in caplog.text
+
+
+class TestFetchChanges:
+    """Test fetch_changes function."""
+
+    @patch("iptax.did._fetch_provider_changes")
+    @patch("iptax.did.did.base.Config")
+    def test_fetch_changes_single_provider(
+        self,
+        _mock_config: Mock,
+        mock_fetch_provider: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test fetching changes from single provider."""
+        config_path = tmp_path / "did.conf"
+        config_path.write_text("[general]\nemail = test@example.com\n")
+
+        settings = Settings(
+            employee=EmployeeInfo(name="Test User", supervisor="Manager"),
+            product=ProductConfig(name="Product"),
+            did=DidConfig(
+                config_path=str(config_path),
+                providers=["github.com"],
+            ),
+        )
+
+        mock_change = Mock()
+        mock_fetch_provider.return_value = [mock_change]
+
+        changes = fetch_changes(settings, date(2024, 1, 1), date(2024, 1, 31))
+
+        assert len(changes) == 1
+        assert changes[0] == mock_change
+        mock_fetch_provider.assert_called_once()
+
+    @patch("iptax.did._fetch_provider_changes")
+    @patch("iptax.did.did.base.Config")
+    def test_fetch_changes_multiple_providers(
+        self,
+        _mock_config: Mock,
+        mock_fetch_provider: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test fetching changes from multiple providers."""
+        config_path = tmp_path / "did.conf"
+        config_path.write_text("[general]\nemail = test@example.com\n")
+
+        settings = Settings(
+            employee=EmployeeInfo(name="Test User", supervisor="Manager"),
+            product=ProductConfig(name="Product"),
+            did=DidConfig(
+                config_path=str(config_path),
+                providers=["github.com", "gitlab.com"],
+            ),
+        )
+
+        mock_change1 = Mock()
+        mock_change2 = Mock()
+        mock_fetch_provider.side_effect = [[mock_change1], [mock_change2]]
+
+        changes = fetch_changes(settings, date(2024, 1, 1), date(2024, 1, 31))
+
+        assert len(changes) == 2
+        assert changes[0] == mock_change1
+        assert changes[1] == mock_change2
+        assert mock_fetch_provider.call_count == 2
+
+    @patch("iptax.did.did.base.Config")
+    def test_fetch_changes_config_load_error(
+        self, mock_config: Mock, tmp_path: Path
+    ) -> None:
+        """Test error when loading did config fails."""
+        config_path = tmp_path / "did.conf"
+        config_path.write_text("[general]\nemail = test@example.com\n")
+
+        settings = Settings(
+            employee=EmployeeInfo(name="Test User", supervisor="Manager"),
+            product=ProductConfig(name="Product"),
+            did=DidConfig(
+                config_path=str(config_path),
+                providers=["github.com"],
+            ),
+        )
+
+        mock_config.side_effect = Exception("Config error")
+
+        with pytest.raises(DidIntegrationError) as exc_info:
+            fetch_changes(settings, date(2024, 1, 1), date(2024, 1, 31))
+
+        assert "Failed to load did config" in str(exc_info.value)
+        assert isinstance(exc_info.value.__cause__, Exception)
+
+    @patch("iptax.did._fetch_provider_changes")
+    @patch("iptax.did.did.base.Config")
+    def test_fetch_changes_provider_error(
+        self,
+        _mock_config: Mock,
+        mock_fetch_provider: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test error when fetching from provider fails."""
+        config_path = tmp_path / "did.conf"
+        config_path.write_text("[general]\nemail = test@example.com\n")
+
+        settings = Settings(
+            employee=EmployeeInfo(name="Test User", supervisor="Manager"),
+            product=ProductConfig(name="Product"),
+            did=DidConfig(
+                config_path=str(config_path),
+                providers=["github.com"],
+            ),
+        )
+
+        mock_fetch_provider.side_effect = RuntimeError("Provider error")
+
+        with pytest.raises(DidIntegrationError) as exc_info:
+            fetch_changes(settings, date(2024, 1, 1), date(2024, 1, 31))
+
+        assert "Failed to fetch changes from provider 'github.com'" in str(
+            exc_info.value
+        )
+        assert isinstance(exc_info.value.__cause__, RuntimeError)
+
+    @patch("iptax.did._fetch_provider_changes")
+    @patch("iptax.did.did.base.Config")
+    def test_fetch_changes_empty_results(
+        self,
+        _mock_config: Mock,
+        mock_fetch_provider: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """Test fetching with no changes."""
+        config_path = tmp_path / "did.conf"
+        config_path.write_text("[general]\nemail = test@example.com\n")
+
+        settings = Settings(
+            employee=EmployeeInfo(name="Test User", supervisor="Manager"),
+            product=ProductConfig(name="Product"),
+            did=DidConfig(
+                config_path=str(config_path),
+                providers=["github.com"],
+            ),
+        )
+
+        mock_fetch_provider.return_value = []
+
+        changes = fetch_changes(settings, date(2024, 1, 1), date(2024, 1, 31))
+
+        assert changes == []

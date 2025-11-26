@@ -5,7 +5,6 @@ to ensure no changes are duplicated or missed between reports. It provides
 date range calculation and handles first-time setup.
 """
 
-import os
 import shutil
 import tomllib
 from datetime import UTC, date, datetime, timedelta
@@ -17,6 +16,7 @@ import tomli_w
 from pydantic import ValidationError
 
 from iptax.models import HistoryEntry
+from iptax.utils.env import get_cache_dir
 
 # Constants
 DECEMBER_MONTH = 12
@@ -74,17 +74,7 @@ class HistoryManager:
         Returns:
             Path to history.toml
         """
-        xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
-
-        if xdg_cache_home:
-            cache_dir = Path(xdg_cache_home) / "iptax"
-        else:
-            # Respect HOME environment variable, fall back to Path.home()
-            home = os.environ.get("HOME")
-            home_path = Path(home) if home else Path.home()
-            cache_dir = home_path / ".cache" / "iptax"
-
-        return cache_dir / "history.toml"
+        return get_cache_dir() / "history.toml"
 
     def load(self) -> None:
         """Load history from TOML file.

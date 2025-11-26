@@ -21,11 +21,15 @@ def test_cli_help(runner: CliRunner) -> None:
 
 
 @pytest.mark.unit
-def test_report_command_placeholder(runner: CliRunner) -> None:
-    """Test that report command shows placeholder message."""
+def test_report_command_placeholder(runner: CliRunner, tmp_path, monkeypatch) -> None:
+    """Test that report command requires configuration."""
+    # The report command now requires valid configuration
+    # Test that it shows helpful error message when config is missing
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     result = runner.invoke(cli, ["report", "--dry-run"])
-    assert result.exit_code == 0
-    assert "not yet implemented" in result.output
+    assert result.exit_code == 1
+    assert "Configuration error" in result.output
+    assert "iptax config" in result.output
 
 
 @pytest.mark.unit
@@ -133,3 +137,151 @@ def test_history_command_empty_history(
     result = runner.invoke(cli, ["history"])
     assert result.exit_code == 0
     assert "No report history found" in result.output
+
+
+@pytest.mark.unit
+def test_report_command_did_integration_error(
+    runner: CliRunner, tmp_path, monkeypatch
+) -> None:
+    """Test that report command handles DidIntegrationError."""
+    from unittest.mock import patch
+
+    from iptax.did import DidIntegrationError
+
+    # Create minimal config
+    config_dir = tmp_path / "config" / "iptax"
+    config_dir.mkdir(parents=True)
+    config_file = config_dir / "settings.yaml"
+    config_file.write_text(
+        """
+employee:
+    name: "Test User"
+    supervisor: "Test Supervisor"
+product:
+    name: "Test Product"
+did:
+    providers:
+        - github.com
+"""
+    )
+
+    did_config = tmp_path / ".did"
+    did_config.mkdir()
+    (did_config / "config").write_text("")
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # Mock fetch_changes to raise DidIntegrationError
+    with patch("iptax.cli.fetch_changes") as mock_fetch:
+        mock_fetch.side_effect = DidIntegrationError("Did error")
+
+        result = runner.invoke(cli, ["report", "--dry-run"])
+        assert result.exit_code == 1
+        assert "Did integration error" in result.output
+
+
+@pytest.mark.unit
+def test_report_command_history_corrupted_error(
+    runner: CliRunner, tmp_path, monkeypatch
+) -> None:
+    """Test that report command handles HistoryCorruptedError."""
+    from unittest.mock import patch
+
+    from iptax.history import HistoryCorruptedError
+
+    # Create minimal config
+    config_dir = tmp_path / "config" / "iptax"
+    config_dir.mkdir(parents=True)
+    config_file = config_dir / "settings.yaml"
+    config_file.write_text(
+        """
+employee:
+    name: "Test User"
+    supervisor: "Test Supervisor"
+product:
+    name: "Test Product"
+did:
+    providers:
+        - github.com
+"""
+    )
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+    # Mock HistoryManager.load to raise HistoryCorruptedError
+    with patch("iptax.cli.HistoryManager") as mock_manager:
+        mock_manager.return_value.load.side_effect = HistoryCorruptedError(
+            "Corrupted history"
+        )
+
+        result = runner.invoke(cli, ["report", "--dry-run"])
+        assert result.exit_code == 1
+        assert "History error" in result.output
+
+
+@pytest.mark.unit
+def test_report_command_keyboard_interrupt(
+    runner: CliRunner, tmp_path, monkeypatch
+) -> None:
+    """Test that report command handles KeyboardInterrupt gracefully."""
+    from unittest.mock import patch
+
+    # Create minimal config
+    config_dir = tmp_path / "config" / "iptax"
+    config_dir.mkdir(parents=True)
+    config_file = config_dir / "settings.yaml"
+    config_file.write_text(
+        """
+employee:
+    name: "Test User"
+    supervisor: "Test Supervisor"
+product:
+    name: "Test Product"
+did:
+    providers:
+        - github.com
+"""
+    )
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+    # Mock fetch_changes to raise KeyboardInterrupt
+    with patch("iptax.cli.fetch_changes") as mock_fetch:
+        mock_fetch.side_effect = KeyboardInterrupt()
+
+        result = runner.invoke(cli, ["report", "--dry-run"])
+        assert result.exit_code == 1
+        assert "cancelled" in result.output
+
+
+@pytest.mark.unit
+def test_report_command_invalid_month_format(
+    runner: CliRunner, tmp_path, monkeypatch
+) -> None:
+    """Test that report command handles invalid month format."""
+    # Create minimal config so we can reach month validation
+    config_dir = tmp_path / "config" / "iptax"
+    config_dir.mkdir(parents=True)
+    config_file = config_dir / "settings.yaml"
+    config_file.write_text(
+        """
+employee:
+    name: "Test User"
+    supervisor: "Test Supervisor"
+product:
+    name: "Test Product"
+did:
+    providers:
+        - github.com
+"""
+    )
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+
+    result = runner.invoke(cli, ["report", "--month", "invalid-format"])
+    assert result.exit_code == 1
+    assert "Invalid month format" in result.output
+    assert "expected YYYY-MM" in result.output
