@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from iptax.did_integration import fetch_changes
+from iptax.did import fetch_changes
 from iptax.models import (
     Change,
     DidConfig,

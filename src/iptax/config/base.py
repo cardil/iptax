@@ -24,6 +24,12 @@ from iptax.models import (
     Settings,
     WorkdayConfig,
 )
+from iptax.utils.env import (
+    get_config_dir,
+)
+from iptax.utils.env import (
+    get_did_config_path as get_did_config_path_util,
+)
 
 
 class ConfigError(Exception):
@@ -89,17 +95,7 @@ class Configurator:
         Returns:
             Path to settings.yaml
         """
-        xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
-
-        if xdg_config_home:
-            config_dir = Path(xdg_config_home) / "iptax"
-        else:
-            # Respect HOME environment variable, fall back to Path.home()
-            home = os.environ.get("HOME")
-            home_path = Path(home) if home else Path.home()
-            config_dir = home_path / ".config" / "iptax"
-
-        return config_dir / "settings.yaml"
+        return get_config_dir() / "settings.yaml"
 
     @staticmethod
     def _get_default_did_config_path() -> Path:
@@ -110,10 +106,7 @@ class Configurator:
         Returns:
             Path to ~/.did/config
         """
-        # Respect HOME environment variable, fall back to Path.home()
-        home = os.environ.get("HOME")
-        home_path = Path(home) if home else Path.home()
-        return home_path / ".did" / "config"
+        return get_did_config_path_util()
 
     def load(self) -> Settings:
         """Load and validate settings from config file.

@@ -1,6 +1,7 @@
 """Command-line interface for iptax."""
 
 import json
+import logging
 import sys
 from datetime import date, datetime, timedelta
 
@@ -15,9 +16,27 @@ from iptax.config import (
     get_config_path,
     load_settings,
 )
-from iptax.did_integration import DidIntegrationError, fetch_changes
+from iptax.did import DidIntegrationError, fetch_changes
 from iptax.history import HistoryCorruptedError, HistoryManager, get_history_path
 from iptax.models import Change, Settings
+from iptax.utils.env import get_cache_dir
+
+
+def _setup_logging() -> None:
+    """Setup logging to user's cache directory."""
+    cache_dir = get_cache_dir()
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    # Setup root logger
+    log_file = cache_dir / "iptax.log"
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[
+            logging.FileHandler(log_file),
+        ],
+    )
 
 
 @click.group()
@@ -345,6 +364,7 @@ def _output_yaml(entries: dict) -> None:
 
 def main() -> None:
     """Main entry point for the CLI."""
+    _setup_logging()
     cli()
 
 
