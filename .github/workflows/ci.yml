@@ -138,6 +138,14 @@ jobs:
           packages: libkrb5-dev
           version: 1.0
 
+      - name: Setup test did config for E2E tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use openshift-bot: regular account with consistent PR activity
+          # for realistic e2e testing
+          DID_LOGIN: openshift-bot
+        run: python3 scripts/setup_test_did_config.py
+
       - name: Run full verification
         run: make verify
 
