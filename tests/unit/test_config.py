@@ -482,10 +482,10 @@ class TestCreateInteractiveConfig:
                 mock = Mock()
                 for key, value in mock_responses.items():
                     if key in prompt:
-                        mock.ask.return_value = value
+                        mock.unsafe_ask.return_value = value
                         return mock
                 # Default return
-                mock.ask.return_value = kwargs.get("default", "")
+                mock.unsafe_ask.return_value = kwargs.get("default", "")
                 return mock
 
             mock_text.side_effect = text_side_effect
@@ -495,16 +495,16 @@ class TestCreateInteractiveConfig:
                 mock = Mock()
                 for key, value in mock_responses.items():
                     if key in prompt:
-                        mock.ask.return_value = value
+                        mock.unsafe_ask.return_value = value
                         return mock
-                mock.ask.return_value = kwargs.get("default", False)
+                mock.unsafe_ask.return_value = kwargs.get("default", False)
                 return mock
 
             mock_confirm.side_effect = confirm_side_effect
 
             # Setup checkbox mock
             mock_checkbox_instance = Mock()
-            mock_checkbox_instance.ask.return_value = ["github.com"]
+            mock_checkbox_instance.unsafe_ask.return_value = ["github.com"]
             mock_checkbox.return_value = mock_checkbox_instance
 
             configurator.create(interactive=True)
@@ -538,7 +538,7 @@ class TestCreateInteractiveConfig:
 
             # Mock text inputs
             mock_text_instance = Mock()
-            mock_text_instance.ask.side_effect = [
+            mock_text_instance.unsafe_ask.side_effect = [
                 "John Doe",  # Employee name
                 "Jane Smith",  # Supervisor name
                 "Test Product",  # Product name
@@ -552,7 +552,7 @@ class TestCreateInteractiveConfig:
 
             # Mock confirm inputs
             mock_confirm_instance = Mock()
-            mock_confirm_instance.ask.side_effect = [
+            mock_confirm_instance.unsafe_ask.side_effect = [
                 True,  # Enable AI
                 False,  # Use .env file
                 False,  # Enable Workday
@@ -561,12 +561,12 @@ class TestCreateInteractiveConfig:
 
             # Mock select (AI provider)
             mock_select_instance = Mock()
-            mock_select_instance.ask.return_value = "gemini"
+            mock_select_instance.unsafe_ask.return_value = "gemini"
             mock_select.return_value = mock_select_instance
 
             # Mock checkbox
             mock_checkbox_instance = Mock()
-            mock_checkbox_instance.ask.return_value = ["github.com"]
+            mock_checkbox_instance.unsafe_ask.return_value = ["github.com"]
             mock_checkbox.return_value = mock_checkbox_instance
 
             configurator.create(interactive=True)
@@ -596,7 +596,7 @@ class TestCreateInteractiveConfig:
 
             # Mock text inputs
             mock_text_instance = Mock()
-            mock_text_instance.ask.side_effect = [
+            mock_text_instance.unsafe_ask.side_effect = [
                 "John Doe",  # Employee name
                 "Jane Smith",  # Supervisor name
                 "Test Product",  # Product name
@@ -612,7 +612,7 @@ class TestCreateInteractiveConfig:
 
             # Mock confirm inputs
             mock_confirm_instance = Mock()
-            mock_confirm_instance.ask.side_effect = [
+            mock_confirm_instance.unsafe_ask.side_effect = [
                 True,  # Enable AI
                 False,  # Enable Workday
             ]
@@ -620,12 +620,12 @@ class TestCreateInteractiveConfig:
 
             # Mock select (AI provider)
             mock_select_instance = Mock()
-            mock_select_instance.ask.return_value = "vertex"
+            mock_select_instance.unsafe_ask.return_value = "vertex"
             mock_select.return_value = mock_select_instance
 
             # Mock checkbox
             mock_checkbox_instance = Mock()
-            mock_checkbox_instance.ask.return_value = ["github.com"]
+            mock_checkbox_instance.unsafe_ask.return_value = ["github.com"]
             mock_checkbox.return_value = mock_checkbox_instance
 
             configurator.create(interactive=True)
@@ -656,7 +656,7 @@ class TestCreateInteractiveConfig:
 
             # Mock text inputs
             mock_text_instance = Mock()
-            mock_text_instance.ask.side_effect = [
+            mock_text_instance.unsafe_ask.side_effect = [
                 "John Doe",
                 "Jane Smith",
                 "Test Product",
@@ -670,7 +670,7 @@ class TestCreateInteractiveConfig:
 
             # Mock confirm inputs
             mock_confirm_instance = Mock()
-            mock_confirm_instance.ask.side_effect = [
+            mock_confirm_instance.unsafe_ask.side_effect = [
                 False,  # Disable AI
                 True,  # Enable Workday
             ]
@@ -678,12 +678,12 @@ class TestCreateInteractiveConfig:
 
             # Mock select (Workday auth method)
             mock_select_instance = Mock()
-            mock_select_instance.ask.return_value = "sso+kerberos"
+            mock_select_instance.unsafe_ask.return_value = "sso+kerberos"
             mock_select.return_value = mock_select_instance
 
             # Mock checkbox
             mock_checkbox_instance = Mock()
-            mock_checkbox_instance.ask.return_value = ["github.com"]
+            mock_checkbox_instance.unsafe_ask.return_value = ["github.com"]
             mock_checkbox.return_value = mock_checkbox_instance
 
             configurator.create(interactive=True)
@@ -716,7 +716,7 @@ class TestCreateInteractiveConfig:
 
             # Mock text inputs - note: no trusted URIs prompt for "sso" auth
             mock_text_instance = Mock()
-            mock_text_instance.ask.side_effect = [
+            mock_text_instance.unsafe_ask.side_effect = [
                 "John Doe",
                 "Jane Smith",
                 "Test Product",
@@ -729,7 +729,7 @@ class TestCreateInteractiveConfig:
 
             # Mock confirm inputs
             mock_confirm_instance = Mock()
-            mock_confirm_instance.ask.side_effect = [
+            mock_confirm_instance.unsafe_ask.side_effect = [
                 False,  # Disable AI
                 True,  # Enable Workday
             ]
@@ -737,12 +737,12 @@ class TestCreateInteractiveConfig:
 
             # Mock select (Workday auth method)
             mock_select_instance = Mock()
-            mock_select_instance.ask.return_value = "sso"
+            mock_select_instance.unsafe_ask.return_value = "sso"
             mock_select.return_value = mock_select_instance
 
             # Mock checkbox
             mock_checkbox_instance = Mock()
-            mock_checkbox_instance.ask.return_value = ["github.com"]
+            mock_checkbox_instance.unsafe_ask.return_value = ["github.com"]
             mock_checkbox.return_value = mock_checkbox_instance
 
             configurator.create(interactive=True)
