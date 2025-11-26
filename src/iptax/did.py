@@ -19,17 +19,16 @@ from iptax.models import Change, Repository, Settings
 
 logger = logging.getLogger(__name__)
 
+# Constants for stat detection
+MERGED_STAT_KEYWORDS = ("merged", "pull", "merge")
+
 
 class DidIntegrationError(Exception):
     """Error during did integration."""
 
-    pass
-
 
 class InvalidStatDataError(Exception):
     """Data validation error when converting did stat to Change object."""
-
-    pass
 
 
 def fetch_changes(
@@ -155,10 +154,15 @@ def _extract_merged_stats(result: object) -> list[Issue]:
 
     # Validate user stats structure
     if not hasattr(user_stats, "stats"):
-        raise DidIntegrationError("User stats object missing 'stats' attribute")
+        raise DidIntegrationError(
+            f"User stats object (type: {type(user_stats).__name__}) "
+            "missing 'stats' attribute"
+        )
 
     if not isinstance(user_stats.stats, list):
-        raise DidIntegrationError("User stats.stats is not a list")
+        raise DidIntegrationError(
+            f"User stats.stats is not a list (type: {type(user_stats.stats).__name__})"
+        )
 
     # Empty user stats means no activity in the period - this is valid
     if len(user_stats.stats) == 0:
@@ -246,8 +250,9 @@ def _is_merged_stat(stat: object) -> bool:
         return False
 
     class_name_lower = stat.__class__.__name__.lower()
-    return "merged" in class_name_lower and (
-        "pull" in class_name_lower or "merge" in class_name_lower
+    return MERGED_STAT_KEYWORDS[0] in class_name_lower and (
+        MERGED_STAT_KEYWORDS[1] in class_name_lower
+        or MERGED_STAT_KEYWORDS[2] in class_name_lower
     )
 
 

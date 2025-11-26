@@ -16,6 +16,7 @@ from iptax.models import (
     DidConfig,
     DisabledAIConfig,
     EmployeeInfo,
+    Fields,
     GeminiProviderConfig,
     ProductConfig,
     ReportConfig,
@@ -100,12 +101,11 @@ def _get_report_config(defaults: Settings | None) -> ReportConfig:
     questionary.print("\nReport Settings:", style="bold")
 
     # Get defaults from model or existing config
-    if defaults:
-        default_percentage = defaults.report.creative_work_percentage
-    else:
-        default_percentage = ReportConfig.model_fields[
-            "creative_work_percentage"
-        ].default
+    default_percentage = (
+        defaults.report.creative_work_percentage
+        if defaults
+        else Fields(ReportConfig).creative_work_percentage.default
+    )
 
     creative_percentage = questionary.text(
         f"Creative work percentage (0-{MAX_PERCENTAGE}) [{default_percentage}]:",
@@ -114,10 +114,11 @@ def _get_report_config(defaults: Settings | None) -> ReportConfig:
         or f"Must be 0-{MAX_PERCENTAGE}",
     ).ask()
 
-    if defaults:
-        default_output_dir = str(defaults.report.output_dir)
-    else:
-        default_output_dir = ReportConfig.model_fields["output_dir"].default
+    default_output_dir = (
+        str(defaults.report.output_dir)
+        if defaults
+        else Fields(ReportConfig).output_dir.default
+    )
 
     output_dir = questionary.text(
         f"Output directory [{default_output_dir}]:", default=default_output_dir
@@ -188,12 +189,12 @@ def _configure_gemini(default_config: AIProviderConfig | None) -> GeminiProvider
     default_model = (
         default_config.model
         if isinstance(default_config, GeminiProviderConfig)
-        else GeminiProviderConfig.model_fields["model"].default
+        else Fields(GeminiProviderConfig).model.default
     )
     default_api_key_env = (
         default_config.api_key_env
         if isinstance(default_config, GeminiProviderConfig)
-        else GeminiProviderConfig.model_fields["api_key_env"].default
+        else Fields(GeminiProviderConfig).api_key_env.default
     )
 
     model = questionary.text(f"Model [{default_model}]:", default=default_model).ask()
@@ -242,12 +243,12 @@ def _configure_vertex(
     default_model = (
         default_config.model
         if isinstance(default_config, VertexAIProviderConfig)
-        else VertexAIProviderConfig.model_fields["model"].default
+        else Fields(VertexAIProviderConfig).model.default
     )
     default_location = (
         default_config.location
         if isinstance(default_config, VertexAIProviderConfig)
-        else VertexAIProviderConfig.model_fields["location"].default
+        else Fields(VertexAIProviderConfig).location.default
     )
     default_project_id = (
         default_config.project_id
@@ -315,10 +316,11 @@ def _get_did_config(
     questionary.print("\npsss/did Configuration:", style="bold")
 
     # Get default from model or existing config
-    if defaults:
-        default_did_path = str(defaults.did.config_path)
-    else:
-        default_did_path = DidConfig.model_fields["config_path"].default
+    default_did_path = (
+        str(defaults.did.config_path)
+        if defaults
+        else Fields(DidConfig).config_path.default
+    )
 
     did_path = questionary.text(
         f"did config path [{default_did_path}]:", default=default_did_path

@@ -18,9 +18,53 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic.fields import FieldInfo
+
+
+class Fields:
+    """Proxy class for accessing Pydantic model field info via attributes.
+
+    Enables syntax like `Fields(ReportConfig).output_dir.default` instead of
+    `ReportConfig.model_fields["output_dir"].default`.
+
+    This avoids conflicts with Pydantic's metaclass which intercepts
+    class-level attribute access.
+
+    Example:
+        class MyConfig(BaseModel):
+            name: str = Field(default="default_name")
+
+        # Access default value
+        default_name = Fields(MyConfig).name.default  # Returns "default_name"
+    """
+
+    def __init__(self, model_class: type[BaseModel]) -> None:
+        """Initialize the accessor with a Pydantic model class."""
+        self._model_class = model_class
+
+    def __getattr__(self, name: str) -> FieldInfo:
+        """Provide access to field info via attribute access."""
+        return self._model_class.model_fields[name]
+
 
 # Constants
 MAX_PERCENTAGE = 100
+
+# Bilingual month names for report generation
+MONTH_NAMES_BILINGUAL = {
+    "01": ("January", "Styczeń"),
+    "02": ("February", "Luty"),
+    "03": ("March", "Marzec"),
+    "04": ("April", "Kwiecień"),
+    "05": ("May", "Maj"),
+    "06": ("June", "Czerwiec"),
+    "07": ("July", "Lipiec"),
+    "08": ("August", "Sierpień"),
+    "09": ("September", "Wrzesień"),
+    "10": ("October", "Październik"),
+    "11": ("November", "Listopad"),
+    "12": ("December", "Grudzień"),
+}
 
 
 def _validate_not_empty_string(v: str) -> str:
@@ -31,6 +75,36 @@ def _validate_not_empty_string(v: str) -> str:
 
 
 NonEmptyStr = Annotated[str, BeforeValidator(_validate_not_empty_string)]
+
+
+def _validate_product_name(v: str) -> str:
+    """Validate product name is not empty."""
+    if not v or not v.strip():
+        raise ValueError("Product name cannot be empty")
+    return v.strip()
+
+
+NonEmptyProductName = Annotated[str, BeforeValidator(_validate_product_name)]
+
+
+def _validate_file_exists(v: str | None, field_name: str) -> str | None:
+    """Validate that file exists if path is specified.
+
+    Args:
+        v: File path or None
+        field_name: Name of the field for error messages
+
+    Returns:
+        The original value (None if None was passed, str if valid path)
+
+    Raises:
+        ValueError: If file path is specified but doesn't exist
+    """
+    if v is not None:
+        path = Path(v).expanduser()
+        if not path.exists():
+            raise ValueError(f"{field_name} not found: {path}")
+    return v
 
 
 class EmployeeInfo(BaseModel):
@@ -48,16 +122,6 @@ class EmployeeInfo(BaseModel):
         ...,
         description="Full name of the employee's supervisor",
     )
-
-
-def _validate_product_name(v: str) -> str:
-    """Validate product name is not empty."""
-    if not v or not v.strip():
-        raise ValueError("Product name cannot be empty")
-    return v.strip()
-
-
-NonEmptyProductName = Annotated[str, BeforeValidator(_validate_product_name)]
 
 
 class ProductConfig(BaseModel):
@@ -170,11 +234,7 @@ class GeminiProviderConfig(AIProviderConfigBase):
     @classmethod
     def validate_api_key_file(cls, v: str | None) -> str | None:
         """Validate that API key file exists if specified."""
-        if v is not None:
-            path = Path(v).expanduser()
-            if not path.exists():
-                raise ValueError(f"API key file not found: {path}")
-        return v
+        return _validate_file_exists(v, "API key file")
 
 
 class VertexAIProviderConfig(AIProviderConfigBase):
@@ -209,11 +269,7 @@ class VertexAIProviderConfig(AIProviderConfigBase):
     @classmethod
     def validate_credentials_file(cls, v: str | None) -> str | None:
         """Validate that credentials file exists if specified."""
-        if v is not None:
-            path = Path(v).expanduser()
-            if not path.exists():
-                raise ValueError(f"Credentials file not found: {path}")
-        return v
+        return _validate_file_exists(v, "Credentials file")
 
 
 class DisabledAIConfig(BaseModel):
@@ -684,21 +740,6 @@ class ReportData(BaseModel):
             This file must be saved with UTF-8 encoding to properly handle
             Polish characters in month names.
         """
-        month_names = {
-            "01": ("January", "Styczeń"),
-            "02": ("February", "Luty"),
-            "03": ("March", "Marzec"),
-            "04": ("April", "Kwiecień"),
-            "05": ("May", "Maj"),
-            "06": ("June", "Czerwiec"),
-            "07": ("July", "Lipiec"),
-            "08": ("August", "Sierpień"),
-            "09": ("September", "Wrzesień"),
-            "10": ("October", "Październik"),
-            "11": ("November", "Listopad"),
-            "12": ("December", "Grudzień"),
-        }
-
         year, month = self.month.split("-")
-        en, pl = month_names.get(month, ("Unknown", "Nieznany"))
+        en, pl = MONTH_NAMES_BILINGUAL.get(month, ("Unknown", "Nieznany"))
         return f"{en} {year}", f"{pl} {year}"
