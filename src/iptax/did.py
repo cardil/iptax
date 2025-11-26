@@ -9,7 +9,7 @@ import logging
 import re
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import date
-from typing import cast
+from typing import Literal, cast
 
 import did.base
 import did.cli
@@ -374,7 +374,7 @@ def _convert_to_change(stat: object, provider_name: str) -> Change:
 def _clean_emoji(title: str) -> str:
     """Remove GitHub emoji codes from title.
 
-    Removes patterns like :rocket:, :bug:, etc.
+    Removes patterns like :rocket:, :bug:, :100:, :+1:, etc.
 
     Args:
         title: Original title with potential emoji codes
@@ -382,14 +382,15 @@ def _clean_emoji(title: str) -> str:
     Returns:
         Title with emoji codes removed and whitespace cleaned
     """
-    # Remove emoji codes (e.g., :rocket:, :bug:, :sparkles:)
-    cleaned = re.sub(r":[a-z_]+:", "", title)
+    # Remove emoji codes (e.g., :rocket:, :bug:, :sparkles:, :100:, :+1:)
+    # Matches word characters, digits, plus signs, and hyphens
+    cleaned = re.sub(r":[\w+-]+:", "", title, flags=re.IGNORECASE)
 
     # Strip leading/trailing whitespace and collapse multiple spaces
     return " ".join(cleaned.split())
 
 
-def _determine_provider_type(host: str) -> str:
+def _determine_provider_type(host: str) -> Literal["github", "gitlab"]:
     """Determine provider type from host name.
 
     Args:

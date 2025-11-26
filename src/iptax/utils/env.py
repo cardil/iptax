@@ -4,8 +4,11 @@ This module provides centralized functions for resolving application directories
 that respect XDG Base Directory specification and HOME environment variable.
 """
 
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def get_home_dir() -> Path:
@@ -25,6 +28,7 @@ def get_config_dir() -> Path:
 
     Respects XDG_CONFIG_HOME and HOME environment variables.
     Falls back to ~/.config/iptax if environment variables are not set.
+    Per XDG spec, relative paths in XDG_CONFIG_HOME are ignored.
 
     Returns:
         Path to the iptax configuration directory
@@ -32,7 +36,15 @@ def get_config_dir() -> Path:
     xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
 
     if xdg_config_home:
-        return Path(xdg_config_home) / "iptax"
+        xdg_path = Path(xdg_config_home)
+        if not xdg_path.is_absolute():
+            logger.warning(
+                "XDG_CONFIG_HOME contains relative path '%s' which violates "
+                "XDG Base Directory specification. Ignoring and using default.",
+                xdg_config_home,
+            )
+        else:
+            return xdg_path / "iptax"
 
     return get_home_dir() / ".config" / "iptax"
 
@@ -42,6 +54,7 @@ def get_cache_dir() -> Path:
 
     Respects XDG_CACHE_HOME and HOME environment variables.
     Falls back to ~/.cache/iptax if environment variables are not set.
+    Per XDG spec, relative paths in XDG_CACHE_HOME are ignored.
 
     Returns:
         Path to the iptax cache directory
@@ -49,7 +62,15 @@ def get_cache_dir() -> Path:
     xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
 
     if xdg_cache_home:
-        return Path(xdg_cache_home) / "iptax"
+        xdg_path = Path(xdg_cache_home)
+        if not xdg_path.is_absolute():
+            logger.warning(
+                "XDG_CACHE_HOME contains relative path '%s' which violates "
+                "XDG Base Directory specification. Ignoring and using default.",
+                xdg_cache_home,
+            )
+        else:
+            return xdg_path / "iptax"
 
     return get_home_dir() / ".cache" / "iptax"
 
