@@ -1,5 +1,6 @@
 """Unit tests for did integration module."""
 
+import logging
 from datetime import date
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -477,6 +478,165 @@ class TestFetchProviderChanges:
 
         assert "Failed to call did.cli.main()" in str(exc_info.value)
         assert isinstance(exc_info.value.__cause__, RuntimeError)
+
+
+class TestExtractMergedStats:
+    """Test _extract_merged_stats function."""
+
+    def test_extract_user_stats_missing_stats_attribute(self) -> None:
+        """Test error when user stats object missing stats attribute."""
+        from iptax.did import _extract_merged_stats
+
+        mock_user = Mock(spec=[])  # No 'stats' attribute
+        result = ([mock_user],)
+
+        with pytest.raises(
+            DidIntegrationError, match="User stats object missing 'stats' attribute"
+        ):
+            _extract_merged_stats(result)
+
+    def test_extract_user_stats_stats_not_list(self) -> None:
+        """Test error when user stats.stats is not a list."""
+        from iptax.did import _extract_merged_stats
+
+        mock_user = Mock()
+        mock_user.stats = "not a list"
+        result = ([mock_user],)
+
+        with pytest.raises(
+            DidIntegrationError, match=r"User stats\.stats is not a list"
+        ):
+            _extract_merged_stats(result)
+
+    def test_extract_provider_stats_missing_stats_attribute(self) -> None:
+        """Test error when provider stats group missing stats attribute."""
+        from iptax.did import _extract_merged_stats
+
+        mock_provider_group = Mock(spec=[])  # No 'stats' attribute
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+        result = ([mock_user],)
+
+        with pytest.raises(
+            DidIntegrationError, match="Provider stats group missing 'stats' attribute"
+        ):
+            _extract_merged_stats(result)
+
+    def test_extract_provider_stats_stats_not_list(self) -> None:
+        """Test error when provider stats.stats is not a list."""
+        from iptax.did import _extract_merged_stats
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = "not a list"
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+        result = ([mock_user],)
+
+        with pytest.raises(
+            DidIntegrationError, match=r"Provider stats\.stats is not a list"
+        ):
+            _extract_merged_stats(result)
+
+    def test_extract_provider_stats_empty_list(self) -> None:
+        """Test empty provider stats returns empty list."""
+        from iptax.did import _extract_merged_stats
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = []
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+        result = ([mock_user],)
+
+        assert _extract_merged_stats(result) == []
+
+    def test_extract_merged_stat_missing_stats_attribute(self) -> None:
+        """Test error when merged stat object missing stats attribute."""
+        from iptax.did import _extract_merged_stats
+
+        mock_merged_stat = Mock(spec=[])  # No 'stats' attribute
+        mock_merged_stat.__class__.__name__ = "PullRequestsMerged"
+
+        mock_provider_group = Mock()
+        mock_provider_group.stats = [mock_merged_stat]
+        mock_user = Mock()
+        mock_user.stats = [mock_provider_group]
+        result = ([mock_user],)
+
+        # Mock without 'stats' won't pass _is_merged_stat check, falls through to end
+        with pytest.raises(
+            DidIntegrationError,
+            match="Merged stats section not found in did result",
+        ):
+            _extract_merged_stats(result)
+
+
+class TestValidateAndExtractUserStats:
+    """Test _validate_and_extract_user_stats function."""
+
+    def test_validate_non_tuple_result(self) -> None:
+        """Test error when result is not a tuple."""
+        from iptax.did import _validate_and_extract_user_stats
+
+        with pytest.raises(DidIntegrationError, match="Expected tuple"):
+            _validate_and_extract_user_stats([])  # List instead of tuple
+
+    def test_validate_empty_users_list(self) -> None:
+        """Test error when users list is empty."""
+        from iptax.did import _validate_and_extract_user_stats
+
+        result = ([],)  # Empty list is falsy
+
+        # Empty list is falsy, caught by line 220 check
+        with pytest.raises(
+            DidIntegrationError, match="First element of did result is None or falsy"
+        ):
+            _validate_and_extract_user_stats(result)
+
+
+class TestIsMergedStat:
+    """Test _is_merged_stat function."""
+
+    def test_is_merged_stat_no_stats_attribute(self) -> None:
+        """Test returns False when stat has no stats attribute."""
+        from iptax.did import _is_merged_stat
+
+        mock_stat = Mock(spec=[])  # No 'stats' attribute
+        assert _is_merged_stat(mock_stat) is False
+
+
+class TestCheckDidStderr:
+    """Test _check_did_stderr function."""
+
+    def test_check_stderr_with_error_keyword(self) -> None:
+        """Test raises error when stderr contains 'error' keyword."""
+        from iptax.did import _check_did_stderr
+
+        with pytest.raises(DidIntegrationError, match="did CLI reported errors"):
+            _check_did_stderr("Error: something went wrong", "github.com")
+
+    def test_check_stderr_with_fail_keyword(self) -> None:
+        """Test raises error when stderr contains 'fail' keyword."""
+        from iptax.did import _check_did_stderr
+
+        with pytest.raises(DidIntegrationError, match="did CLI reported errors"):
+            _check_did_stderr("Failed to connect", "github.com")
+
+    def test_check_stderr_with_exception_keyword(self) -> None:
+        """Test raises error when stderr contains 'exception' keyword."""
+        from iptax.did import _check_did_stderr
+
+        with pytest.raises(DidIntegrationError, match="did CLI reported errors"):
+            _check_did_stderr("Exception occurred", "github.com")
+
+    def test_check_stderr_with_warning_only(self, caplog) -> None:
+        """Test logs warning but doesn't raise when stderr has no error keywords."""
+        from iptax.did import _check_did_stderr
+
+        with caplog.at_level(logging.WARNING):
+            _check_did_stderr("Some warning message", "github.com")
+
+        assert "did CLI produced stderr output" in caplog.text
+        assert "github.com" in caplog.text
 
 
 class TestFetchChanges:
