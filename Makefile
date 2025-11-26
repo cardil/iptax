@@ -73,6 +73,15 @@ $(VENV)/init.done: $(VENV)/venv.done pyproject.toml
 	@mkdir -p $(GUARDS)
 	$(VENV_PIP) install -e ".[dev]"
 	$(VENV_PYTHON) -m playwright install chromium
+	@# Fix certifi to use system certs (for corporate SSL proxies)
+	@if [ -f /usr/lib/python3.*/site-packages/certifi/core.py ]; then \
+		SYSTEM_CERTIFI=$$(echo /usr/lib/python3.*/site-packages/certifi/core.py); \
+		VENV_CERTIFI=$$(echo $(VENV)/lib/python3.*/site-packages/certifi/core.py); \
+		if [ -f "$$SYSTEM_CERTIFI" ] && [ -f "$$VENV_CERTIFI" ]; then \
+			echo -e "$(BLUE)$(GEAR) Linking certifi to system certs...$(RESET)"; \
+			ln -sf "$$SYSTEM_CERTIFI" "$$VENV_CERTIFI"; \
+		fi; \
+	fi
 	@touch $@
 
 ##@ Testing

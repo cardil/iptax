@@ -21,11 +21,15 @@ def test_cli_help(runner: CliRunner) -> None:
 
 
 @pytest.mark.unit
-def test_report_command_placeholder(runner: CliRunner) -> None:
-    """Test that report command shows placeholder message."""
+def test_report_command_placeholder(runner: CliRunner, tmp_path, monkeypatch) -> None:
+    """Test that report command requires configuration."""
+    # The report command now requires valid configuration
+    # Test that it shows helpful error message when config is missing
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     result = runner.invoke(cli, ["report", "--dry-run"])
-    assert result.exit_code == 0
-    assert "not yet implemented" in result.output
+    assert result.exit_code == 1
+    assert "Configuration error" in result.output
+    assert "iptax config" in result.output
 
 
 @pytest.mark.unit
