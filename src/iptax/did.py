@@ -221,7 +221,12 @@ def _validate_and_extract_user_stats(result: object) -> object:
         raise DidIntegrationError("First element of did result is None or falsy")
 
     # Extract users list - first element should be a list
-    users_list = result[0] if isinstance(result[0], list) else list(result[0])
+    try:
+        users_list = result[0] if isinstance(result[0], list) else list(result[0])
+    except TypeError as e:
+        raise DidIntegrationError(
+            f"First element of did result is not iterable: {type(result[0]).__name__}"
+        ) from e
     if len(users_list) == 0:
         raise DidIntegrationError("Users list in did result is empty")
 
@@ -398,11 +403,18 @@ def _determine_provider_type(host: str) -> Literal["github", "gitlab"]:
 
     Returns:
         Provider type: "github" or "gitlab"
+
+    Raises:
+        DidIntegrationError: If provider type cannot be determined from host
     """
     host_lower = host.lower()
     if "github" in host_lower:
         return "github"
     if "gitlab" in host_lower:
         return "gitlab"
-    # Default to gitlab if can't determine
-    return "gitlab"
+
+    # Cannot determine provider type - raise error to avoid silent misconfigurations
+    raise DidIntegrationError(
+        f"Cannot determine provider type from host '{host}'. "
+        f"Host name must contain 'github' or 'gitlab'"
+    )

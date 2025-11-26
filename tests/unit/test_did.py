@@ -72,9 +72,13 @@ class TestDetermineProviderType:
         """Test identifying self-hosted GitLab."""
         assert _determine_provider_type("gitlab.example.org") == "gitlab"
 
-    def test_unknown_defaults_to_gitlab(self) -> None:
-        """Test unknown hosts default to GitLab."""
-        assert _determine_provider_type("git.example.com") == "gitlab"
+    def test_unknown_raises_error(self) -> None:
+        """Test unknown hosts raise DidIntegrationError."""
+        with pytest.raises(
+            DidIntegrationError,
+            match=r"Cannot determine provider type from host 'git\.example\.com'",
+        ):
+            _determine_provider_type("git.example.com")
 
     def test_case_insensitive(self) -> None:
         """Test host matching is case insensitive."""

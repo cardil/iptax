@@ -79,9 +79,18 @@ def get_did_config_path() -> Path:
     """Get the default path for did config file.
 
     Did uses ~/.did/config by default and doesn't support XDG variables.
-    This function respects HOME environment variable.
+    This function respects DID_CONFIG and HOME environment variables.
+
+    Checks DID_CONFIG environment variable first, then falls back to
+    ~/.did/config (respecting HOME environment variable).
 
     Returns:
-        Path to ~/.did/config
+        Path to did config file
     """
+    # Check DID_CONFIG environment variable first
+    did_config = os.environ.get("DID_CONFIG")
+    if did_config:
+        return Path(did_config).expanduser()
+
+    # Fall back to default ~/.did/config
     return get_home_dir() / ".did" / "config"
