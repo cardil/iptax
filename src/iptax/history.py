@@ -236,22 +236,24 @@ class HistoryManager:
         """
         self._ensure_loaded()
 
-        # Validate month format
+        # Validate and normalize month format
         try:
-            datetime.strptime(month, "%Y-%m")
+            parsed_month = datetime.strptime(month, "%Y-%m")
         except ValueError as e:
             raise ValueError(f"Invalid month format '{month}', expected YYYY-MM") from e
 
+        # Normalize to YYYY-MM format
+        month_key = parsed_month.strftime("%Y-%m")
         now = datetime.now(UTC)
 
-        if month in self._history and regenerate:
+        if month_key in self._history and regenerate:
             # Update existing entry with regeneration timestamp and cutoff date
-            entry = self._history[month]
+            entry = self._history[month_key]
             entry.last_cutoff_date = cutoff_date
             entry.regenerated_at = now
         else:
             # Create new entry
-            self._history[month] = HistoryEntry(
+            self._history[month_key] = HistoryEntry(
                 last_cutoff_date=cutoff_date,
                 generated_at=now,
             )
@@ -363,7 +365,16 @@ class HistoryManager:
                     "For the first report, you must provide a previous cutoff date."
                 )
 
-            cutoff = self._prompt_first_cutoff()
+            # Suggest 25th of the month immediately preceding the target month
+            if month_date.month == 1:
+                prev_year = month_date.year - 1
+                prev_month = DECEMBER_MONTH
+            else:
+                prev_year = month_date.year
+                prev_month = month_date.month - 1
+            default_cutoff = date(prev_year, prev_month, 25)
+
+            cutoff = self._prompt_first_cutoff(default_cutoff)
             start_date = cutoff + timedelta(days=1)
         else:
             # Use previous cutoff + 1 day

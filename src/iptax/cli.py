@@ -2,7 +2,7 @@
 
 import json
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import click
 import yaml
@@ -140,10 +140,22 @@ def history(month: str | None, output_format: str, path: bool) -> None:
 
     # Filter by month if specified
     if month:
-        if month not in entries:
-            click.secho(f"No history entry found for {month}", fg="yellow")
+        # Normalize month format
+        try:
+            parsed_month = datetime.strptime(month, "%Y-%m")
+            month_key = parsed_month.strftime("%Y-%m")
+        except ValueError:
+            click.secho(
+                f"Error: Invalid month format '{month}', expected YYYY-MM",
+                fg="red",
+                err=True,
+            )
+            sys.exit(1)
+
+        if month_key not in entries:
+            click.secho(f"No history entry found for {month_key}", fg="yellow")
             sys.exit(0)
-        entries = {month: entries[month]}
+        entries = {month_key: entries[month_key]}
 
     # Handle empty history
     if not entries:
