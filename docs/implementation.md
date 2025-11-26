@@ -21,10 +21,10 @@ The project will be implemented in 5 phases, following the workflow order define
 [Workflows](workflows.md):
 
 1. Foundation & Core Infrastructure
-2. Did Integration (data collection)
-3. Workday Integration (work hours)
-4. AI Filtering & Review
-5. Report Generation
+1. Did Integration (data collection)
+1. Workday Integration (work hours)
+1. AI Filtering & Review
+1. Report Generation
 
 ______________________________________________________________________
 
