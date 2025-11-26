@@ -17,8 +17,14 @@ ______________________________________________________________________
 
 ## Phase Overview
 
-The project will be implemented in 4 phases, each delivering incremental value and
-building on the previous phase.
+The project will be implemented in 5 phases, following the workflow order defined in
+[Workflows](workflows.md):
+
+1. Foundation & Core Infrastructure
+1. Did Integration (data collection)
+1. Workday Integration (work hours)
+1. AI Filtering & Review
+1. Report Generation
 
 ______________________________________________________________________
 
@@ -38,7 +44,7 @@ ______________________________________________________________________
 
 - `iptax config` creates and validates settings
 - `iptax history` displays (empty) history
-- `make unit` passes all config/history tests
+- `make verify` passes all config/history tests
 - Documentation in place
 
 ### Key Files
@@ -73,7 +79,7 @@ ______________________________________________________________________
 - Date range calculated correctly from history
 - Changes properly extracted with metadata
 - Multi-month span detection works
-- `make unit` passes all did integration tests
+- `make verify` passes all did integration tests
 
 ### Key Files
 
@@ -83,7 +89,33 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Phase 3: AI Filtering & Review (Week 5-6)
+## Phase 3: Workday Integration (Week 5)
+
+**Goal:** Retrieve work hours from Workday or accept manual input
+
+### Deliverables
+
+1. Workday integration (Playwright) with SAML authentication
+1. Work hours extraction from timesheet/absence calendar
+1. Fallback to manual hours input
+1. Work hours calculation based on creative work percentage
+1. Unit tests with mocked browser
+
+### Success Criteria
+
+- Workday integration works or falls back gracefully
+- Work hours calculated correctly
+- Manual input flow is smooth
+- `make verify` passes all Workday tests
+
+### Key Files
+
+- `src/iptax/workday.py` - Workday client
+- `tests/unit/test_workday.py` - Tests
+
+______________________________________________________________________
+
+## Phase 4: AI Filtering & Review (Week 6-7)
 
 **Goal:** Implement AI-assisted filtering with TUI review
 
@@ -103,7 +135,7 @@ ______________________________________________________________________
 - TUI displays compact list and detail views
 - User can navigate and override decisions
 - UNCERTAIN/ERROR changes force manual review
-- `make unit` and `make e2e` pass
+- `make verify` pass
 
 ### Key Files
 
@@ -114,16 +146,15 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Phase 4: Report Generation & Polish (Week 7-8)
+## Phase 5: Report Generation (Week 8)
 
-**Goal:** Complete report generation and finalize all features
+**Goal:** Generate all output files and finalize
 
 ### Deliverables
 
-1. Workday integration (Playwright) with fallback
 1. Report compiler (Markdown formatting)
 1. PDF generation (WeasyPrint, bilingual templates)
-1. Work hours calculation
+1. History update after generation
 1. Complete e2e tests
 1. Documentation (installation, usage, troubleshooting)
 
@@ -131,14 +162,12 @@ ______________________________________________________________________
 
 - Can generate all 3 output files (MD + 2 PDFs)
 - PDFs are bilingual and properly formatted
-- Workday integration works or falls back gracefully
 - History updated correctly after generation
 - `make verify` passes completely
 - User documentation complete
 
 ### Key Files
 
-- `src/iptax/workday.py` - Workday client
 - `src/iptax/report_compiler.py` - Report compilation
 - `src/iptax/pdf_generator.py` - PDF generation
 - `src/iptax/templates/` - HTML templates
@@ -155,21 +184,25 @@ Week 1-2: Phase 1 - Foundation
 ├── M1.2: Config system working
 └── M1.3: Basic CLI functional
 
-Week 3-4: Phase 2 - Data Collection
-├── M2.1: did integration working
+Week 3-4: Phase 2 - Did Integration
+├── M2.1: did SDK integration working
 ├── M2.2: Change extraction complete
 └── M2.3: Date range logic validated
 
-Week 5-6: Phase 3 - AI & Review
-├── M3.1: AI filtering operational
-├── M3.2: TUI review working
-└── M3.3: Cache system functional
+Week 5: Phase 3 - Workday Integration
+├── M3.1: Workday client working
+├── M3.2: SAML authentication flow
+└── M3.3: Fallback to manual input
 
-Week 7-8: Phase 4 - Reports & Polish
-├── M4.1: All reports generating
-├── M4.2: Workday integration done
-├── M4.3: Documentation complete
-└── M4.4: Ready for release
+Week 6-7: Phase 4 - AI & Review
+├── M4.1: AI filtering operational
+├── M4.2: TUI review working
+└── M4.3: Cache system functional
+
+Week 8: Phase 5 - Reports & Release
+├── M5.1: All reports generating
+├── M5.2: Documentation complete
+└── M5.3: Ready for release
 ```
 
 ______________________________________________________________________
@@ -190,9 +223,6 @@ make init
 
 # 4. Format code
 make format
-
-# 5. Run relevant tests
-make unit  # or make e2e
 
 # 6. Full verification before committing
 make verify
@@ -327,7 +357,7 @@ ______________________________________________________________________
 
 ### For Final Release
 
-- All 4 phases complete
+- All 5 phases complete
 - Full e2e workflow tested manually
 - User documentation complete
 - Installation tested on fresh system
@@ -358,7 +388,7 @@ ______________________________________________________________________
 
 ### v1.0 Scope
 
-- Core features as defined in phases 1-4
+- Core features as defined in phases 1-5
 - Support for Gemini and Vertex AI
 - GitHub and GitLab via did
 - Workday integration with SAML
