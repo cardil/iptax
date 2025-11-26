@@ -413,7 +413,8 @@ class TestWorkdayConfig:
 
         assert config.enabled is False
         assert config.url is None
-        assert config.auth == "saml"
+        assert config.auth == "sso+kerberos"
+        assert config.trusted_uris == []
 
     def test_disabled_config_without_url(self):
         """Test that disabled config doesn't require URL."""
@@ -433,11 +434,34 @@ class TestWorkdayConfig:
         """Test creating enabled config with URL."""
         config = WorkdayConfig(
             enabled=True,
-            url="https://company.workday.com",
+            url="https://workday.example.org",
         )
 
         assert config.enabled is True
-        assert config.url == "https://company.workday.com"
+        assert config.url == "https://workday.example.org"
+
+    def test_sso_kerberos_auth_with_trusted_uris(self):
+        """Test SSO+Kerberos config with trusted URIs."""
+        config = WorkdayConfig(
+            enabled=True,
+            url="https://workday.example.org",
+            auth="sso+kerberos",
+            trusted_uris=["*.example.org", "*.sso.example.org"],
+        )
+
+        assert config.auth == "sso+kerberos"
+        assert config.trusted_uris == ["*.example.org", "*.sso.example.org"]
+
+    def test_sso_auth_without_trusted_uris(self):
+        """Test SSO (password fallback) config without trusted URIs."""
+        config = WorkdayConfig(
+            enabled=True,
+            url="https://workday.example.org",
+            auth="sso",
+        )
+
+        assert config.auth == "sso"
+        assert config.trusted_uris == []
 
 
 class TestDidConfig:

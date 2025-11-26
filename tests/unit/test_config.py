@@ -634,8 +634,8 @@ class TestCreateInteractiveConfig:
         assert isinstance(settings.ai, VertexAIProviderConfig)
         assert settings.ai.project_id == "my-gcp-project"
 
-    def test_interactive_config_with_workday(self, tmp_path):
-        """Test interactive configuration with Workday enabled."""
+    def test_interactive_config_with_workday_kerberos(self, tmp_path):
+        """Test interactive configuration with Workday enabled using SSO+Kerberos."""
         did_config_file = tmp_path / "did-config"
         did_config_file.write_text("[general]\n[github.com]\ntype = github\n")
 
@@ -649,6 +649,7 @@ class TestCreateInteractiveConfig:
         with (
             patch("iptax.config.interactive.questionary.text") as mock_text,
             patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.select") as mock_select,
             patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
             patch("iptax.config.interactive.questionary.print"),
         ):
@@ -661,7 +662,8 @@ class TestCreateInteractiveConfig:
                 "Test Product",
                 "80",
                 "~/Documents/iptax/{year}/",
-                "https://company.workday.com",  # Workday URL
+                "https://workday.example.org",  # Workday URL
+                "*.example.org,*.sso.example.org",  # Trusted URIs
                 str(did_config_file),
             ]
             mock_text.return_value = mock_text_instance
@@ -674,6 +676,11 @@ class TestCreateInteractiveConfig:
             ]
             mock_confirm.return_value = mock_confirm_instance
 
+            # Mock select (Workday auth method)
+            mock_select_instance = Mock()
+            mock_select_instance.ask.return_value = "sso+kerberos"
+            mock_select.return_value = mock_select_instance
+
             # Mock checkbox
             mock_checkbox_instance = Mock()
             mock_checkbox_instance.ask.return_value = ["github.com"]
@@ -683,7 +690,68 @@ class TestCreateInteractiveConfig:
 
         settings = Settings.from_yaml_file(settings_file)
         assert settings.workday.enabled is True
-        assert settings.workday.url == "https://company.workday.com"
+        assert settings.workday.url == "https://workday.example.org"
+        assert settings.workday.auth == "sso+kerberos"
+        assert settings.workday.trusted_uris == ["*.example.org", "*.sso.example.org"]
+
+    def test_interactive_config_with_workday_sso(self, tmp_path):
+        """Test interactive configuration with Workday enabled using SSO (password)."""
+        did_config_file = tmp_path / "did-config"
+        did_config_file.write_text("[general]\n[github.com]\ntype = github\n")
+
+        settings_file = tmp_path / "settings.yaml"
+
+        configurator = Configurator(
+            settings_path=settings_file,
+            did_config_path=did_config_file,
+        )
+
+        with (
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.select") as mock_select,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
+        ):
+
+            # Mock text inputs - note: no trusted URIs prompt for "sso" auth
+            mock_text_instance = Mock()
+            mock_text_instance.ask.side_effect = [
+                "John Doe",
+                "Jane Smith",
+                "Test Product",
+                "80",
+                "~/Documents/iptax/{year}/",
+                "https://workday.example.org",  # Workday URL
+                str(did_config_file),
+            ]
+            mock_text.return_value = mock_text_instance
+
+            # Mock confirm inputs
+            mock_confirm_instance = Mock()
+            mock_confirm_instance.ask.side_effect = [
+                False,  # Disable AI
+                True,  # Enable Workday
+            ]
+            mock_confirm.return_value = mock_confirm_instance
+
+            # Mock select (Workday auth method)
+            mock_select_instance = Mock()
+            mock_select_instance.ask.return_value = "sso"
+            mock_select.return_value = mock_select_instance
+
+            # Mock checkbox
+            mock_checkbox_instance = Mock()
+            mock_checkbox_instance.ask.return_value = ["github.com"]
+            mock_checkbox.return_value = mock_checkbox_instance
+
+            configurator.create(interactive=True)
+
+        settings = Settings.from_yaml_file(settings_file)
+        assert settings.workday.enabled is True
+        assert settings.workday.url == "https://workday.example.org"
+        assert settings.workday.auth == "sso"
+        assert settings.workday.trusted_uris == []
 
 
 class TestCreateDefaultConfig:

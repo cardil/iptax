@@ -300,11 +300,48 @@ def _get_workday_config(defaults: Settings | None) -> WorkdayConfig:
     if enable_workday:
         default_url = defaults.workday.url if defaults and defaults.workday.url else ""
         workday_url = questionary.text(
-            "Workday URL:",
+            "Workday URL (e.g., https://workday.example.org):",
             default=default_url,
             validate=lambda x: len(x.strip()) > 0 or "URL cannot be empty",
         ).ask()
-        return WorkdayConfig(enabled=True, url=workday_url)
+
+        default_auth = defaults.workday.auth if defaults else "sso+kerberos"
+        auth_method = questionary.select(
+            "Authentication method:",
+            choices=[
+                questionary.Choice(
+                    "SSO with Kerberos (automatic, requires valid ticket)",
+                    value="sso+kerberos",
+                ),
+                questionary.Choice(
+                    "SSO with username/password (prompts for credentials)",
+                    value="sso",
+                ),
+            ],
+            default=default_auth,
+        ).ask()
+
+        trusted_uris: list[str] = []
+        if auth_method == "sso+kerberos":
+            default_uris = (
+                ",".join(defaults.workday.trusted_uris)
+                if defaults and defaults.workday.trusted_uris
+                else ""
+            )
+            uris_input = questionary.text(
+                "Trusted URIs for Kerberos/SPNEGO (comma-separated, "
+                "e.g., *.example.org,*.sso.example.org):",
+                default=default_uris,
+            ).ask()
+            if uris_input and uris_input.strip():
+                trusted_uris = [u.strip() for u in uris_input.split(",") if u.strip()]
+
+        return WorkdayConfig(
+            enabled=True,
+            url=workday_url,
+            auth=auth_method,
+            trusted_uris=trusted_uris,
+        )
     return WorkdayConfig(enabled=False)
 
 
