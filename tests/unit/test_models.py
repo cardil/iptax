@@ -14,6 +14,7 @@ from iptax.models import (
     DidConfig,
     DisabledAIConfig,
     EmployeeInfo,
+    Fields,
     GeminiProviderConfig,
     HistoryEntry,
     ProductConfig,
@@ -24,6 +25,52 @@ from iptax.models import (
     VertexAIProviderConfig,
     WorkdayConfig,
 )
+
+
+class TestFields:
+    """Test Fields proxy class."""
+
+    def test_fields_returns_fields_instance(self):
+        """Test that Fields() returns a Fields instance."""
+        accessor = Fields(ReportConfig)
+
+        assert isinstance(accessor, Fields)
+
+    def test_access_field_default_value(self):
+        """Test accessing a field's default value."""
+        accessor = Fields(ReportConfig)
+
+        assert accessor.output_dir.default == "~/Documents/iptax/{year}/"
+        assert accessor.creative_work_percentage.default == 80
+
+    def test_access_field_description(self):
+        """Test accessing a field's description."""
+        accessor = Fields(ReportConfig)
+
+        assert "Output directory" in accessor.output_dir.description
+        assert "creative" in accessor.creative_work_percentage.description.lower()
+
+    def test_access_nonexistent_field_raises_key_error(self):
+        """Test that accessing non-existent field raises KeyError."""
+        accessor = Fields(ReportConfig)
+
+        with pytest.raises(KeyError):
+            _ = accessor.nonexistent_field
+
+    def test_fields_with_did_config(self):
+        """Test Fields() with DidConfig model."""
+        accessor = Fields(DidConfig)
+
+        assert accessor.config_path.default == "~/.did/config"
+
+    def test_fields_works_with_any_pydantic_model(self):
+        """Test that Fields() works with any Pydantic BaseModel."""
+        # Test with a model that doesn't have defaults
+        accessor = Fields(EmployeeInfo)
+
+        # Should be able to access field info even without defaults
+        assert accessor.name is not None
+        assert accessor.supervisor is not None
 
 
 class TestEmployeeInfo:

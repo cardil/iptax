@@ -19,7 +19,7 @@ from iptax.config import (
 from iptax.did import DidIntegrationError, fetch_changes
 from iptax.history import HistoryCorruptedError, HistoryManager, get_history_path
 from iptax.models import Change, Settings
-from iptax.utils.env import get_cache_dir
+from iptax.utils.env import get_cache_dir, get_month_end_date
 
 
 def _setup_logging() -> None:
@@ -58,8 +58,8 @@ def cli() -> None:
 )
 def report(
     month: str | None,
-    skip_ai: bool,  # noqa: ARG001
-    skip_workday: bool,  # noqa: ARG001
+    skip_ai: bool,  # noqa: ARG001 - placeholder for future AI filtering implementation
+    skip_workday: bool,  # noqa: ARG001 - placeholder for future Workday integration
     dry_run: bool,
 ) -> None:
     """Generate IP tax report for the specified month (default: current month)."""
@@ -124,15 +124,7 @@ def _get_date_range(month_key: str) -> tuple[date, date]:
     """Get start and end date for a month."""
     year, month_num = month_key.split("-")
     start_date = datetime(int(year), int(month_num), 1).date()
-
-    # Get last day of month
-    december = 12
-    if int(month_num) == december:
-        end_date = datetime(int(year), december, 31).date()
-    else:
-        next_month = datetime(int(year), int(month_num) + 1, 1).date()
-        end_date = next_month - timedelta(days=1)
-
+    end_date = get_month_end_date(int(year), int(month_num))
     return start_date, end_date
 
 
@@ -332,8 +324,15 @@ def _output_table(entries: dict) -> None:
         )
 
 
-def _output_json(entries: dict) -> None:
-    """Output history as JSON."""
+def _convert_entries_to_dict(entries: dict) -> dict:
+    """Convert history entries to serializable dictionary.
+
+    Args:
+        entries: Dictionary of HistoryEntry objects
+
+    Returns:
+        Dictionary with serialized values
+    """
     data = {}
     for month, entry in entries.items():
         data[month] = {
@@ -343,22 +342,18 @@ def _output_json(entries: dict) -> None:
                 entry.regenerated_at.isoformat() if entry.regenerated_at else None
             ),
         }
+    return data
 
+
+def _output_json(entries: dict) -> None:
+    """Output history as JSON."""
+    data = _convert_entries_to_dict(entries)
     click.echo(json.dumps(data, indent=2))
 
 
 def _output_yaml(entries: dict) -> None:
     """Output history as YAML."""
-    data = {}
-    for month, entry in entries.items():
-        data[month] = {
-            "last_cutoff_date": str(entry.last_cutoff_date),
-            "generated_at": entry.generated_at.isoformat(),
-            "regenerated_at": (
-                entry.regenerated_at.isoformat() if entry.regenerated_at else None
-            ),
-        }
-
+    data = _convert_entries_to_dict(entries)
     click.echo(yaml.safe_dump(data, default_flow_style=False, sort_keys=False))
 
 

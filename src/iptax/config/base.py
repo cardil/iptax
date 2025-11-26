@@ -208,14 +208,13 @@ class Configurator:
             # Load did config using the SDK (pass path as keyword argument)
             did_config = DidSdkConfig(path=str(self.did_config_path))
 
-            # Extract provider names from sections
-            # did config uses INI format with sections like [github], [gitlab]
-            providers = []
-
             # Get all sections except 'general'
-            for section in did_config.parser.sections():
-                if section.lower() != "general":
-                    providers.append(section)
+            # (did config uses INI format with sections like [github], [gitlab])
+            providers = [
+                section
+                for section in did_config.parser.sections()
+                if section.lower() != "general"
+            ]
 
             if providers:
                 return providers
@@ -223,9 +222,9 @@ class Configurator:
             # No providers configured
             self._raise_no_providers_error()
 
+        except DidConfigError:
+            raise
         except Exception as e:
-            if isinstance(e, DidConfigError):
-                raise
             raise DidConfigError(
                 f"Failed to parse did config: {e}\n\n"
                 f"Please check {self.did_config_path} for syntax errors."

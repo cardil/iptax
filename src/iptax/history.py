@@ -16,7 +16,7 @@ import tomli_w
 from pydantic import ValidationError
 
 from iptax.models import HistoryEntry
-from iptax.utils.env import get_cache_dir
+from iptax.utils.env import get_cache_dir, get_month_end_date
 
 # Constants
 DECEMBER_MONTH = 12
@@ -111,9 +111,9 @@ class HistoryManager:
                 f"Cannot parse {self.history_path}: {e}\n\n"
                 "The history file has invalid TOML syntax."
             ) from e
+        except HistoryCorruptedError:
+            raise
         except Exception as e:
-            if isinstance(e, HistoryCorruptedError):
-                raise
             raise HistoryCorruptedError(
                 f"Failed to load history from {self.history_path}: {e}"
             ) from e
@@ -338,11 +338,7 @@ class HistoryManager:
             raise ValueError(f"Invalid month format '{month}', expected YYYY-MM") from e
 
         # Calculate end date (last day of the month)
-        if month_date.month == DECEMBER_MONTH:
-            next_month = month_date.replace(year=month_date.year + 1, month=1, day=1)
-        else:
-            next_month = month_date.replace(month=month_date.month + 1, day=1)
-        end_date = (next_month - timedelta(days=1)).date()
+        end_date = get_month_end_date(month_date.year, month_date.month)
 
         # Get previous entry to determine start date
         prev_entry = self.get_previous_entry(month)

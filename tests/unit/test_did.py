@@ -495,7 +495,8 @@ class TestExtractMergedStats:
         result = ([mock_user],)
 
         with pytest.raises(
-            DidIntegrationError, match="User stats object missing 'stats' attribute"
+            DidIntegrationError,
+            match=r"User stats object \(type: .*\) missing 'stats' attribute",
         ):
             _extract_merged_stats(result)
 
