@@ -208,11 +208,8 @@ class Configurator:
             # Load did config using the SDK (pass path as keyword argument)
             did_config = DidSdkConfig(path=str(self.did_config_path))
 
-            # Extract provider names from sections
-            # did config uses INI format with sections like [github], [gitlab]
-            providers = []
-
             # Get all sections except 'general'
+            # (did config uses INI format with sections like [github], [gitlab])
             providers = [
                 section
                 for section in did_config.parser.sections()
