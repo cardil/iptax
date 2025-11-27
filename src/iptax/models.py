@@ -346,6 +346,40 @@ class WorkdayConfig(BaseModel):
         return self
 
 
+class WorkHours(BaseModel):
+    """Work hours data from Workday.
+
+    Contains working days, absence information, and total hours
+    for a reporting period. Used for calculating creative work hours.
+    """
+
+    working_days: int = Field(
+        ...,
+        description="Number of working days in the period",
+        ge=0,
+    )
+    absence_days: int = Field(
+        default=0,
+        description="Vacation, sick leave, holidays",
+        ge=0,
+    )
+    total_hours: float = Field(
+        ...,
+        description="Total working hours",
+        ge=0,
+    )
+
+    @property
+    def effective_days(self) -> int:
+        """Days actually worked."""
+        return self.working_days - self.absence_days
+
+    @property
+    def effective_hours(self) -> float:
+        """Hours actually worked (assuming 8h/day for absences)."""
+        return self.total_hours - (self.absence_days * 8.0)
+
+
 class DidConfig(BaseModel):
     """psss/did integration configuration.
 
