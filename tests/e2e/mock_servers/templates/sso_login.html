@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SSO Login</title>
+</head>
+<body>
+  <h1>Corporate SSO Login</h1>
+
+  {% if error %}
+  <div class="error" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <form method="POST" action="/sso/login">
+    <div>
+      <label for="username">Username</label>
+      <!-- Matches: get_by_role("textbox", name="Username") -->
+      <input type="text"
+        id="username"
+        name="username"
+        aria-label="Username"
+        required>
+    </div>
+
+    <div>
+      <label for="password">Password</label>
+      <!-- Matches: get_by_role("textbox", name="Password") -->
+      <!-- Real SSO has role="textbox" on password field -->
+      <input type="password"
+        id="password"
+        name="password"
+        role="textbox"
+        aria-label="Password"
+        required>
+    </div>
+
+    <div>
+      <!-- Matches: get_by_role("button", name="Log in to SSO") -->
+      <button type="submit">Log in to SSO</button>
+    </div>
+  </form>
+</body>
+</html>

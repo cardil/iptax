@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Workday - Home</title>
+</head>
+<body>
+  <header>
+    <h1>Workday</h1>
+  </header>
+
+  <main>
+    <section aria-label="Your Top Apps">
+      <h2>Your Top Apps</h2>
+      <div class="app-grid">
+        <!-- Matches: get_by_role("button", name="Time", exact=True) -->
+        <button type="button"
+          onclick="window.location='/d/time.htmld'">
+          Time
+        </button>
+
+        <!-- Other apps for realism -->
+        <button type="button">Benefits</button>
+        <button type="button">Pay</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

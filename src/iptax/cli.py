@@ -1,7 +1,6 @@
 """Command-line interface for iptax."""
 
 import json
-import logging
 import sys
 from datetime import date, datetime, timedelta
 
@@ -21,23 +20,19 @@ from iptax.did import DidIntegrationError, fetch_changes
 from iptax.history import HistoryCorruptedError, HistoryManager, get_history_path
 from iptax.models import Change, Settings
 from iptax.utils.env import get_cache_dir, get_month_end_date
+from iptax.utils.logging import setup_logging
+from iptax.workday import WorkdayClient, WorkdayError
 
 
 def _setup_logging() -> None:
-    """Setup logging to user's cache directory."""
+    """Setup logging to user's cache directory.
+
+    Truncates log file on each run to keep it manageable.
+    """
     cache_dir = get_cache_dir()
     cache_dir.mkdir(parents=True, exist_ok=True)
-
-    # Setup root logger
     log_file = cache_dir / "iptax.log"
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        handlers=[
-            logging.FileHandler(log_file),
-        ],
-    )
+    setup_logging(log_file)
 
 
 @click.group()
@@ -360,6 +355,72 @@ def _output_yaml(entries: dict) -> None:
     """Output history as YAML."""
     data = _convert_entries_to_dict(entries)
     click.echo(yaml.safe_dump(data, default_flow_style=False, sort_keys=False))
+
+
+# FIXME: Remove this command after integrating workday into report command
+@cli.command()
+@click.option("--month", help="Month to fetch work hours for (YYYY-MM format)")
+@click.option(
+    "--foreground",
+    is_flag=True,
+    help="Run browser in foreground (visible) instead of headless",
+)
+@click.option(
+    "--no-kerberos",
+    is_flag=True,
+    help="Disable Kerberos/SPNEGO authentication (use SSO login form instead)",
+)
+def workday(month: str | None, foreground: bool, no_kerberos: bool) -> None:
+    """Test Workday integration (temporary command).
+
+    This command is for testing the Workday integration.
+    It will be removed once integrated into the report command.
+    """
+    console = Console()
+
+    try:
+        settings = load_settings()
+        console.print("[cyan]✓[/cyan] Settings loaded")
+
+        # Override auth method if --no-kerberos flag is set
+        if no_kerberos:
+            settings.workday.auth = "sso"
+            console.print("[yellow]⚠[/yellow] Kerberos disabled, using SSO login form")
+
+        # Get month key and date range
+        month_key = _get_month_key(month)
+        start_date, end_date = _get_date_range(month_key)
+        console.print(f"[cyan]📅[/cyan] Date range: {start_date} to {end_date}")
+
+        # Create Workday client and fetch hours
+        client = WorkdayClient(settings.workday)
+        headless = not foreground
+        # Auto-detect interactive mode based on whether stdin is a terminal
+        interactive = sys.stdin.isatty()
+
+        console.print("[cyan]🔍[/cyan] Fetching work hours...")
+        work_hours = client.get_work_hours(
+            start_date, end_date, interactive=interactive, headless=headless
+        )
+
+        # Display results
+        console.print("\n[bold green]✓ Work hours retrieved:[/bold green]")
+        console.print(f"  Working days: {work_hours.working_days}")
+        console.print(f"  Absence days: {work_hours.absence_days}")
+        console.print(f"  Total hours: {work_hours.total_hours}")
+        console.print(f"  Effective days: {work_hours.effective_days}")
+        console.print(f"  Effective hours: {work_hours.effective_hours}")
+
+    except ConfigError as e:
+        click.secho(f"Configuration error: {e}", fg="red", err=True)
+        click.echo("\nRun 'iptax config' to configure the application.")
+        sys.exit(1)
+    except WorkdayError as e:
+        click.secho(f"Workday error: {e}", fg="red", err=True)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n\n[yellow]Operation cancelled[/yellow]")
+        sys.exit(1)
 
 
 def main() -> None:
