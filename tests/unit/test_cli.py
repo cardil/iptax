@@ -285,3 +285,72 @@ did:
     assert result.exit_code == 1
     assert "Invalid month format" in result.output
     assert "expected YYYY-MM" in result.output
+
+
+@pytest.mark.unit
+def test_config_command_existing_config_overwrite_yes(
+    runner: CliRunner, tmp_path, monkeypatch
+) -> None:
+    """Test config command when existing config exists and user confirms overwrite."""
+    from unittest.mock import Mock, patch
+
+    # Create existing config file
+    config_dir = tmp_path / "config" / "iptax"
+    config_dir.mkdir(parents=True)
+    config_file = config_dir / "settings.yaml"
+    config_file.write_text("old: config")
+
+    # Create did config
+    did_config = tmp_path / ".did"
+    did_config.mkdir()
+    (did_config / "config").write_text("[general]\n[github]\ntype = github\n")
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # Mock questionary.confirm to return True (user says yes to overwrite)
+    with patch("iptax.cli.questionary.confirm") as mock_confirm:
+        mock_confirm_instance = Mock()
+        mock_confirm_instance.unsafe_ask.return_value = True
+        mock_confirm.return_value = mock_confirm_instance
+
+        # Mock create_default_config to avoid running full wizard
+        with patch("iptax.cli.create_default_config"):
+            result = runner.invoke(cli, ["config"])
+
+        # Should have asked about overwrite
+        mock_confirm.assert_called_once()
+        assert "Do you want to overwrite it?" in mock_confirm.call_args[0][0]
+        assert result.exit_code == 0
+
+
+@pytest.mark.unit
+def test_config_command_existing_config_overwrite_no(
+    runner: CliRunner, tmp_path, monkeypatch
+) -> None:
+    """Test config command when existing config exists and user declines overwrite."""
+    from unittest.mock import Mock, patch
+
+    # Create existing config file
+    config_dir = tmp_path / "config" / "iptax"
+    config_dir.mkdir(parents=True)
+    config_file = config_dir / "settings.yaml"
+    config_file.write_text("old: config")
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+
+    # Mock questionary.confirm to return False (user says no to overwrite)
+    with patch("iptax.cli.questionary.confirm") as mock_confirm:
+        mock_confirm_instance = Mock()
+        mock_confirm_instance.unsafe_ask.return_value = False
+        mock_confirm.return_value = mock_confirm_instance
+
+        result = runner.invoke(cli, ["config"])
+
+        # Should have asked about overwrite
+        mock_confirm.assert_called_once()
+        assert "Configuration not changed" in result.output
+        assert result.exit_code == 0
+
+        # Original config should be unchanged
+        assert config_file.read_text() == "old: config"

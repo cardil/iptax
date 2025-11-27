@@ -6,6 +6,7 @@ import sys
 from datetime import date, datetime, timedelta
 
 import click
+import questionary
 import yaml
 from rich.console import Console
 from rich.table import Table
@@ -207,7 +208,11 @@ def config(show: bool, validate: bool, path: bool) -> None:
         # Check if config already exists
         if config_path.exists():
             click.echo(f"Configuration file already exists at: {config_path}")
-            if not click.confirm("Do you want to overwrite it?"):
+            overwrite = questionary.confirm(
+                "Do you want to overwrite it?",
+                default=True,
+            ).unsafe_ask()
+            if not overwrite:
                 click.echo("Configuration not changed.")
                 return
 

@@ -10,6 +10,8 @@ from pathlib import Path
 import questionary
 from questionary.prompts.common import Choice
 
+# All prompts use unsafe_ask() to propagate KeyboardInterrupt
+# instead of returning None, allowing clean exit on Ctrl+C
 from iptax.models import (
     MAX_PERCENTAGE,
     AIProviderConfig,
@@ -68,7 +70,7 @@ def _get_employee_info(defaults: Settings | None) -> EmployeeInfo:
         "Employee name:",
         default=default_name,
         validate=lambda x: len(x.strip()) > 0 or "Name cannot be empty",
-    ).ask()
+    ).unsafe_ask()
 
     default_supervisor = (
         defaults.employee.supervisor if defaults and defaults.employee else ""
@@ -77,7 +79,7 @@ def _get_employee_info(defaults: Settings | None) -> EmployeeInfo:
         "Supervisor name:",
         default=default_supervisor,
         validate=lambda x: len(x.strip()) > 0 or "Name cannot be empty",
-    ).ask()
+    ).unsafe_ask()
 
     return EmployeeInfo(name=employee_name, supervisor=supervisor_name)
 
@@ -91,7 +93,7 @@ def _get_product_config(defaults: Settings | None) -> ProductConfig:
         "Product name:",
         default=default_product,
         validate=lambda x: len(x.strip()) > 0 or "Product name cannot be empty",
-    ).ask()
+    ).unsafe_ask()
 
     return ProductConfig(name=product_name)
 
@@ -112,7 +114,7 @@ def _get_report_config(defaults: Settings | None) -> ReportConfig:
         default=str(default_percentage),
         validate=lambda x: (x.isdigit() and 0 <= int(x) <= MAX_PERCENTAGE)
         or f"Must be 0-{MAX_PERCENTAGE}",
-    ).ask()
+    ).unsafe_ask()
 
     default_output_dir = (
         str(defaults.report.output_dir)
@@ -122,7 +124,7 @@ def _get_report_config(defaults: Settings | None) -> ReportConfig:
 
     output_dir = questionary.text(
         f"Output directory [{default_output_dir}]:", default=default_output_dir
-    ).ask()
+    ).unsafe_ask()
 
     return ReportConfig(
         output_dir=output_dir,
@@ -139,7 +141,7 @@ def _get_ai_config(defaults: Settings | None) -> AIProviderConfig:
     )
     enable_ai = questionary.confirm(
         "Enable AI filtering?", default=default_enable_ai
-    ).ask()
+    ).unsafe_ask()
 
     if enable_ai:
         default_ai_config = defaults.ai if defaults else None
@@ -171,7 +173,7 @@ def _configure_ai_provider(
             questionary.Choice("Google Vertex AI", value="vertex"),
         ],
         default=default_provider,
-    ).ask()
+    ).unsafe_ask()
 
     if provider == "gemini":
         return _configure_gemini(default_config)
@@ -197,12 +199,14 @@ def _configure_gemini(default_config: AIProviderConfig | None) -> GeminiProvider
         else Fields(GeminiProviderConfig).api_key_env.default
     )
 
-    model = questionary.text(f"Model [{default_model}]:", default=default_model).ask()
+    model = questionary.text(
+        f"Model [{default_model}]:", default=default_model
+    ).unsafe_ask()
 
     api_key_env = questionary.text(
         f"API key environment variable [{default_api_key_env}]:",
         default=default_api_key_env,
-    ).ask()
+    ).unsafe_ask()
 
     default_use_env_file = (
         bool(default_config.api_key_file)
@@ -213,7 +217,7 @@ def _configure_gemini(default_config: AIProviderConfig | None) -> GeminiProvider
     use_env_file = questionary.confirm(
         "Use .env file for API key? (default: use system environment)",
         default=default_use_env_file,
-    ).ask()
+    ).unsafe_ask()
 
     api_key_file = None
     if use_env_file:
@@ -227,7 +231,7 @@ def _configure_gemini(default_config: AIProviderConfig | None) -> GeminiProvider
             "Path to .env file:",
             default=default_path,
             validate=lambda x: len(x.strip()) > 0 or "Path cannot be empty",
-        ).ask()
+        ).unsafe_ask()
 
     return GeminiProviderConfig(
         model=model,
@@ -256,17 +260,19 @@ def _configure_vertex(
         else ""
     )
 
-    model = questionary.text(f"Model [{default_model}]:", default=default_model).ask()
+    model = questionary.text(
+        f"Model [{default_model}]:", default=default_model
+    ).unsafe_ask()
 
     project_id = questionary.text(
         "GCP Project ID:",
         default=default_project_id,
         validate=lambda x: len(x.strip()) > 0 or "Project ID cannot be empty",
-    ).ask()
+    ).unsafe_ask()
 
     location = questionary.text(
         f"GCP Location [{default_location}]:", default=default_location
-    ).ask()
+    ).unsafe_ask()
 
     default_credentials = (
         str(default_config.credentials_file)
@@ -278,7 +284,7 @@ def _configure_vertex(
     credentials_file = questionary.text(
         "Credentials file (optional, press Enter to skip):",
         default=default_credentials,
-    ).ask()
+    ).unsafe_ask()
 
     return VertexAIProviderConfig(
         model=model,
@@ -295,16 +301,53 @@ def _get_workday_config(defaults: Settings | None) -> WorkdayConfig:
     default_enable_workday = defaults.workday.enabled if defaults else True
     enable_workday = questionary.confirm(
         "Enable Workday integration?", default=default_enable_workday
-    ).ask()
+    ).unsafe_ask()
 
     if enable_workday:
         default_url = defaults.workday.url if defaults and defaults.workday.url else ""
         workday_url = questionary.text(
-            "Workday URL:",
+            "Workday URL (e.g., https://workday.example.org):",
             default=default_url,
             validate=lambda x: len(x.strip()) > 0 or "URL cannot be empty",
-        ).ask()
-        return WorkdayConfig(enabled=True, url=workday_url)
+        ).unsafe_ask()
+
+        default_auth = defaults.workday.auth if defaults else "sso+kerberos"
+        auth_method = questionary.select(
+            "Authentication method:",
+            choices=[
+                questionary.Choice(
+                    "SSO with Kerberos (automatic, requires valid ticket)",
+                    value="sso+kerberos",
+                ),
+                questionary.Choice(
+                    "SSO with username/password (prompts for credentials)",
+                    value="sso",
+                ),
+            ],
+            default=default_auth,
+        ).unsafe_ask()
+
+        trusted_uris: list[str] = []
+        if auth_method == "sso+kerberos":
+            default_uris = (
+                ",".join(defaults.workday.trusted_uris)
+                if defaults and defaults.workday.trusted_uris
+                else ""
+            )
+            uris_input = questionary.text(
+                "Trusted URIs for Kerberos/SPNEGO (comma-separated, "
+                "e.g., *.example.org,*.sso.example.org):",
+                default=default_uris,
+            ).unsafe_ask()
+            if uris_input and uris_input.strip():
+                trusted_uris = [u.strip() for u in uris_input.split(",") if u.strip()]
+
+        return WorkdayConfig(
+            enabled=True,
+            url=workday_url,
+            auth=auth_method,
+            trusted_uris=trusted_uris,
+        )
     return WorkdayConfig(enabled=False)
 
 
@@ -324,7 +367,7 @@ def _get_did_config(
 
     did_path = questionary.text(
         f"did config path [{default_did_path}]:", default=default_did_path
-    ).ask()
+    ).unsafe_ask()
 
     # List available providers
     questionary.print("\nReading did config...", style="italic")
@@ -345,7 +388,7 @@ def _get_did_config(
     selected_providers = questionary.checkbox(
         "Select providers to use:",
         choices=choices,
-    ).ask()
+    ).unsafe_ask()
 
     if not selected_providers:
         questionary.print("⚠ At least one provider must be selected", style="bold red")

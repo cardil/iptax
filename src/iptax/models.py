@@ -294,6 +294,23 @@ class WorkdayConfig(BaseModel):
 
     Settings for automated retrieval of work hours from Workday.
     Falls back to manual input if disabled or if automation fails.
+
+    Supported authentication methods:
+
+    - "sso+kerberos": Fully automatic SSO with Kerberos/SPNEGO. Requires valid
+        Kerberos ticket. The authentication flow is:
+        1. Browser navigates to Workday
+        2. Workday redirects via SAML to SSO/IdP (like Keycloak)
+        3. SSO/IdP uses SPNEGO to authenticate with browser's Kerberos ticket
+        4. SSO/IdP returns SAML assertion to Workday
+        5. Session established
+        Playwright needs Chromium args (--auth-server-allowlist,
+        --auth-negotiate-delegate-allowlist) to enable SPNEGO for SSO domains
+        specified in trusted_uris.
+
+    - "sso": SSO with username/password fallback. Prompts for credentials
+        in command-line which are then entered into the SSO login form.
+        Use this if Kerberos tickets are not available or not accepted.
     """
 
     enabled: bool = Field(
@@ -302,11 +319,23 @@ class WorkdayConfig(BaseModel):
     )
     url: str | None = Field(
         default=None,
-        description="Company Workday URL",
+        description="Company Workday URL (e.g., https://workday.example.org)",
     )
-    auth: Literal["saml"] = Field(
-        default="saml",
-        description="Authentication method (only SAML supported)",
+    auth: Literal["sso+kerberos", "sso"] = Field(
+        default="sso+kerberos",
+        description=(
+            "Authentication method: "
+            "'sso+kerberos' for automatic Kerberos/SPNEGO, "
+            "'sso' for username/password prompt"
+        ),
+    )
+    trusted_uris: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Trusted URIs for SPNEGO/Kerberos auth (used with 'sso+kerberos'). "
+            "Used in Chromium's --auth-server-allowlist. "
+            "Example: ['*.example.org', '*.sso.example.org']"
+        ),
     )
 
     @model_validator(mode="after")
