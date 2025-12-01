@@ -57,6 +57,7 @@ class TestWorkdayClientGetWorkHours:
         with (
             patch("iptax.workday.client.prompt_manual_work_hours") as mock_prompt,
             patch("iptax.workday.client.questionary") as mock_questionary,
+            patch.object(client, "fetch_work_hours", side_effect=NotImplementedError()),
         ):
             mock_prompt.return_value = WorkHours(
                 working_days=21,

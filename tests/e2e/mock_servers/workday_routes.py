@@ -71,6 +71,11 @@ def time_page():
 
     global _current_week_start  # noqa: PLW0603
 
+    # Initialize week if not set
+    if _current_week_start is None:
+        today = date.today()
+        _current_week_start = today - timedelta(days=today.weekday())
+
     # Handle week navigation via query params
     action = request.args.get("action")
     if action == "prev":
@@ -82,10 +87,6 @@ def time_page():
         _current_week_start = date.fromisoformat(request.args["date"])
         # Align to Monday
         _current_week_start -= timedelta(days=_current_week_start.weekday())
-
-    if _current_week_start is None:
-        today = date.today()
-        _current_week_start = today - timedelta(days=today.weekday())
 
     week_end = _current_week_start + timedelta(days=6)
 

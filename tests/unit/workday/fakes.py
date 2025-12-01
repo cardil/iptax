@@ -84,14 +84,15 @@ class FakeLocator:
         *,
         name: str | re.Pattern[str] | None = None,
         exact: bool = False,  # noqa: ARG002 - matches Playwright
-        level: int | None = None,  # noqa: ARG002 - matches Playwright
+        level: int | None = None,
     ) -> FakeLocator:
         """Get child element by ARIA role.
 
-        Args match Playwright interface; exact and level are unused in fake.
+        Args match Playwright interface; exact is unused in fake.
         """
-        # Build key from role and name for lookup
-        key = f"{role}:{name}"
+        # Build key from role, name, and level for lookup (matches _make_role_key)
+        name_str = name.pattern if isinstance(name, re.Pattern) else str(name)
+        key = f"{role}:{name_str}:{level}"
         return self.child_locators.get(key, FakeLocator())
 
 

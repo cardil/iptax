@@ -71,9 +71,9 @@ class TestPromptCredentialsAsync:
 
         with patch("iptax.workday.prompts.questionary") as mock_questionary:
             mock_text = MagicMock()
-            mock_text.ask_async = AsyncMock(return_value="testuser")
+            mock_text.unsafe_ask_async = AsyncMock(return_value="testuser")
             mock_password = MagicMock()
-            mock_password.ask_async = AsyncMock(return_value="testpass")
+            mock_password.unsafe_ask_async = AsyncMock(return_value="testpass")
 
             mock_questionary.text.return_value = mock_text
             mock_questionary.password.return_value = mock_password

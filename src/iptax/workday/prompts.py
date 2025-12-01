@@ -182,9 +182,9 @@ async def prompt_credentials_async() -> tuple[str, str]:
     username = await questionary.text(
         "Username:",
         validate=lambda x: len(x.strip()) > 0 or "Username cannot be empty",
-    ).ask_async()
+    ).unsafe_ask_async()
     password = await questionary.password(
         "Password:",
         validate=lambda x: len(x.strip()) > 0 or "Password cannot be empty",
-    ).ask_async()
+    ).unsafe_ask_async()
     return username, password
