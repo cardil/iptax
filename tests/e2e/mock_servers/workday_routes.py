@@ -69,6 +69,8 @@ def home():
 def time_page():
     """Time page with week selection and calendar."""
 
+    # Global needed to maintain week state across HTTP requests
+    # in test mock server (noqa: PLW0603)
     global _current_week_start  # noqa: PLW0603
 
     # Initialize week if not set
