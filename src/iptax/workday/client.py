@@ -31,14 +31,15 @@ logger = logging.getLogger(__name__)
 class WorkdayClient:
     """Client for fetching work hours from Workday."""
 
-    def __init__(self, config: WorkdayConfig) -> None:
+    def __init__(self, config: WorkdayConfig, console: Console | None = None) -> None:
         """Initialize WorkdayClient.
 
         Args:
             config: Workday configuration
+            console: Rich console for output (optional, defaults to new Console)
         """
         self.config = config
-        self.console = Console()
+        self.console = console or Console()
         self._progress_ctrl: ProgressController | None = None
 
     async def fetch_work_hours(
@@ -227,7 +228,6 @@ class WorkdayClient:
 
         Raises:
             WorkdayError: If Workday is disabled and not interactive
-            NotImplementedError: If automation not implemented and not interactive
             AuthenticationError: If authentication fails and not interactive
         """
 
@@ -241,16 +241,6 @@ class WorkdayClient:
             return asyncio.run(
                 self.fetch_work_hours(start_date, end_date, headless=headless)
             )
-        except NotImplementedError:
-            if interactive:
-                questionary.print(
-                    "⚠ Workday automation not yet implemented. "
-                    "Falling back to manual input.",
-                    style="yellow",
-                )
-                questionary.print("")
-                return prompt_manual_work_hours(start_date, end_date)
-            raise
         except Exception as e:
             if interactive:
                 self._display_error_telemetry(e)

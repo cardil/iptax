@@ -616,15 +616,20 @@ class TestExtractWorkHours:
         # Configure navigation elements
         driver.configure_locator(role="button", name="Previous Week")
         driver.configure_locator(role="button", name="Next Week")
+        # Sequence must alternate so wait_for_week_change detects transitions:
+        # 1. navigate_previous: get heading (seq[0]), wait changed (seq[1] differs)
+        # 2. navigate_next: get heading (seq[2]), wait until changed (seq[3] differs)
+        # 3. get_current_week_range in loop (seq[4])
         driver.configure_locator(
             role="heading",
             name=re.compile(r"\w+ \d+.*\d{4}"),
             level=2,
             text_content_sequence=[
-                "Nov 17 - 23, 2025",  # Previous week
-                "Nov 17 - 23, 2025",  # Get heading before next
-                "Nov 24 - 30, 2025",  # After next (target week)
-                "Nov 24 - 30, 2025",  # Get range
+                "Nov 24 - 30, 2025",  # Before navigate_previous (current week)
+                "Nov 17 - 23, 2025",  # After Previous click (changed!)
+                "Nov 17 - 23, 2025",  # Get heading before navigate_next
+                "Nov 24 - 30, 2025",  # After Next click (changed!)
+                "Nov 24 - 30, 2025",  # get_current_week_range in while loop
             ],
         )
 
@@ -647,15 +652,17 @@ class TestExtractWorkHours:
 
         driver.configure_locator(role="button", name="Previous Week")
         driver.configure_locator(role="button", name="Next Week")
+        # Sequence must alternate for wait_for_week_change to detect transitions
         driver.configure_locator(
             role="heading",
             name=re.compile(r"\w+ \d+.*\d{4}"),
             level=2,
             text_content_sequence=[
-                "Nov 17 - 23, 2025",
-                "Nov 17 - 23, 2025",
-                "Nov 24 - 30, 2025",
-                "Nov 24 - 30, 2025",
+                "Nov 24 - 30, 2025",  # Before navigate_previous
+                "Nov 17 - 23, 2025",  # After Previous click (changed!)
+                "Nov 17 - 23, 2025",  # Get heading before navigate_next
+                "Nov 24 - 30, 2025",  # After Next click (changed!)
+                "Nov 24 - 30, 2025",  # get_current_week_range
             ],
         )
 

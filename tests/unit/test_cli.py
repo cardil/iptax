@@ -3,7 +3,7 @@
 import pytest
 from click.testing import CliRunner
 
-from iptax.cli import cli
+from iptax.cli import _setup_logging, cli
 
 
 @pytest.fixture
@@ -354,3 +354,26 @@ def test_config_command_existing_config_overwrite_no(
 
         # Original config should be unchanged
         assert config_file.read_text() == "old: config"
+
+
+@pytest.mark.unit
+def test_setup_logging_creates_cache_dir_and_log_file(tmp_path, monkeypatch) -> None:
+    """Test that _setup_logging creates cache directory and configures logging."""
+    from unittest.mock import patch
+
+    # Set XDG_CACHE_HOME to temp directory
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setenv("XDG_CACHE_HOME", str(cache_dir))
+
+    # Mock setup_logging to verify it's called with correct path
+    with patch("iptax.cli.setup_logging") as mock_setup:
+        _setup_logging()
+
+        # Verify cache directory was created
+        expected_cache_dir = cache_dir / "iptax"
+        assert expected_cache_dir.exists()
+
+        # Verify setup_logging was called with correct log file path
+        mock_setup.assert_called_once()
+        log_file_arg = mock_setup.call_args[0][0]
+        assert log_file_arg == expected_cache_dir / "iptax.log"

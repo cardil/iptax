@@ -73,17 +73,16 @@ class TestRaiseHelpers:
 class TestProcessLoginRaceResult:
     """Test _process_login_race_result function."""
 
-    @pytest.mark.asyncio
-    async def test_login_success(self) -> None:
+    def test_login_success(self) -> None:
         """Test processing successful login result."""
-        task = AsyncMock()
+        # Use MagicMock since task.result() is synchronous
+        task = MagicMock()
         task.result.return_value = "success"
         done = {task}
         result = _process_login_race_result(done, "https://wd5.myworkday.com/example")
         assert result is True
 
-    @pytest.mark.asyncio
-    async def test_login_failure(self) -> None:
+    def test_login_failure(self) -> None:
         """Test processing failed login (bad credentials)."""
         task = MagicMock()
         task.result.return_value = "failure"
@@ -91,17 +90,16 @@ class TestProcessLoginRaceResult:
         with pytest.raises(BadCredentialsError):
             _process_login_race_result(done, "https://auth.example.org/sso")
 
-    @pytest.mark.asyncio
-    async def test_login_race_result_already_on_workday(self) -> None:
+    def test_login_race_result_already_on_workday(self) -> None:
         """Test when URL is already on Workday (fallback check)."""
-        task = AsyncMock()
+        # Use MagicMock since task.result() is synchronous
+        task = MagicMock()
         task.result.side_effect = Exception("Task failed")
         done = {task}
         result = _process_login_race_result(done, "https://wd5.myworkday.com/example")
         assert result is True
 
-    @pytest.mark.asyncio
-    async def test_login_race_result_not_on_workday(self) -> None:
+    def test_login_race_result_not_on_workday(self) -> None:
         """Test when URL is not on Workday and tasks failed."""
         task = MagicMock()
         task.result.side_effect = Exception("Task failed")
