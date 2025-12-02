@@ -72,7 +72,7 @@ init: $(VENV)/init.done  ## Initialize development environment (install deps)
 $(VENV)/init.done: $(VENV)/venv.done pyproject.toml
 	@mkdir -p $(GUARDS)
 	$(VENV_PIP) install -e ".[dev]"
-	$(VENV_PYTHON) -m playwright install chromium
+	$(VENV_PYTHON) -m playwright install firefox
 	@# Fix certifi to use system certs (for corporate SSL proxies)
 	@SYSTEM_CERTIFI=$$(ls /usr/lib/python3.*/site-packages/certifi/core.py \
 		2>/dev/null | head -1); \
@@ -140,9 +140,11 @@ $(GUARDS)/format.done: $(VENV)/init.done $(SRC_FILES) $(TEST_FILES) \
 	$(MD_FILES) pyproject.toml .editorconfig
 	@mkdir -p $(GUARDS)
 	@echo -e "$(BLUE)$(GEAR) Checking code formatting...$(RESET)"
-	@$(VENV_BIN)/black --check --diff src/ tests/
+	@$(VENV_BIN)/mdformat --wrap 88 --check docs/ README.md || \
+		(echo -e "$(YELLOW)💡 Hint: Run 'make format'$(RESET)" && exit 1)
+	@$(VENV_BIN)/black --check --diff src/ tests/ || \
+		(echo -e "$(YELLOW)💡 Hint: Run 'make format'$(RESET)" && exit 1)
 	@$(VENV_BIN)/ruff check src/ tests/
-	@$(VENV_BIN)/mdformat --wrap 88 --check docs/ README.md
 	@touch $@
 
 .PHONY: typecheck

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Workday - Time</title>
+  <script>
+    // Week navigation via JavaScript
+    function navigatePrev() {
+      window.location = '/d/time.htmld?action=prev';
+    }
+    function navigateNext() {
+      window.location = '/d/time.htmld?action=next';
+    }
+    function openWeekSelector() {
+      document.getElementById('week-modal').style.display = 'block';
+    }
+    function selectWeek() {
+      const month = document.getElementById('month-input').value;
+      const day = document.getElementById('day-input').value;
+      const year = document.getElementById('year-input').value;
+      const date = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      window.location = `/d/time.htmld?date=${date}`;
+    }
+    function closeModal() {
+      document.getElementById('week-modal').style.display = 'none';
+    }
+
+    // Simulate API call when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+      const weekStart = '{{ week_start }}';
+      fetch(`/rel-task/2997$9444.htmld?week_start=${weekStart}`)
+        .then(r => r.json())
+        .then(data => console.log('Calendar data loaded:', data))
+        .catch(e => console.error('Failed to load calendar data:', e));
+    });
+  </script>
+</head>
+<body>
+  <header>
+    <h1>Time</h1>
+  </header>
+
+  <main>
+    <nav aria-label="Week Navigation">
+      <!-- Matches: get_by_role("link", name="Select Week") -->
+      <a href="#" role="link" onclick="openWeekSelector(); return false;">
+        Select Week
+      </a>
+    </nav>
+
+    <section aria-label="Week View">
+      <!-- Matches: get_by_role("heading", level=2) with date pattern -->
+      <h2>{{ week_start.strftime('%b %d') }} - {{
+        week_end.strftime('%d, %Y') }}</h2>
+
+      <div class="navigation">
+        <!-- Matches: get_by_role("button", name="Previous Week") -->
+        <button type="button" onclick="navigatePrev()">Previous Week</button>
+
+        <!-- Matches: get_by_role("button", name="Next Week") -->
+        <button type="button" onclick="navigateNext()">Next Week</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Summary</h2>
+      <!-- Matches CSS: section:has(h2:has-text('Summary')) dl -->
+      <dl>
+        <div>
+          <dt>Standard Hours:</dt>
+          <dd>40</dd>
+        </div>
+        <div>
+          <dt>Overtime:</dt>
+          <dd>0</dd>
+        </div>
+        <div>
+          <dt>Time Off / Leave of Absence</dt>
+          <dd>0</dd>
+        </div>
+        <div>
+          <dt>Total Hours:</dt>
+          <dd>40</dd>
+        </div>
+      </dl>
+    </section>
+  </main>
+
+  <!-- Week Selection Modal -->
+  <div id="week-modal" role="dialog" style="display: none;">
+    <div class="modal-content">
+      <h3>Select Week</h3>
+      <div>
+        <label for="month-input">Month</label>
+        <!-- Matches: get_by_role("spinbutton", name="Month") -->
+        <input type="number"
+          id="month-input"
+          role="spinbutton"
+          aria-label="Month"
+          min="1"
+          max="12"
+          value="{{ week_start.month }}">
+      </div>
+      <div>
+        <label for="day-input">Day</label>
+        <!-- Matches: get_by_role("spinbutton", name="Day") -->
+        <input type="number"
+          id="day-input"
+          role="spinbutton"
+          aria-label="Day"
+          min="1"
+          max="31"
+          value="{{ week_start.day }}">
+      </div>
+      <div>
+        <label for="year-input">Year</label>
+        <!-- Matches: get_by_role("spinbutton", name="Year") -->
+        <input type="number"
+          id="year-input"
+          role="spinbutton"
+          aria-label="Year"
+          min="2020"
+          max="2030"
+          value="{{ week_start.year }}">
+      </div>
+      <div>
+        <!-- Matches: get_by_role("button", name="OK") -->
+        <button type="button" onclick="selectWeek()">OK</button>
+        <button type="button" onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

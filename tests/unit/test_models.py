@@ -24,6 +24,7 @@ from iptax.models import (
     Settings,
     VertexAIProviderConfig,
     WorkdayConfig,
+    WorkHours,
 )
 
 
@@ -462,6 +463,115 @@ class TestWorkdayConfig:
 
         assert config.auth == "sso"
         assert config.trusted_uris == []
+
+
+class TestWorkHours:
+    """Test WorkHours model validation and properties."""
+
+    def test_basic_creation(self):
+        """Test creating WorkHours with required fields."""
+        work_hours = WorkHours(
+            working_days=21,
+            total_hours=168.0,
+        )
+
+        assert work_hours.working_days == 21
+        assert work_hours.absence_days == 0
+        assert work_hours.total_hours == 168.0
+
+    def test_with_absence_days(self):
+        """Test creating WorkHours with absence days."""
+        work_hours = WorkHours(
+            working_days=21,
+            absence_days=3,
+            total_hours=168.0,
+        )
+
+        assert work_hours.working_days == 21
+        assert work_hours.absence_days == 3
+        assert work_hours.total_hours == 168.0
+
+    def test_effective_days_property_no_absence(self):
+        """Test effective_days property without absences."""
+        work_hours = WorkHours(
+            working_days=21,
+            total_hours=168.0,
+        )
+
+        assert work_hours.effective_days == 21
+
+    def test_effective_days_property_with_absence(self):
+        """Test effective_days property with absences."""
+        work_hours = WorkHours(
+            working_days=21,
+            absence_days=5,
+            total_hours=168.0,
+        )
+
+        assert work_hours.effective_days == 16
+
+    def test_effective_hours_property_no_absence(self):
+        """Test effective_hours property without absences."""
+        work_hours = WorkHours(
+            working_days=21,
+            total_hours=168.0,
+        )
+
+        assert work_hours.effective_hours == 168.0
+
+    def test_effective_hours_property_with_absence(self):
+        """Test effective_hours property with absences."""
+        work_hours = WorkHours(
+            working_days=21,
+            absence_days=3,
+            total_hours=168.0,
+        )
+
+        # 168 - (3 * 8) = 168 - 24 = 144
+        assert work_hours.effective_hours == 144.0
+
+    def test_working_days_cannot_be_negative(self):
+        """Test that working_days cannot be negative."""
+        with pytest.raises(ValidationError) as exc_info:
+            WorkHours(
+                working_days=-1,
+                total_hours=168.0,
+            )
+
+        assert "greater than or equal to 0" in str(exc_info.value).lower()
+
+    def test_absence_days_cannot_be_negative(self):
+        """Test that absence_days cannot be negative."""
+        with pytest.raises(ValidationError) as exc_info:
+            WorkHours(
+                working_days=21,
+                absence_days=-1,
+                total_hours=168.0,
+            )
+
+        assert "greater than or equal to 0" in str(exc_info.value).lower()
+
+    def test_total_hours_cannot_be_negative(self):
+        """Test that total_hours cannot be negative."""
+        with pytest.raises(ValidationError) as exc_info:
+            WorkHours(
+                working_days=21,
+                total_hours=-8.0,
+            )
+
+        assert "greater than or equal to 0" in str(exc_info.value).lower()
+
+    def test_zero_values_are_valid(self):
+        """Test that zero values are valid."""
+        work_hours = WorkHours(
+            working_days=0,
+            absence_days=0,
+            total_hours=0.0,
+        )
+
+        assert work_hours.working_days == 0
+        assert work_hours.absence_days == 0
+        assert work_hours.total_hours == 0.0
 
 
 class TestDidConfig:

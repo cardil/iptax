@@ -773,7 +773,7 @@ class TestCreateDefaultConfig:
 
     def test_create_default_config_without_did(
         self,
-        isolated_home,  # noqa: ARG002 - fixture sets up environment
+        isolated_home,  # noqa: ARG002 - fixture sets up env
     ):
         """Test create_default_config() raises DidConfigError when did
         not configured."""
