@@ -263,20 +263,24 @@ Hope this helps!"""
         assert response.judgments[0].decision == AIDecision.INCLUDE
 
 
-def test_parse_response_no_code_block_fails(
+def test_parse_response_plain_yaml(
     gemini_config: GeminiProviderConfig,
 ) -> None:
-    """Test that parsing fails if no YAML code block is found."""
+    """Test parsing plain YAML when no code block is present."""
     with patch.dict(os.environ, {"TEST_GEMINI_KEY": "test-key"}):
         provider = AIProvider(gemini_config)
 
         response_text = """judgments:
--   change_id: "github.com/org/repo#123"
-    decision: EXCLUDE
-    reasoning: Not relevant"""
+    -   change_id: "github.com/org/repo#123"
+        decision: EXCLUDE
+        reasoning: Not relevant"""
 
-        with pytest.raises(AIProviderError, match="Failed to extract YAML"):
-            provider._parse_response(response_text)
+        response = provider._parse_response(response_text)
+
+        assert isinstance(response, AIResponse)
+        assert len(response.judgments) == 1
+        assert response.judgments[0].change_id == "github.com/org/repo#123"
+        assert response.judgments[0].decision == AIDecision.EXCLUDE
 
 
 def test_parse_response_invalid_yaml(gemini_config: GeminiProviderConfig) -> None:
@@ -359,3 +363,108 @@ judgments:
         assert isinstance(response, AIResponse)
         assert len(response.judgments) == 1
         assert response.judgments[0].change_id == "test#1"
+
+
+@patch("iptax.ai.provider.litellm.completion")
+def test_judge_changes_retry_on_parse_error(
+    mock_completion: Mock, gemini_config: GeminiProviderConfig
+) -> None:
+    """Test that judge_changes retries when parse fails."""
+    # First response: invalid YAML
+    # Second response: valid YAML
+    mock_response_invalid = MagicMock()
+    mock_response_invalid.choices = [
+        MagicMock(message=MagicMock(content="This is not valid YAML at all."))
+    ]
+
+    mock_response_valid = MagicMock()
+    mock_response_valid.choices = [
+        MagicMock(
+            message=MagicMock(
+                content="""```yaml
+judgments:
+    -   change_id: "github.com/org/repo#123"
+        decision: INCLUDE
+        reasoning: Valid response
+```"""
+            )
+        )
+    ]
+
+    mock_completion.side_effect = [mock_response_invalid, mock_response_valid]
+
+    with patch.dict(os.environ, {"TEST_GEMINI_KEY": "test-key"}):
+        provider = AIProvider(gemini_config, max_retries=2)
+        response = provider.judge_changes("test prompt")
+
+        # Should have called LiteLLM twice
+        assert mock_completion.call_count == 2
+
+        # Second call should include error correction
+        second_call = mock_completion.call_args_list[1]
+        messages = second_call.kwargs["messages"]
+        assert len(messages) == 3
+        assert messages[0]["role"] == "user"
+        assert messages[1]["role"] == "assistant"
+        assert messages[2]["role"] == "user"
+        assert "could not be parsed" in messages[2]["content"]
+
+        # Final response should be valid
+        assert isinstance(response, AIResponse)
+        assert len(response.judgments) == 1
+
+
+@patch("iptax.ai.provider.litellm.completion")
+def test_judge_changes_max_retries_exhausted(
+    mock_completion: Mock, gemini_config: GeminiProviderConfig
+) -> None:
+    """Test that AIProviderError is raised after max retries exhausted."""
+    mock_response_invalid = MagicMock()
+    mock_response_invalid.choices = [
+        MagicMock(message=MagicMock(content="Invalid response every time"))
+    ]
+
+    mock_completion.return_value = mock_response_invalid
+
+    with patch.dict(os.environ, {"TEST_GEMINI_KEY": "test-key"}):
+        provider = AIProvider(gemini_config, max_retries=2)
+
+        with pytest.raises(AIProviderError):
+            provider.judge_changes("test prompt")
+
+        # Should have tried 3 times (initial + 2 retries)
+        assert mock_completion.call_count == 3
+
+
+@patch("iptax.ai.provider.litellm.completion")
+def test_judge_changes_no_retries(
+    mock_completion: Mock, gemini_config: GeminiProviderConfig
+) -> None:
+    """Test with max_retries=0 (no retries)."""
+    mock_response_invalid = MagicMock()
+    mock_response_invalid.choices = [
+        MagicMock(message=MagicMock(content="Invalid response"))
+    ]
+
+    mock_completion.return_value = mock_response_invalid
+
+    with patch.dict(os.environ, {"TEST_GEMINI_KEY": "test-key"}):
+        provider = AIProvider(gemini_config, max_retries=0)
+
+        with pytest.raises(AIProviderError):
+            provider.judge_changes("test prompt")
+
+        # Should have tried only once
+        assert mock_completion.call_count == 1
+
+
+def test_build_correction_prompt(gemini_config: GeminiProviderConfig) -> None:
+    """Test that correction prompt is built correctly."""
+    with patch.dict(os.environ, {"TEST_GEMINI_KEY": "test-key"}):
+        provider = AIProvider(gemini_config)
+        prompt = provider._build_correction_prompt("Test error message")
+
+        assert "Test error message" in prompt
+        assert "YAML" in prompt
+        assert "```yaml" in prompt
+        assert "judgments" in prompt

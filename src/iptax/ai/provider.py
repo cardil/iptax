@@ -38,11 +38,16 @@ class AIDisabledError(Exception):
     pass
 
 
+# Default max retries for parsing errors
+DEFAULT_MAX_RETRIES = 2
+
+
 class AIProvider:
     """AI provider for judging code changes.
 
     Handles communication with AI providers through LiteLLM and parses
-    responses into structured judgments.
+    responses into structured judgments. Includes retry logic for parsing
+    errors.
 
     Examples:
         >>> from iptax.models import GeminiProviderConfig
@@ -56,11 +61,14 @@ class AIProvider:
         >>> response = provider.judge_changes(prompt)
     """
 
-    def __init__(self, config: AIProviderConfig) -> None:
+    def __init__(
+        self, config: AIProviderConfig, max_retries: int = DEFAULT_MAX_RETRIES
+    ) -> None:
         """Initialize AI provider with configuration.
 
         Args:
             config: AI provider configuration (discriminated union)
+            max_retries: Maximum retries when AI response can't be parsed
 
         Raises:
             AIDisabledError: If AI is disabled in configuration
@@ -69,9 +77,13 @@ class AIProvider:
             raise AIDisabledError("AI is disabled in configuration")
 
         self.config = config
+        self.max_retries = max_retries
 
     def judge_changes(self, prompt: str) -> AIResponse:
         """Send prompt to AI and parse the response.
+
+        Includes retry logic: if the response cannot be parsed, the AI is
+        asked to correct its response with the error details.
 
         Args:
             prompt: The prompt to send to the AI
@@ -81,6 +93,7 @@ class AIProvider:
 
         Raises:
             AIProviderError: If the API call fails or response is invalid
+                after all retries
         """
         # Build parameters for LiteLLM
         model, api_params = self._build_llm_params()
@@ -88,24 +101,67 @@ class AIProvider:
         logger.debug("Sending prompt to AI model: %s", model)
         logger.debug("Prompt:\n%s", prompt)
 
-        try:
-            # Call LiteLLM
-            response = litellm.completion(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                **api_params,
-            )
-        except Exception as e:
-            raise AIProviderError(f"AI provider error: {e}") from e
+        # Build conversation messages
+        messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
 
-        # Extract response text
-        response_text = response.choices[0].message.content
-        if not response_text:
-            raise AIProviderError("AI returned empty response")
-        logger.debug("AI response:\n%s", response_text)
+        last_error: Exception | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                # Call LiteLLM
+                response = litellm.completion(
+                    model=model,
+                    messages=messages,
+                    **api_params,
+                )
+            except Exception as e:
+                raise AIProviderError(f"AI provider error: {e}") from e
 
-        # Parse YAML from response
-        return self._parse_response(response_text, prompt)
+            # Extract response text
+            response_text = response.choices[0].message.content
+            if not response_text:
+                raise AIProviderError("AI returned empty response")
+            logger.debug("AI response (attempt %d):\n%s", attempt + 1, response_text)
+
+            try:
+                return self._parse_response(response_text, prompt)
+            except AIProviderError as e:
+                last_error = e
+                if attempt < self.max_retries:
+                    # Add the AI's response and error correction request
+                    logger.info(
+                        "Parse error on attempt %d, retrying: %s", attempt + 1, e
+                    )
+                    messages.append({"role": "assistant", "content": response_text})
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": self._build_correction_prompt(str(e)),
+                        }
+                    )
+                else:
+                    logger.warning("Parse failed after %d attempts: %s", attempt + 1, e)
+
+        # All retries exhausted
+        assert last_error is not None
+        raise last_error
+
+    def _build_correction_prompt(self, error_message: str) -> str:
+        """Build a prompt asking the AI to correct its response.
+
+        Args:
+            error_message: The parsing error message
+
+        Returns:
+            Correction prompt string
+        """
+        return (
+            f"Your response could not be parsed. Error: {error_message}\n\n"
+            "Please provide your response again in valid YAML format, "
+            "wrapped in ```yaml and ``` code blocks. "
+            "Make sure the YAML structure matches the expected format with "
+            "'judgments' as the top-level key containing a list of items, "
+            "each with 'change_id', 'decision', and 'reasoning' fields."
+        )
 
     def _build_llm_params(self) -> tuple[str, dict[str, Any]]:
         """Build model name and API parameters for LiteLLM.
@@ -195,7 +251,8 @@ class AIProvider:
     def _parse_response(self, response_text: str, prompt: str = "") -> AIResponse:
         """Parse AI response text into structured data.
 
-        Extracts YAML from code blocks (```yaml ... ```).
+        First tries to extract YAML from code blocks (```yaml ... ```).
+        If no code block is found, attempts to parse the entire response as YAML.
 
         Args:
             response_text: Raw response text from AI
@@ -207,21 +264,18 @@ class AIProvider:
         Raises:
             AIProviderError: If response cannot be parsed
         """
-        # Extract YAML from code blocks
+        # Try to extract YAML from code blocks first
         yaml_match = re.search(
             r"```yaml\s*\n(.*?)\n```", response_text, re.DOTALL | re.IGNORECASE
         )
 
-        if not yaml_match:
-            logger.debug("Failed to extract YAML from response")
-            logger.debug("Prompt was:\n%s", prompt)
-            logger.debug("Response was:\n%s", response_text)
-            raise AIProviderError(
-                "Failed to extract YAML from response. "
-                "Expected ```yaml ... ``` code block."
-            )
-
-        yaml_text = yaml_match.group(1)
+        if yaml_match:
+            yaml_text = yaml_match.group(1)
+            logger.debug("Extracted YAML from code block")
+        else:
+            # Fallback: try to parse the entire response as YAML
+            logger.debug("No YAML code block found, trying to parse entire response")
+            yaml_text = response_text.strip()
 
         try:
             data = yaml.safe_load(yaml_text)
