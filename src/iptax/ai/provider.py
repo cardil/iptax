@@ -8,6 +8,7 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 import litellm
 import yaml
@@ -81,33 +82,32 @@ class AIProvider:
         Raises:
             AIProviderError: If the API call fails or response is invalid
         """
+        # Build parameters for LiteLLM
+        model, api_params = self._build_llm_params()
+
+        logger.debug("Sending prompt to AI model: %s", model)
+        logger.debug("Prompt:\n%s", prompt)
+
         try:
-            # Build parameters for LiteLLM
-            model, api_params = self._build_llm_params()
-
-            logger.debug("Sending prompt to AI model: %s", model)
-            logger.debug("Prompt:\n%s", prompt)
-
             # Call LiteLLM
             response = litellm.completion(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 **api_params,
             )
-
-            # Extract response text
-            response_text = response.choices[0].message.content
-            logger.debug("AI response:\n%s", response_text)
-
-            # Parse YAML from response
-            return self._parse_response(response_text, prompt)
-
-        except AIProviderError:
-            raise
         except Exception as e:
             raise AIProviderError(f"AI provider error: {e}") from e
 
-    def _build_llm_params(self) -> tuple[str, dict[str, str]]:
+        # Extract response text
+        response_text = response.choices[0].message.content
+        if not response_text:
+            raise AIProviderError("AI returned empty response")
+        logger.debug("AI response:\n%s", response_text)
+
+        # Parse YAML from response
+        return self._parse_response(response_text, prompt)
+
+    def _build_llm_params(self) -> tuple[str, dict[str, Any]]:
         """Build model name and API parameters for LiteLLM.
 
         Returns:
@@ -124,7 +124,7 @@ class AIProvider:
             case _:
                 raise AIProviderError(f"Unknown provider type: {self.config.provider}")
 
-    def _build_gemini_params(self) -> tuple[str, dict[str, str]]:
+    def _build_gemini_params(self) -> tuple[str, dict[str, Any]]:
         """Build parameters for Gemini provider.
 
         Returns:
@@ -153,14 +153,14 @@ class AIProvider:
         model = f"gemini/{self.config.model}"
 
         # Build API params
-        api_params: dict[str, str] = {"api_key": api_key}
+        api_params: dict[str, Any] = {"api_key": api_key}
 
         if self.config.max_tokens:
-            api_params["max_tokens"] = str(self.config.max_tokens)
+            api_params["max_tokens"] = self.config.max_tokens
 
         return model, api_params
 
-    def _build_vertex_params(self) -> tuple[str, dict[str, str]]:
+    def _build_vertex_params(self) -> tuple[str, dict[str, Any]]:
         """Build parameters for Vertex AI provider.
 
         Returns:
@@ -175,7 +175,7 @@ class AIProvider:
         model = f"vertex_ai/{self.config.model}"
 
         # Build API params
-        api_params: dict[str, str] = {
+        api_params: dict[str, Any] = {
             "vertex_project": self.config.project_id,
             "vertex_location": self.config.location,
         }
@@ -188,7 +188,7 @@ class AIProvider:
             api_params["vertex_credentials"] = str(creds_file)
 
         if self.config.max_tokens:
-            api_params["max_tokens"] = str(self.config.max_tokens)
+            api_params["max_tokens"] = self.config.max_tokens
 
         return model, api_params
 
@@ -225,12 +225,17 @@ class AIProvider:
 
         try:
             data = yaml.safe_load(yaml_text)
-            return AIResponse(**data)
         except yaml.YAMLError as e:
             logger.debug("Failed to parse YAML")
             logger.debug("Prompt was:\n%s", prompt)
             logger.debug("YAML text was:\n%s", yaml_text)
             raise AIProviderError(f"Failed to parse YAML response: {e}") from e
+
+        if data is None:
+            raise AIProviderError("Empty YAML response")
+
+        try:
+            return AIResponse(**data)
         except Exception as e:
             logger.debug("Invalid response format")
             logger.debug("Prompt was:\n%s", prompt)

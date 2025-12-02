@@ -145,7 +145,11 @@ def test_real_ai_judgment(ai_config, sample_changes: list[Change]) -> None:
     # Verify each judgment
     for item in response.judgments:
         # Verify decision is valid
-        assert item.decision in ["INCLUDE", "EXCLUDE", "UNCERTAIN"]
+        assert item.decision in [
+            AIDecision.INCLUDE,
+            AIDecision.EXCLUDE,
+            AIDecision.UNCERTAIN,
+        ]
 
         # Verify reasoning is provided
         assert item.reasoning

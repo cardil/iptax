@@ -117,7 +117,7 @@ def test_gemini_with_max_tokens(gemini_config: GeminiProviderConfig) -> None:
         model, params = provider._build_gemini_params()
 
         assert model == "gemini/gemini-2.5-pro"
-        assert params["max_tokens"] == "2048"
+        assert params["max_tokens"] == 2048
 
 
 def test_vertex_provider_build_params(vertex_config: VertexAIProviderConfig) -> None:
@@ -170,7 +170,7 @@ def test_vertex_with_max_tokens(vertex_config: VertexAIProviderConfig) -> None:
     model, params = provider._build_vertex_params()
 
     assert model == "vertex_ai/gemini-2.5-pro"
-    assert params["max_tokens"] == "4096"
+    assert params["max_tokens"] == 4096
 
 
 @patch("iptax.ai.provider.litellm.completion")
