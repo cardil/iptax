@@ -48,7 +48,7 @@ ______________________________________________________________________
 We can't naively include all past judgments - this wastes context tokens and may include
 irrelevant or outdated decisions. Instead, we use an intelligent selection strategy:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Selection Parameters                     │
 ├─────────────────────────────────────────────────────────────┤
@@ -210,12 +210,12 @@ class JudgmentCacheManager:
         """
         ...
 
-    def load(self) -> JudgmentCache:
-        """Load cache from disk, creating empty cache if not exists."""
+    def load(self) -> None:
+        """Load cache from disk into self.cache, creating empty cache if not exists."""
         ...
 
-    def save(self, cache: JudgmentCache) -> None:
-        """Persist cache to disk."""
+    def save(self) -> None:
+        """Persist self.cache to disk."""
         ...
 
     def get_history_for_prompt(
@@ -238,7 +238,7 @@ class JudgmentCacheManager:
         ...
 
     def add_judgment(self, judgment: Judgment) -> None:
-        """Add or update a judgment in the cache."""
+        """Add or update a judgment in the cache. Saves immediately."""
         ...
 
     def update_with_user_decision(
@@ -246,8 +246,8 @@ class JudgmentCacheManager:
         change_id: str,
         user_decision: AIDecision,
         user_reasoning: str | None = None
-    ) -> None:
-        """Record user's override of an AI decision."""
+    ) -> bool:
+        """Record user's override of an AI decision. Returns True if updated."""
         ...
 
     def get_judgment(self, change_id: str) -> Judgment | None:
