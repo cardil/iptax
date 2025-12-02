@@ -10,28 +10,28 @@ import pytest
 from pydantic import ValidationError
 
 from iptax.ai.models import (
-    AIDecision,
     AIResponse,
     AIResponseItem,
+    Decision,
     Judgment,
     JudgmentCache,
 )
 
 
-class TestAIDecision:
-    """Test AIDecision enum."""
+class TestDecision:
+    """Test Decision enum."""
 
     def test_enum_value_count(self):
         """Test that there are exactly 3 decision types."""
-        assert len(AIDecision) == 3
+        assert len(Decision) == 3
 
     def test_enum_membership(self):
         """Test that values can be checked for membership."""
-        assert AIDecision("INCLUDE") == AIDecision.INCLUDE
-        assert AIDecision("EXCLUDE") == AIDecision.EXCLUDE
-        assert AIDecision("UNCERTAIN") == AIDecision.UNCERTAIN
+        assert Decision("INCLUDE") == Decision.INCLUDE
+        assert Decision("EXCLUDE") == Decision.EXCLUDE
+        assert Decision("UNCERTAIN") == Decision.UNCERTAIN
         with pytest.raises(ValueError):
-            AIDecision("ERROR")
+            Decision("ERROR")
 
 
 class TestJudgment:
@@ -41,13 +41,13 @@ class TestJudgment:
         """Test creating a Judgment with required fields."""
         judgment = Judgment(
             change_id="github.com/owner/repo#123",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="This change implements core product functionality",
             product="Test Product",
         )
 
         assert judgment.change_id == "github.com/owner/repo#123"
-        assert judgment.decision == AIDecision.INCLUDE
+        assert judgment.decision == Decision.INCLUDE
         assert judgment.reasoning == "This change implements core product functionality"
         assert judgment.product == "Test Product"
         assert judgment.user_decision is None
@@ -58,7 +58,7 @@ class TestJudgment:
         """Test that timestamp is in UTC."""
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test",
             product="Test",
         )
@@ -70,57 +70,57 @@ class TestJudgment:
         """Test creating a Judgment with user override."""
         judgment = Judgment(
             change_id="github.com/owner/repo#123",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="AI thinks this is relevant",
-            user_decision=AIDecision.EXCLUDE,
+            user_decision=Decision.EXCLUDE,
             user_reasoning="Actually not related to our product",
             product="Test Product",
         )
 
-        assert judgment.decision == AIDecision.INCLUDE
-        assert judgment.user_decision == AIDecision.EXCLUDE
+        assert judgment.decision == Decision.INCLUDE
+        assert judgment.user_decision == Decision.EXCLUDE
         assert judgment.user_reasoning == "Actually not related to our product"
 
     def test_final_decision_without_user_override(self):
         """Test final_decision property returns AI decision when no override."""
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test",
             product="Test",
         )
 
-        assert judgment.final_decision == AIDecision.INCLUDE
+        assert judgment.final_decision == Decision.INCLUDE
 
     def test_final_decision_with_user_override(self):
         """Test final_decision property returns user decision when overridden."""
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="AI reasoning",
-            user_decision=AIDecision.EXCLUDE,
+            user_decision=Decision.EXCLUDE,
             product="Test",
         )
 
-        assert judgment.final_decision == AIDecision.EXCLUDE
+        assert judgment.final_decision == Decision.EXCLUDE
 
     def test_final_decision_with_uncertain_to_include(self):
         """Test user can override UNCERTAIN to INCLUDE."""
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.UNCERTAIN,
+            decision=Decision.UNCERTAIN,
             reasoning="Not enough context",
-            user_decision=AIDecision.INCLUDE,
+            user_decision=Decision.INCLUDE,
             product="Test",
         )
 
-        assert judgment.final_decision == AIDecision.INCLUDE
+        assert judgment.final_decision == Decision.INCLUDE
 
     def test_change_id_required(self):
         """Test that change_id is required."""
         with pytest.raises(ValidationError) as exc_info:
             Judgment(
-                decision=AIDecision.INCLUDE,
+                decision=Decision.INCLUDE,
                 reasoning="Test",
                 product="Test",
             )
@@ -143,7 +143,7 @@ class TestJudgment:
         with pytest.raises(ValidationError) as exc_info:
             Judgment(
                 change_id="test#1",
-                decision=AIDecision.INCLUDE,
+                decision=Decision.INCLUDE,
                 product="Test",
             )
 
@@ -154,7 +154,7 @@ class TestJudgment:
         with pytest.raises(ValidationError) as exc_info:
             Judgment(
                 change_id="test#1",
-                decision=AIDecision.INCLUDE,
+                decision=Decision.INCLUDE,
                 reasoning="Test",
             )
 
@@ -176,7 +176,7 @@ class TestJudgment:
         """Test Judgment can be serialized and deserialized."""
         original = Judgment(
             change_id="github.com/owner/repo#123",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test reasoning",
             product="Test Product",
         )
@@ -207,13 +207,13 @@ class TestJudgmentCache:
         """Test creating cache with judgments."""
         judgment1 = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test 1",
             product="Product",
         )
         judgment2 = Judgment(
             change_id="test#2",
-            decision=AIDecision.EXCLUDE,
+            decision=Decision.EXCLUDE,
             reasoning="Test 2",
             product="Product",
         )
@@ -238,7 +238,7 @@ class TestJudgmentCache:
         """Test cache can be serialized and deserialized."""
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test",
             product="Product",
         )
@@ -261,7 +261,7 @@ class TestJudgmentCache:
 
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test",
             product="Product",
         )
@@ -279,12 +279,12 @@ class TestAIResponseItem:
         """Test creating an AIResponseItem."""
         item = AIResponseItem(
             change_id="github.com/owner/repo#123",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="This implements core functionality",
         )
 
         assert item.change_id == "github.com/owner/repo#123"
-        assert item.decision == AIDecision.INCLUDE
+        assert item.decision == Decision.INCLUDE
         assert item.reasoning == "This implements core functionality"
 
     def test_all_fields_required(self):
@@ -292,7 +292,7 @@ class TestAIResponseItem:
         with pytest.raises(ValidationError) as exc_info:
             AIResponseItem(
                 change_id="test#1",
-                decision=AIDecision.INCLUDE,
+                decision=Decision.INCLUDE,
             )
 
         assert "reasoning" in str(exc_info.value)
@@ -311,7 +311,7 @@ class TestAIResponse:
         """Test creating response with single judgment."""
         item = AIResponseItem(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test",
         )
 
@@ -325,17 +325,17 @@ class TestAIResponse:
         items = [
             AIResponseItem(
                 change_id="test#1",
-                decision=AIDecision.INCLUDE,
+                decision=Decision.INCLUDE,
                 reasoning="Relevant",
             ),
             AIResponseItem(
                 change_id="test#2",
-                decision=AIDecision.EXCLUDE,
+                decision=Decision.EXCLUDE,
                 reasoning="Not relevant",
             ),
             AIResponseItem(
                 change_id="test#3",
-                decision=AIDecision.UNCERTAIN,
+                decision=Decision.UNCERTAIN,
                 reasoning="Need more context",
             ),
         ]
@@ -343,9 +343,9 @@ class TestAIResponse:
         response = AIResponse(judgments=items)
 
         assert len(response.judgments) == 3
-        assert response.judgments[0].decision == AIDecision.INCLUDE
-        assert response.judgments[1].decision == AIDecision.EXCLUDE
-        assert response.judgments[2].decision == AIDecision.UNCERTAIN
+        assert response.judgments[0].decision == Decision.INCLUDE
+        assert response.judgments[1].decision == Decision.EXCLUDE
+        assert response.judgments[2].decision == Decision.UNCERTAIN
 
     def test_parsing_from_dict(self):
         """Test parsing AIResponse from dictionary."""
@@ -368,9 +368,9 @@ class TestAIResponse:
 
         assert len(response.judgments) == 2
         assert response.judgments[0].change_id == "test#1"
-        assert response.judgments[0].decision == AIDecision.INCLUDE
+        assert response.judgments[0].decision == Decision.INCLUDE
         assert response.judgments[1].change_id == "test#2"
-        assert response.judgments[1].decision == AIDecision.EXCLUDE
+        assert response.judgments[1].decision == Decision.EXCLUDE
 
     def test_judgments_field_required(self):
         """Test that judgments field is required."""
@@ -402,7 +402,7 @@ class TestAIResponse:
             judgments=[
                 AIResponseItem(
                     change_id="test#1",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="Test",
                 )
             ]

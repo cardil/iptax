@@ -11,7 +11,7 @@ from pathlib import Path
 
 from iptax.utils.env import get_cache_dir
 
-from .models import AIDecision, Judgment, JudgmentCache
+from .models import Decision, Judgment, JudgmentCache
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class JudgmentCacheManager:
     def update_with_user_decision(
         self,
         change_id: str,
-        user_decision: AIDecision,
+        user_decision: Decision,
         user_reasoning: str | None = None,
     ) -> bool:
         """Record user's override of an AI decision.

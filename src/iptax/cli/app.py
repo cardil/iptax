@@ -1,25 +1,26 @@
 """Command-line interface for iptax."""
 
-import json
 import sys
-from datetime import date, datetime, timedelta
+import time
 
 import click
 import questionary
 import yaml
 from rich.console import Console
-from rich.table import Table
 
+from iptax.ai.tui import ai_progress
+from iptax.cli import elements, flows, mocks, utils
 from iptax.config import (
     ConfigError,
     create_default_config,
     get_config_path,
-    load_settings,
 )
-from iptax.did import DidIntegrationError, fetch_changes
+from iptax.config import (
+    load_settings as config_load_settings,
+)
+from iptax.did import DidIntegrationError
 from iptax.history import HistoryCorruptedError, HistoryManager, get_history_path
-from iptax.models import Change, Settings
-from iptax.utils.env import get_cache_dir, get_month_end_date
+from iptax.utils.env import get_cache_dir
 from iptax.utils.logging import setup_logging
 from iptax.workday import WorkdayClient, WorkdayError
 
@@ -62,20 +63,16 @@ def report(
     console = Console()
 
     try:
-        settings = load_settings()
-        console.print("[cyan]✓[/cyan] Settings loaded")
-
-        manager = HistoryManager()
-        manager.load()
-        console.print("[cyan]✓[/cyan] History loaded")
+        settings = flows.load_settings(console)
+        flows.load_history(console)
 
         # Get month key and date range
-        month_key = _get_month_key(month)
-        start_date, end_date = _get_date_range(month_key)
-        console.print(f"[cyan]📅[/cyan] Date range: {start_date} to {end_date}")
+        month_key = _parse_month(month)
+        start_date, end_date = utils.get_date_range(month_key)
 
         # Fetch and display changes
-        changes = _fetch_and_display_changes(console, settings, start_date, end_date)
+        changes = flows.fetch_changes(console, settings, start_date, end_date)
+        elements.display_changes(console, changes, start_date, end_date)
 
         if dry_run:
             console.print("\n[yellow]Dry run - no files created[/yellow]")
@@ -100,59 +97,17 @@ def report(
         sys.exit(1)
 
 
-def _get_month_key(month: str | None) -> str:
-    """Get month key from provided month or current month."""
-    if month:
-        try:
-            parsed_month = datetime.strptime(month, "%Y-%m")
-            return parsed_month.strftime("%Y-%m")
-        except ValueError:
-            click.secho(
-                f"Error: Invalid month format '{month}', expected YYYY-MM",
-                fg="red",
-                err=True,
-            )
-            sys.exit(1)
-    return datetime.now().strftime("%Y-%m")
-
-
-def _get_date_range(month_key: str) -> tuple[date, date]:
-    """Get start and end date for a month."""
-    year, month_num = month_key.split("-")
-    start_date = datetime(int(year), int(month_num), 1).date()
-    end_date = get_month_end_date(int(year), int(month_num))
-    return start_date, end_date
-
-
-def _fetch_and_display_changes(
-    console: Console, settings: Settings, start_date: date, end_date: date
-) -> list[Change]:
-    """Fetch changes and display them in the console."""
-    console.print("[cyan]🔍[/cyan] Fetching changes from did...")
-    changes = fetch_changes(settings, start_date, end_date)
-    console.print(f"[green]✓[/green] Found {len(changes)} changes")
-
-    if not changes:
-        console.print("[yellow]No changes found for this period[/yellow]")
-        return changes
-
-    # Display changes
-    console.print("\n[bold]Changes:[/bold]")
-    for i, change in enumerate(changes, 1):
-        console.print(f"\n[cyan]{i}.[/cyan] {change.title}")
-        console.print(f"   Repository: {change.repository.get_display_name()}")
-        console.print(f"   URL: {change.get_url()}")
-        if change.merged_at:
-            merged_str = change.merged_at.strftime("%Y-%m-%d %H:%M:%S")
-            console.print(f"   Merged: {merged_str}")
-
-    # Display summary
-    repositories = {change.repository.get_display_name() for change in changes}
-    console.print("\n[bold]Summary:[/bold]")
-    console.print(f"  Total changes: {len(changes)}")
-    console.print(f"  Repositories: {len(repositories)}")
-
-    return changes
+def _parse_month(month: str | None) -> str:
+    """Parse month string, exit on error."""
+    try:
+        return utils.parse_month_key(month)
+    except ValueError:
+        click.secho(
+            f"Error: Invalid month format '{month}', expected YYYY-MM",
+            fg="red",
+            err=True,
+        )
+        sys.exit(1)
 
 
 @cli.command()
@@ -171,7 +126,7 @@ def config(show: bool, validate: bool, path: bool) -> None:
     # Handle --show flag
     if show:
         try:
-            settings = load_settings()
+            settings = config_load_settings()
             # Pretty-print YAML
             yaml_str = yaml.safe_dump(
                 settings.model_dump(),
@@ -189,7 +144,7 @@ def config(show: bool, validate: bool, path: bool) -> None:
     # Handle --validate flag
     if validate:
         try:
-            load_settings()
+            config_load_settings()
             click.secho("✓ Configuration is valid", fg="green")
             click.echo(f"Configuration file: {config_path}")
         except ConfigError as e:
@@ -255,18 +210,7 @@ def history(month: str | None, output_format: str, path: bool) -> None:
 
     # Filter by month if specified
     if month:
-        # Normalize month format
-        try:
-            parsed_month = datetime.strptime(month, "%Y-%m")
-            month_key = parsed_month.strftime("%Y-%m")
-        except ValueError:
-            click.secho(
-                f"Error: Invalid month format '{month}', expected YYYY-MM",
-                fg="red",
-                err=True,
-            )
-            sys.exit(1)
-
+        month_key = _parse_month(month)
         if month_key not in entries:
             click.secho(f"No history entry found for {month_key}", fg="yellow")
             sys.exit(0)
@@ -279,85 +223,16 @@ def history(month: str | None, output_format: str, path: bool) -> None:
         return
 
     # Output based on format
-    if output_format == "json":
-        _output_json(entries)
-    elif output_format == "yaml":
-        _output_yaml(entries)
-    else:  # table
-        _output_table(entries)
-
-
-def _output_table(entries: dict) -> None:
-    """Output history as a formatted table."""
     console = Console()
-
-    # Create table
-    table = Table(title="Report History", show_header=True, header_style="bold cyan")
-    table.add_column("Month", style="cyan", no_wrap=True)
-    table.add_column("Cutoff Date", style="green")
-    table.add_column("Generated At", style="blue")
-    table.add_column("Regenerated", style="yellow")
-
-    # Sort entries by month
-    for month in sorted(entries.keys()):
-        entry = entries[month]
-        regenerated = (
-            entry.regenerated_at.strftime("%Y-%m-%d") if entry.regenerated_at else "-"
-        )
-
-        table.add_row(
-            month,
-            str(entry.last_cutoff_date),
-            entry.generated_at.strftime("%Y-%m-%d %H:%M:%S"),
-            regenerated,
-        )
-
-    console.print(table)
-
-    # Show next report info if there are entries
-    if entries:
-        latest_month = max(entries.keys())
-        latest_entry = entries[latest_month]
-        next_start = latest_entry.last_cutoff_date + timedelta(days=1)
-        console.print(
-            f"\nNext report will start from: [green]{next_start}[/green]",
-        )
+    if output_format == "json":
+        click.echo(elements.format_history_json(entries))
+    elif output_format == "yaml":
+        click.echo(elements.format_history_yaml(entries))
+    else:  # table
+        elements.display_history_table(console, entries)
 
 
-def _convert_entries_to_dict(entries: dict) -> dict:
-    """Convert history entries to serializable dictionary.
-
-    Args:
-        entries: Dictionary of HistoryEntry objects
-
-    Returns:
-        Dictionary with serialized values
-    """
-    data = {}
-    for month, entry in entries.items():
-        data[month] = {
-            "last_cutoff_date": str(entry.last_cutoff_date),
-            "generated_at": entry.generated_at.isoformat(),
-            "regenerated_at": (
-                entry.regenerated_at.isoformat() if entry.regenerated_at else None
-            ),
-        }
-    return data
-
-
-def _output_json(entries: dict) -> None:
-    """Output history as JSON."""
-    data = _convert_entries_to_dict(entries)
-    click.echo(json.dumps(data, indent=2))
-
-
-def _output_yaml(entries: dict) -> None:
-    """Output history as YAML."""
-    data = _convert_entries_to_dict(entries)
-    click.echo(yaml.safe_dump(data, default_flow_style=False, sort_keys=False))
-
-
-# FIXME: Remove this command after integrating workday into report command
+# TODO(ksuszyns): Remove this command after integrating workday into report command
 @cli.command()
 @click.option("--month", help="Month to fetch work hours for (YYYY-MM format)")
 @click.option(
@@ -379,8 +254,7 @@ def workday(month: str | None, foreground: bool, no_kerberos: bool) -> None:
     console = Console()
 
     try:
-        settings = load_settings()
-        console.print("[cyan]✓[/cyan] Settings loaded")
+        settings = flows.load_settings(console)
 
         # Override auth method if --no-kerberos flag is set
         if no_kerberos:
@@ -388,8 +262,8 @@ def workday(month: str | None, foreground: bool, no_kerberos: bool) -> None:
             console.print("[yellow]⚠[/yellow] Kerberos disabled, using SSO login form")
 
         # Get month key and date range
-        month_key = _get_month_key(month)
-        start_date, end_date = _get_date_range(month_key)
+        month_key = _parse_month(month)
+        start_date, end_date = utils.get_date_range(month_key)
         console.print(f"[cyan]📅[/cyan] Date range: {start_date} to {end_date}")
 
         # Create Workday client and fetch hours
@@ -421,6 +295,30 @@ def workday(month: str | None, foreground: bool, no_kerberos: bool) -> None:
     except KeyboardInterrupt:
         console.print("\n\n[yellow]Operation cancelled[/yellow]")
         sys.exit(1)
+
+
+# TODO(ksuszyns): Remove this command after integrating AI review into report command
+@cli.command("ai-test")
+@click.option("--mock-count", default=15, help="Number of mock changes to generate")
+def ai_test(mock_count: int) -> None:
+    """Test AI review UI with mock data (temporary command).
+
+    This command generates mock changes and judgments to test the TUI
+    without making real AI calls. It will be removed once integrated
+    into the report command.
+    """
+    console = Console()
+
+    # Generate mock data
+    mock_changes = mocks.generate_mock_changes(mock_count)
+    mock_judgments = mocks.generate_mock_judgments(mock_changes)
+
+    # Show spinner demo
+    with ai_progress(console, "Simulating AI processing..."):
+        time.sleep(2)
+
+    # Run review flow
+    flows.review(console, mock_judgments, mock_changes)
 
 
 def main() -> None:

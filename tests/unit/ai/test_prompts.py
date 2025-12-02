@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iptax.ai.models import AIDecision, Judgment
+from iptax.ai.models import Decision, Judgment
 from iptax.ai.prompts import build_judgment_prompt
 from iptax.models import Change, Repository
 
@@ -62,7 +62,7 @@ def confirmed_judgment() -> Judgment:
     """Create a confirmed (not corrected) judgment."""
     return Judgment(
         change_id="github.com/org/project#100",
-        decision=AIDecision.INCLUDE,
+        decision=Decision.INCLUDE,
         reasoning="This change adds core functionality to the product",
         product="Test Product",
         timestamp=datetime.now(UTC),
@@ -74,9 +74,9 @@ def corrected_judgment() -> Judgment:
     """Create a corrected judgment with user override."""
     return Judgment(
         change_id="github.com/org/project#101",
-        decision=AIDecision.EXCLUDE,
+        decision=Decision.EXCLUDE,
         reasoning="This appears to be infrastructure work",
-        user_decision=AIDecision.INCLUDE,
+        user_decision=Decision.INCLUDE,
         user_reasoning="Actually, this is product-specific infrastructure",
         product="Test Product",
         timestamp=datetime.now(UTC),

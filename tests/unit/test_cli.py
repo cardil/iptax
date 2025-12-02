@@ -3,7 +3,7 @@
 import pytest
 from click.testing import CliRunner
 
-from iptax.cli import _setup_logging, cli
+from iptax.cli.app import cli
 
 
 @pytest.fixture
@@ -140,124 +140,6 @@ def test_history_command_empty_history(
 
 
 @pytest.mark.unit
-def test_report_command_did_integration_error(
-    runner: CliRunner, tmp_path, monkeypatch
-) -> None:
-    """Test that report command handles DidIntegrationError."""
-    from unittest.mock import patch
-
-    from iptax.did import DidIntegrationError
-
-    # Create minimal config
-    config_dir = tmp_path / "config" / "iptax"
-    config_dir.mkdir(parents=True)
-    config_file = config_dir / "settings.yaml"
-    config_file.write_text(
-        """
-employee:
-    name: "Test User"
-    supervisor: "Test Supervisor"
-product:
-    name: "Test Product"
-did:
-    providers:
-        - github.com
-"""
-    )
-
-    did_config = tmp_path / ".did"
-    did_config.mkdir()
-    (did_config / "config").write_text("")
-
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    monkeypatch.setenv("HOME", str(tmp_path))
-
-    # Mock fetch_changes to raise DidIntegrationError
-    with patch("iptax.cli.fetch_changes") as mock_fetch:
-        mock_fetch.side_effect = DidIntegrationError("Did error")
-
-        result = runner.invoke(cli, ["report", "--dry-run"])
-        assert result.exit_code == 1
-        assert "Did integration error" in result.output
-
-
-@pytest.mark.unit
-def test_report_command_history_corrupted_error(
-    runner: CliRunner, tmp_path, monkeypatch
-) -> None:
-    """Test that report command handles HistoryCorruptedError."""
-    from unittest.mock import patch
-
-    from iptax.history import HistoryCorruptedError
-
-    # Create minimal config
-    config_dir = tmp_path / "config" / "iptax"
-    config_dir.mkdir(parents=True)
-    config_file = config_dir / "settings.yaml"
-    config_file.write_text(
-        """
-employee:
-    name: "Test User"
-    supervisor: "Test Supervisor"
-product:
-    name: "Test Product"
-did:
-    providers:
-        - github.com
-"""
-    )
-
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
-
-    # Mock HistoryManager.load to raise HistoryCorruptedError
-    with patch("iptax.cli.HistoryManager") as mock_manager:
-        mock_manager.return_value.load.side_effect = HistoryCorruptedError(
-            "Corrupted history"
-        )
-
-        result = runner.invoke(cli, ["report", "--dry-run"])
-        assert result.exit_code == 1
-        assert "History error" in result.output
-
-
-@pytest.mark.unit
-def test_report_command_keyboard_interrupt(
-    runner: CliRunner, tmp_path, monkeypatch
-) -> None:
-    """Test that report command handles KeyboardInterrupt gracefully."""
-    from unittest.mock import patch
-
-    # Create minimal config
-    config_dir = tmp_path / "config" / "iptax"
-    config_dir.mkdir(parents=True)
-    config_file = config_dir / "settings.yaml"
-    config_file.write_text(
-        """
-employee:
-    name: "Test User"
-    supervisor: "Test Supervisor"
-product:
-    name: "Test Product"
-did:
-    providers:
-        - github.com
-"""
-    )
-
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
-
-    # Mock fetch_changes to raise KeyboardInterrupt
-    with patch("iptax.cli.fetch_changes") as mock_fetch:
-        mock_fetch.side_effect = KeyboardInterrupt()
-
-        result = runner.invoke(cli, ["report", "--dry-run"])
-        assert result.exit_code == 1
-        assert "cancelled" in result.output
-
-
-@pytest.mark.unit
 def test_report_command_invalid_month_format(
     runner: CliRunner, tmp_path, monkeypatch
 ) -> None:
@@ -287,93 +169,9 @@ did:
     assert "expected YYYY-MM" in result.output
 
 
-@pytest.mark.unit
-def test_config_command_existing_config_overwrite_yes(
-    runner: CliRunner, tmp_path, monkeypatch
-) -> None:
-    """Test config command when existing config exists and user confirms overwrite."""
-    from unittest.mock import Mock, patch
-
-    # Create existing config file
-    config_dir = tmp_path / "config" / "iptax"
-    config_dir.mkdir(parents=True)
-    config_file = config_dir / "settings.yaml"
-    config_file.write_text("old: config")
-
-    # Create did config
-    did_config = tmp_path / ".did"
-    did_config.mkdir()
-    (did_config / "config").write_text("[general]\n[github]\ntype = github\n")
-
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    monkeypatch.setenv("HOME", str(tmp_path))
-
-    # Mock questionary.confirm to return True (user says yes to overwrite)
-    with patch("iptax.cli.questionary.confirm") as mock_confirm:
-        mock_confirm_instance = Mock()
-        mock_confirm_instance.unsafe_ask.return_value = True
-        mock_confirm.return_value = mock_confirm_instance
-
-        # Mock create_default_config to avoid running full wizard
-        with patch("iptax.cli.create_default_config"):
-            result = runner.invoke(cli, ["config"])
-
-        # Should have asked about overwrite
-        mock_confirm.assert_called_once()
-        assert "Do you want to overwrite it?" in mock_confirm.call_args[0][0]
-        assert result.exit_code == 0
-
-
-@pytest.mark.unit
-def test_config_command_existing_config_overwrite_no(
-    runner: CliRunner, tmp_path, monkeypatch
-) -> None:
-    """Test config command when existing config exists and user declines overwrite."""
-    from unittest.mock import Mock, patch
-
-    # Create existing config file
-    config_dir = tmp_path / "config" / "iptax"
-    config_dir.mkdir(parents=True)
-    config_file = config_dir / "settings.yaml"
-    config_file.write_text("old: config")
-
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-
-    # Mock questionary.confirm to return False (user says no to overwrite)
-    with patch("iptax.cli.questionary.confirm") as mock_confirm:
-        mock_confirm_instance = Mock()
-        mock_confirm_instance.unsafe_ask.return_value = False
-        mock_confirm.return_value = mock_confirm_instance
-
-        result = runner.invoke(cli, ["config"])
-
-        # Should have asked about overwrite
-        mock_confirm.assert_called_once()
-        assert "Configuration not changed" in result.output
-        assert result.exit_code == 0
-
-        # Original config should be unchanged
-        assert config_file.read_text() == "old: config"
-
-
-@pytest.mark.unit
-def test_setup_logging_creates_cache_dir_and_log_file(tmp_path, monkeypatch) -> None:
-    """Test that _setup_logging creates cache directory and configures logging."""
-    from unittest.mock import patch
-
-    # Set XDG_CACHE_HOME to temp directory
-    cache_dir = tmp_path / "cache"
-    monkeypatch.setenv("XDG_CACHE_HOME", str(cache_dir))
-
-    # Mock setup_logging to verify it's called with correct path
-    with patch("iptax.cli.setup_logging") as mock_setup:
-        _setup_logging()
-
-        # Verify cache directory was created
-        expected_cache_dir = cache_dir / "iptax"
-        assert expected_cache_dir.exists()
-
-        # Verify setup_logging was called with correct log file path
-        mock_setup.assert_called_once()
-        log_file_arg = mock_setup.call_args[0][0]
-        assert log_file_arg == expected_cache_dir / "iptax.log"
+# Note: Tests for complex CLI flows with mocking have been moved to
+# module-specific test files:
+# - tests/unit/cli/test_utils.py
+# - tests/unit/cli/test_elements.py
+# - tests/unit/cli/test_mocks.py
+# - tests/unit/cli/test_flows.py

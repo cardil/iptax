@@ -55,6 +55,7 @@ dependencies = [
     # Rich terminal UI
     "rich>=13.7.0",
     "questionary>=2.0.1",
+    "textual>=1.8.0",  # Full TUI framework built on Rich
 
     # Data validation
     "pydantic>=2.5.0",
