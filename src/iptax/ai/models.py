@@ -35,6 +35,11 @@ class Judgment(BaseModel):
     )
 
     @property
+    def was_corrected(self) -> bool:
+        """Return True if user overrode the AI's decision."""
+        return self.final_decision != self.decision
+
+    @property
     def final_decision(self) -> AIDecision:
         """Return user decision if set, otherwise AI decision."""
         return self.user_decision if self.user_decision is not None else self.decision

@@ -3,3 +3,16 @@
 This module provides AI-based filtering of merged PRs/MRs to determine
 which changes are relevant to the product for IP tax reporting purposes.
 """
+
+from .cache import DEFAULT_CACHE_PATH, JudgmentCacheManager
+from .models import AIDecision, AIResponse, AIResponseItem, Judgment, JudgmentCache
+
+__all__ = [
+    "DEFAULT_CACHE_PATH",
+    "AIDecision",
+    "AIResponse",
+    "AIResponseItem",
+    "Judgment",
+    "JudgmentCache",
+    "JudgmentCacheManager",
+]
