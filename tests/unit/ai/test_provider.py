@@ -185,12 +185,12 @@ def test_judge_changes_success(
             message=MagicMock(
                 content="""```yaml
 judgments:
-  - change_id: "github.com/org/repo#123"
-    decision: INCLUDE
-    reasoning: This change adds core product functionality
-  - change_id: "github.com/org/repo#124"
-    decision: EXCLUDE
-    reasoning: This is documentation only
+    -   change_id: "github.com/org/repo#123"
+        decision: INCLUDE
+        reasoning: This change adds core product functionality
+    -   change_id: "github.com/org/repo#124"
+        decision: EXCLUDE
+        reasoning: This is documentation only
 ```"""
             )
         )
@@ -248,9 +248,9 @@ def test_parse_response_yaml_block(gemini_config: GeminiProviderConfig) -> None:
 
 ```yaml
 judgments:
-  - change_id: "github.com/org/repo#123"
-    decision: INCLUDE
-    reasoning: Core feature
+    -   change_id: "github.com/org/repo#123"
+        decision: INCLUDE
+        reasoning: Core feature
 ```
 
 Hope this helps!"""
@@ -271,7 +271,7 @@ def test_parse_response_no_code_block_fails(
         provider = AIProvider(gemini_config)
 
         response_text = """judgments:
-  - change_id: "github.com/org/repo#123"
+-   change_id: "github.com/org/repo#123"
     decision: EXCLUDE
     reasoning: Not relevant"""
 
@@ -316,9 +316,9 @@ def test_parse_response_case_insensitive_yaml_marker(
 
         response_text = """```YAML
 judgments:
-  - change_id: "test#1"
-    decision: UNCERTAIN
-    reasoning: Need more info
+    -   change_id: "test#1"
+        decision: UNCERTAIN
+        reasoning: Need more info
 ```"""
 
         response = provider._parse_response(response_text)
@@ -339,18 +339,18 @@ def test_parse_response_multiple_yaml_blocks(
 
 ```yaml
 judgments:
-  - change_id: "test#1"
-    decision: INCLUDE
-    reasoning: First one
+    -   change_id: "test#1"
+        decision: INCLUDE
+        reasoning: First one
 ```
 
 And here's another block:
 
 ```yaml
 judgments:
-  - change_id: "test#2"
-    decision: EXCLUDE
-    reasoning: Second one
+    -   change_id: "test#2"
+        decision: EXCLUDE
+        reasoning: Second one
 ```"""
 
         response = provider._parse_response(response_text)
