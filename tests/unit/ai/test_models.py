@@ -27,10 +27,11 @@ class TestAIDecision:
 
     def test_enum_membership(self):
         """Test that values can be checked for membership."""
-        assert "INCLUDE" in AIDecision._value2member_map_
-        assert "EXCLUDE" in AIDecision._value2member_map_
-        assert "UNCERTAIN" in AIDecision._value2member_map_
-        assert "ERROR" not in AIDecision._value2member_map_
+        assert AIDecision("INCLUDE") == AIDecision.INCLUDE
+        assert AIDecision("EXCLUDE") == AIDecision.EXCLUDE
+        assert AIDecision("UNCERTAIN") == AIDecision.UNCERTAIN
+        with pytest.raises(ValueError):
+            AIDecision("ERROR")
 
 
 class TestJudgment:
@@ -228,8 +229,8 @@ class TestJudgmentCache:
         assert "test#1" in cache.judgments
         assert "test#2" in cache.judgments
 
-    def test_cache_version_is_immutable(self):
-        """Test that cache_version has a default value."""
+    def test_cache_version_has_default(self):
+        """Test that cache_version has a default value of '1.0'."""
         cache = JudgmentCache()
         assert cache.cache_version == "1.0"
 

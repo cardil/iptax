@@ -37,7 +37,7 @@ class Judgment(BaseModel):
     @property
     def final_decision(self) -> AIDecision:
         """Return user decision if set, otherwise AI decision."""
-        return self.user_decision if self.user_decision else self.decision
+        return self.user_decision if self.user_decision is not None else self.decision
 
 
 class JudgmentCache(BaseModel):
