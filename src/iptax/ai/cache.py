@@ -169,7 +169,7 @@ class JudgmentCacheManager:
         selected_correct = correct[:actual_correct]
 
         # Interleave for variety (correction, correct, correction, ...)
-        result = []
+        result: list[Judgment] = []
         corr_iter = iter(selected_corrections)
         correct_iter = iter(selected_correct)
 

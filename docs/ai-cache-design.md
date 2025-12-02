@@ -3,13 +3,12 @@
 ## Table of Contents
 
 1. [Purpose & Philosophy](#purpose--philosophy)
-2. [Selection Algorithm](#selection-algorithm)
-3. [Model Updates](#model-updates)
-4. [Cache Manager API](#cache-manager-api)
-5. [Edge Cases](#edge-cases)
-6. [Implementation Notes](#implementation-notes)
+1. [Selection Algorithm](#selection-algorithm)
+1. [Cache Manager API](#cache-manager-api)
+1. [Edge Cases](#edge-cases)
+1. [Implementation Notes](#implementation-notes)
 
----
+______________________________________________________________________
 
 ## Purpose & Philosophy
 
@@ -17,32 +16,41 @@
 
 The AI judgment cache is **NOT** designed for:
 
-- **Deduplication** - Each monthly report has different PRs/MRs; we don't need to avoid re-judging the same changes.
-- **Cost Reduction via Skipping** - We perform ONE batch request per run anyway, so skipping individual judgments doesn't save API calls.
+- **Deduplication** - Each monthly report has different PRs/MRs; we don't need to avoid
+  re-judging the same changes.
+- **Cost Reduction via Skipping** - We perform ONE batch request per run anyway, so
+  skipping individual judgments doesn't save API calls.
 
 ### What the Cache IS For
 
-The cache provides **learning context** to the AI. By including past decisions (especially user corrections) in the prompt, we help the AI:
+The cache provides **learning context** to the AI. By including past decisions
+(especially user corrections) in the prompt, we help the AI:
 
-1. **Learn from Mistakes** - When the AI was wrong and the user corrected it, the AI sees what it misunderstood.
-2. **Reinforce Good Patterns** - When the AI was correct, it sees patterns that worked well.
-3. **Understand Product Scope** - Past decisions help define what "related to product X" actually means for this specific user.
+1. **Learn from Mistakes** - When the AI was wrong and the user corrected it, the AI
+   sees what it misunderstood.
+1. **Reinforce Good Patterns** - When the AI was correct, it sees patterns that worked
+   well.
+1. **Understand Product Scope** - Past decisions help define what "related to product X"
+   actually means for this specific user.
 
 ### Key Insight
 
-User corrections are **more valuable** than correct AI decisions because they teach the AI what it got wrong. A prompt full of correct decisions provides less learning signal than one with corrections and explanations.
+User corrections are **more valuable** than correct AI decisions because they teach the
+AI what it got wrong. A prompt full of correct decisions provides less learning signal
+than one with corrections and explanations.
 
----
+______________________________________________________________________
 
 ## Selection Algorithm
 
 ### Overview
 
-We can't naively include all past judgments - this wastes context tokens and may include irrelevant or outdated decisions. Instead, we use an intelligent selection strategy:
+We can't naively include all past judgments - this wastes context tokens and may include
+irrelevant or outdated decisions. Instead, we use an intelligent selection strategy:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Selection Parameters                      │
+│                    Selection Parameters                     │
 ├─────────────────────────────────────────────────────────────┤
 │  max_entries: 20         # Total entries to include         │
 │  correction_ratio: 0.75  # Target 75% corrected decisions   │
@@ -135,7 +143,8 @@ def get_history_for_prompt(
             actual_correct += extra_correct
         else:
             # Not enough correct, take more corrections
-            extra_corrections = min(remaining_slots, len(corrected) - actual_corrections)
+            extra_corrections = min(
+                remaining_slots, len(corrected) - actual_corrections)
             actual_corrections += extra_corrections
 
     # Step 5: Select and combine
@@ -169,63 +178,20 @@ def get_history_for_prompt(
 
 ### Rationale for 75/25 Split
 
-| Ratio | Corrections | Correct AI | Rationale |
-|-------|-------------|------------|-----------|
-| 100/0 | 20 | 0 | Only errors - AI may become too conservative |
-| 75/25 | 15 | 5 | **Balanced** - Strong learning signal with positive reinforcement |
-| 50/50 | 10 | 10 | Even split - Dilutes correction signal |
-| 25/75 | 5 | 15 | Mostly correct - Limited learning from mistakes |
+| Ratio | Wrong | Correct | Rationale                                       |
+| ----- | ----- | ------- | ----------------------------------------------- |
+| 100/0 | 20    | 0       | Only errors - AI may become too conservative    |
+| 75/25 | 15    | 5       | **Balanced** - Strong learning + reinforcement  |
+| 50/50 | 10    | 10      | Even split - Dilutes correction signal          |
+| 25/75 | 5     | 15      | Mostly correct - Limited learning from mistakes |
 
 The 75/25 split provides:
+
 - **Strong correction signal** - AI sees many examples of what it got wrong
 - **Positive reinforcement** - AI also sees patterns that worked
 - **Balanced perspective** - Avoids making AI overly conservative or liberal
 
----
-
-## Model Updates
-
-### Current Model Analysis
-
-The existing [`Judgment`](../src/iptax/ai/models.py:21) model already tracks:
-
-```python
-class Judgment(BaseModel):
-    change_id: str          # e.g., "owner/repo#123"
-    decision: AIDecision    # AI's original decision
-    reasoning: str          # AI's reasoning
-    user_decision: AIDecision | None   # User override (if any)
-    user_reasoning: str | None         # User's reasoning for override
-    product: str            # Product name
-    timestamp: datetime     # When judgment was made
-```
-
-### Proposed Addition: `was_corrected` Property
-
-Add a computed property to detect if the AI was corrected:
-
-```python
-@property
-def was_corrected(self) -> bool:
-    """Return True if user overrode the AI's decision."""
-    return self.user_decision is not None and self.user_decision != self.decision
-```
-
-This property:
-- Returns `True` if user provided a different decision than AI
-- Returns `False` if user agreed (same decision) or didn't override (None)
-- Is computed, not stored, so no schema migration needed
-
-### No Schema Changes Required
-
-The current schema already supports all needed data:
-- **Correction detection** via comparing `decision` vs `user_decision`
-- **Product filtering** via `product` field
-- **Recency sorting** via `timestamp` field
-
-The only change is adding the `was_corrected` property for convenience.
-
----
+______________________________________________________________________
 
 ## Cache Manager API
 
@@ -352,7 +318,7 @@ for change_id, user_choice in user_overrides.items():
     )
 ```
 
----
+______________________________________________________________________
 
 ## Edge Cases
 
@@ -361,6 +327,7 @@ for change_id, user_choice in user_overrides.items():
 **Scenario:** First run, cache is empty.
 
 **Behavior:**
+
 - `get_history_for_prompt()` returns empty list `[]`
 - AI makes decisions without historical context
 - Prompt includes note: "No previous judgments available"
@@ -373,12 +340,14 @@ for change_id, user_choice in user_overrides.items():
 **Scenario:** User never corrected any AI decisions.
 
 **Behavior:**
+
 - `corrected` pool is empty
 - `correction_ratio` cannot be satisfied
 - Algorithm falls back to using all slots for `correct` pool
 - Returns up to `max_entries` correct decisions
 
 **Example:** With `max_entries=20` and `correction_ratio=0.75`:
+
 - Target: 15 corrections, 5 correct
 - Available: 0 corrections, 50 correct
 - Result: 0 corrections, 20 correct (fill remaining slots)
@@ -388,11 +357,13 @@ for change_id, user_choice in user_overrides.items():
 **Scenario:** User corrected every AI decision.
 
 **Behavior:**
+
 - `correct` pool is empty
 - All slots filled with corrections
 - This is actually ideal for learning!
 
 **Example:** With `max_entries=20` and `correction_ratio=0.75`:
+
 - Target: 15 corrections, 5 correct
 - Available: 100 corrections, 0 correct
 - Result: 20 corrections, 0 correct (fill remaining slots)
@@ -402,11 +373,13 @@ for change_id, user_choice in user_overrides.items():
 **Scenario:** Cache has entries spanning years.
 
 **Behavior:**
+
 - Algorithm sorts by `timestamp` descending (newest first)
 - Old entries naturally deprioritized
 - No explicit age cutoff (recency sorting sufficient)
 
 **Rationale:** Recent decisions are more relevant because:
+
 - Product scope may have evolved
 - User's understanding may have changed
 - Coding patterns may have shifted
@@ -416,11 +389,13 @@ for change_id, user_choice in user_overrides.items():
 **Scenario:** User works on multiple products.
 
 **Behavior:**
+
 - History is always filtered by `product` parameter
 - Each product has independent history
 - No cross-product contamination
 
 **Example:**
+
 ```python
 # Only returns "Acme Fungear" judgments
 history = cache_mgr.get_history_for_prompt(product="Acme Fungear")
@@ -431,6 +406,7 @@ history = cache_mgr.get_history_for_prompt(product="Acme Fungear")
 **Scenario:** User reviews AI decision and explicitly confirms it's correct.
 
 **Behavior:**
+
 - If `user_decision == decision`, `was_corrected` returns `False`
 - Explicit confirmation counts as "correct AI decision"
 - This is intentional - we only want actual corrections to be prioritized
@@ -440,11 +416,12 @@ history = cache_mgr.get_history_for_prompt(product="Acme Fungear")
 **Scenario:** Cache file is corrupted or from incompatible version.
 
 **Behavior:**
+
 - `load()` catches parsing errors
 - Falls back to empty cache with warning
 - `cache_version` field allows future migrations
 
----
+______________________________________________________________________
 
 ## Implementation Notes
 
@@ -478,16 +455,15 @@ Use JSON for cache storage (already defined in architecture):
 
 - Cache is loaded once at startup
 - Selection algorithm is O(n log n) due to sorting
-- For typical cache sizes (<1000 entries), this is negligible
+- For typical cache sizes (\<1000 entries), this is negligible
 
----
+______________________________________________________________________
 
 ## Summary
 
-| Component | Description |
-|-----------|-------------|
-| **Purpose** | Provide learning context to AI, NOT deduplication |
-| **Selection Strategy** | 75% corrections / 25% correct, recency-weighted |
-| **Model Change** | Add `was_corrected` property (no schema change) |
-| **Key Method** | `get_history_for_prompt(product, max_entries, correction_ratio)` |
-| **Edge Case Handling** | Graceful fallback for empty pools, cold start, etc. |
+| Component      | Description                                   |
+| -------------- | --------------------------------------------- |
+| **Purpose**    | Learning context for AI, NOT deduplication    |
+| **Selection**  | 75% corrections / 25% correct, recency-based  |
+| **Key Method** | `get_history_for_prompt(product, max, ratio)` |
+| **Edge Cases** | Graceful fallback for empty pools, cold start |
