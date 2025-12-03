@@ -124,7 +124,7 @@ def test_colors_mapping():
     """Test that COLORS has correct mappings for all decision types."""
     assert COLORS[Decision.INCLUDE] == "green"
     assert COLORS[Decision.EXCLUDE] == "red"
-    assert COLORS[Decision.UNCERTAIN] == "yellow"
+    assert COLORS[Decision.UNCERTAIN] == "orange"
     # Verify no ERROR key
     assert Decision.INCLUDE in COLORS
     assert Decision.EXCLUDE in COLORS
@@ -216,7 +216,18 @@ def test_icons_are_single_characters():
 
 def test_colors_are_valid_rich_colors():
     """Test that colors are valid Rich color names."""
-    valid_colors = {"green", "red", "yellow", "blue", "cyan", "magenta", "white"}
+    valid_colors = {
+        "green",
+        "red",
+        "orange",
+        "ansi_blue",
+        "yellow",
+        "blue",
+        "cyan",
+        "magenta",
+        "white",
+        "black",
+    }
     for color in COLORS.values():
         assert color in valid_colors
 
@@ -345,20 +356,16 @@ class TestReviewApp:
             assert not app.in_detail_view
 
     @pytest.mark.asyncio
-    async def test_quit_with_q(self, sample_judgments, sample_changes):
-        """Test quitting with q key."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            await pilot.press("q")
-            assert not app.is_running
-
-    @pytest.mark.asyncio
-    async def test_quit_with_escape_from_list(self, sample_judgments, sample_changes):
-        """Test quitting with escape from list view."""
+    async def test_escape_does_nothing_in_list_view(
+        self, sample_judgments, sample_changes
+    ):
+        """Test that escape does nothing in list view (use Ctrl+C to quit)."""
         app = ReviewApp(sample_judgments, sample_changes)
         async with app.run_test() as pilot:
             await pilot.press("escape")
-            assert not app.is_running
+            # App should still be running - escape only closes modals/detail view
+            assert app.is_running
+            assert not app.in_detail_view
 
     @pytest.mark.asyncio
     async def test_cannot_navigate_past_bounds(self, sample_judgments, sample_changes):
@@ -424,18 +431,12 @@ class TestReviewApp:
 class TestReasonModal:
     """Tests for ReasonModal."""
 
-    @pytest.mark.asyncio
-    async def test_modal_mounts(self):
-        """Test that ReasonModal mounts correctly."""
+    def test_modal_default_reason(self):
+        """Test that ReasonModal default reason is empty."""
         modal = ReasonModal()
-        # Create a host app to mount the modal
-        app = ReviewApp([], [])
-        async with app.run_test():
-            # The modal itself can be instantiated
-            assert modal.current_reason == ""
+        assert modal.current_reason == ""
 
-    @pytest.mark.asyncio
-    async def test_modal_with_initial_reason(self):
+    def test_modal_with_initial_reason(self):
         """Test modal with initial reason value."""
         modal = ReasonModal("Initial reason")
         assert modal.current_reason == "Initial reason"
@@ -523,14 +524,18 @@ class TestReviewAppDetailView:
             assert app.is_running
 
     @pytest.mark.asyncio
-    async def test_quit_from_detail_view(self, sample_judgments, sample_changes):
-        """Test quitting from detail view with q."""
+    async def test_escape_returns_to_list_from_detail(
+        self, sample_judgments, sample_changes
+    ):
+        """Test that escape from detail view returns to list (not quit)."""
         app = ReviewApp(sample_judgments, sample_changes)
         async with app.run_test() as pilot:
             await pilot.press("enter")
             assert app.in_detail_view
-            await pilot.press("q")
-            assert not app.is_running
+            await pilot.press("escape")
+            # Should return to list, not quit
+            assert app.is_running
+            assert not app.in_detail_view
 
 
 class TestReviewAppWithUserOverride:

@@ -30,7 +30,7 @@ class TestDecision:
         assert Decision("INCLUDE") == Decision.INCLUDE
         assert Decision("EXCLUDE") == Decision.EXCLUDE
         assert Decision("UNCERTAIN") == Decision.UNCERTAIN
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="'ERROR' is not a valid Decision"):
             Decision("ERROR")
 
 

@@ -28,17 +28,21 @@ class TestParseMonthKey:
         result = utils.parse_month_key(None)
         assert len(result) == 7
         assert result[4] == "-"
+        # Verify it's a valid parseable date
+        year, month = result.split("-")
+        assert 2000 <= int(year) <= 2100
+        assert 1 <= int(month) <= 12
 
     @pytest.mark.unit
     def test_invalid_format_raises(self):
         """Test that invalid format raises ValueError."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"time data .* does not match format"):
             utils.parse_month_key("invalid")
 
     @pytest.mark.unit
     def test_partial_date_raises(self):
         """Test that partial date raises ValueError."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"time data .* does not match format"):
             utils.parse_month_key("2024")
 
 

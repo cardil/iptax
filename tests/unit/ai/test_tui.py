@@ -68,7 +68,10 @@ def test_ai_progress_exception_handling():
     mock_console.status.return_value.__enter__ = Mock(return_value=mock_status)
     mock_console.status.return_value.__exit__ = Mock(return_value=None)
 
-    with pytest.raises(ValueError), ai_progress(mock_console, "Test"):
+    with (
+        pytest.raises(ValueError, match="Test exception"),
+        ai_progress(mock_console, "Test"),
+    ):
         raise ValueError("Test exception")
 
     # Verify __exit__ was called (cleanup happened)

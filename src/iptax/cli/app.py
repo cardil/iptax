@@ -315,7 +315,7 @@ def ai_test(mock_count: int) -> None:
 
     # Show spinner demo
     with ai_progress(console, "Simulating AI processing..."):
-        time.sleep(2)
+        time.sleep(1)
 
     # Run review flow
     flows.review(console, mock_judgments, mock_changes)

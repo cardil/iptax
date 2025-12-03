@@ -26,7 +26,8 @@ def display_changes(
         end_date: End of date range
     """
     console.print(f"[cyan]📅[/cyan] Date range: {start_date} to {end_date}")
-    console.print(f"[green]✓[/green] Found {len(changes)} changes")
+    change_word = "change" if len(changes) == 1 else "changes"
+    console.print(f"[green]✓[/green] Found {len(changes)} {change_word}")
 
     if not changes:
         console.print("[yellow]No changes found for this period[/yellow]")
@@ -53,6 +54,7 @@ def display_review_results(
     console: Console,
     judgments: list[Judgment],
     changes: list[Change],
+    *,
     accepted: bool,
 ) -> None:
     """Display review results after TUI.

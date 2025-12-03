@@ -34,7 +34,8 @@ def fetch_changes(
     """
     console.print("[cyan]🔍[/cyan] Fetching changes from did...")
     changes = did_fetch_changes(settings, start_date, end_date)
-    console.print(f"[green]✓[/green] Found {len(changes)} changes")
+    change_word = "change" if len(changes) == 1 else "changes"
+    console.print(f"[green]✓[/green] Found {len(changes)} {change_word}")
     return changes
 
 
@@ -100,6 +101,6 @@ def review(
     result = run_review_tui(judgments, changes)
 
     # Post-review results
-    display_review_results(console, result.judgments, changes, result.accepted)
+    display_review_results(console, result.judgments, changes, accepted=result.accepted)
 
     return result

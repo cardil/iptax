@@ -1,7 +1,10 @@
 """Textual-based TUI review interface for AI judgments."""
 
+from contextlib import suppress
+from typing import ClassVar
+
 from textual.app import App, ComposeResult
-from textual.containers import Container, ScrollableContainer
+from textual.containers import Container, VerticalScroll
 from textual.events import Key
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
@@ -20,19 +23,62 @@ ICONS = {
 COLORS = {
     Decision.INCLUDE: "green",
     Decision.EXCLUDE: "red",
-    Decision.UNCERTAIN: "yellow",
+    Decision.UNCERTAIN: "orange",
 }
+
+
+class ListScroll(VerticalScroll):
+    """VerticalScroll without up/down key bindings.
+
+    This allows using up/down arrows for list navigation without
+    triggering scroll behavior. PageUp/Down and mouse scroll still work.
+    """
+
+    # Override to remove all navigation bindings - we handle them in the app
+    BINDINGS: ClassVar[list] = []
+
+    def scroll_visible(  # type: ignore[no-untyped-def]
+        self,
+        *args,  # noqa: ANN002
+        **kwargs,  # noqa: ANN003
+    ) -> None:
+        """Override to prevent automatic scroll-to-visible behavior."""
+        pass
+
+    def scroll_to_widget(  # type: ignore[no-untyped-def,override]
+        self,
+        *args,  # noqa: ANN002
+        **kwargs,  # noqa: ANN003
+    ) -> None:
+        """Override to prevent scroll-to-widget behavior."""
+        pass
+
+    def scroll_to_center(  # type: ignore[no-untyped-def]
+        self,
+        *args,  # noqa: ANN002
+        **kwargs,  # noqa: ANN003
+    ) -> None:
+        """Override to prevent scroll-to-center behavior."""
+        pass
+
+    def action_scroll_up(self) -> None:
+        """Block scroll_up action."""
+        pass
+
+    def action_scroll_down(self) -> None:
+        """Block scroll_down action."""
+        pass
 
 
 class ReviewResult:
     """Result of the review process."""
 
-    def __init__(self, judgments: list[Judgment], accepted: bool = False) -> None:
+    def __init__(self, judgments: list[Judgment], *, accepted: bool = False) -> None:
         """Initialize review result.
 
         Args:
             judgments: List of judgments (potentially modified)
-            accepted: Whether user accepted all judgments without review
+            accepted: Whether user accepted (keyword-only)
         """
         self.judgments = judgments
         self.accepted = accepted
@@ -105,6 +151,10 @@ class ReasonModal(ModalScreen[str | None]):
                 yield Button("Save", variant="primary", id="save-btn")
                 yield Button("Skip", variant="default", id="skip-btn")
 
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle Enter key in input field - submit the form."""
+        self.dismiss(event.value)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         if event.button.id == "save-btn":
@@ -117,12 +167,14 @@ class ReasonModal(ModalScreen[str | None]):
         """Handle escape key."""
         if event.key == "escape":
             self.dismiss(None)
+            event.stop()  # Prevent bubbling to app-level key handlers
 
 
 class ReviewApp(App):
     """Textual app for reviewing AI judgments."""
 
     TITLE = "iptax"
+    ENABLE_COMMAND_PALETTE = False
 
     CSS = """
     #list-container {
@@ -139,8 +191,13 @@ class ReviewApp(App):
         height: 1;
     }
 
+    .change-row:focus {
+        /* Prevent focus styling */
+    }
+
     .selected {
         background: $primary-background-darken-1;
+        color: white;
     }
 
     #footer-bar {
@@ -148,11 +205,6 @@ class ReviewApp(App):
         background: $panel;
         padding: 0 1;
         dock: bottom;
-    }
-
-    #detail-container {
-        height: 1fr;
-        padding: 1;
     }
 
     .detail-header {
@@ -164,7 +216,6 @@ class ReviewApp(App):
     }
 
     .detail-section {
-        background: $surface;
         padding: 1;
         margin-top: 1;
     }
@@ -186,12 +237,12 @@ class ReviewApp(App):
     }
 
     .ai-decision-uncertain {
-        color: yellow;
+        color: orange;
         text-style: bold;
     }
 
     .user-override {
-        color: cyan;
+        color: ansi_blue;
         text-style: italic;
     }
     """
@@ -202,6 +253,7 @@ class ReviewApp(App):
         changes: list[Change],
     ) -> None:
         super().__init__()
+        self.theme = "textual-ansi"
         self.judgments = judgments
         self.changes = changes
         self.change_map = {c.get_change_id(): c for c in changes}
@@ -212,7 +264,7 @@ class ReviewApp(App):
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         yield Container(
-            ScrollableContainer(id="changes-list"),
+            ListScroll(id="changes-list"),
             id="list-container",
         )
         yield Static(id="footer-bar")
@@ -237,10 +289,9 @@ class ReviewApp(App):
 
     def _refresh_list(self) -> None:
         """Refresh the changes list."""
-        changes_list = self.query_one("#changes-list", ScrollableContainer)
+        changes_list = self.query_one("#changes-list", ListScroll)
         changes_list.remove_children()
 
-        selected_row: Static | None = None
         for i, judgment in enumerate(self.judgments):
             change = self.change_map.get(judgment.change_id)
             icon = ICONS[judgment.final_decision]
@@ -249,35 +300,70 @@ class ReviewApp(App):
 
             # Add edited marker on right side, dimmed
             edited_marker = " [dim]*[/]" if judgment.was_corrected else ""
-            cursor = ">" if i == self.selected_index else " "
-            row_class = (
+            row_content = f"  [{color}]{icon}[/] {title}{edited_marker}"
+
+            # Use CSS class for selection styling
+            classes = (
                 "change-row selected" if i == self.selected_index else "change-row"
             )
-
-            row = Static(
-                f"{cursor} [{color}]{icon}[/] {title}{edited_marker}",
-                classes=row_class,
-            )
+            row = Static(row_content, classes=classes)
             changes_list.mount(row)
-            if i == self.selected_index:
-                selected_row = row
 
-        # Scroll to keep selected row visible
-        if selected_row is not None:
-            selected_row.scroll_visible()
+        # Store row references for later updates
+        self._row_widgets: list[Static] = list(changes_list.query(Static))
+
+    def _update_selection(self, old_index: int, new_index: int) -> None:
+        """Update selection using CSS class changes."""
+        if not hasattr(self, "_row_widgets") or not self._row_widgets:
+            return
+
+        # Update old row - remove selected class
+        if 0 <= old_index < len(self._row_widgets):
+            old_row = self._row_widgets[old_index]
+            old_row.remove_class("selected")
+
+        # Update new row - add selected class
+        if 0 <= new_index < len(self._row_widgets):
+            new_row = self._row_widgets[new_index]
+            new_row.add_class("selected")
+
+            # Check if new row is visible, scroll if needed
+            self._ensure_row_visible(new_row, new_index)
+
+    def _ensure_row_visible(self, _row: Static, index: int) -> None:
+        """Scroll only if the row is outside the visible viewport."""
+        with suppress(AttributeError, LookupError):
+            changes_list = self.query_one("#changes-list", ListScroll)
+
+            # Get viewport info
+            scroll_y = changes_list.scroll_y
+            viewport_height = changes_list.size.height
+
+            # Row position (each row is 1 unit high)
+            row_top = index
+            row_bottom = index + 1
+            viewport_bottom = scroll_y + viewport_height
+
+            # Only scroll if row is outside visible area
+            if row_top < scroll_y:
+                # Row is above viewport - scroll up to show it
+                changes_list.scroll_to(y=row_top, animate=False)
+            elif row_bottom > viewport_bottom:
+                # Row is below viewport - scroll down to show it
+                changes_list.scroll_to(y=row_bottom - viewport_height, animate=False)
 
     def _refresh_footer(self) -> None:
         """Refresh the footer bar based on current view."""
         footer = self.query_one("#footer-bar", Static)
         include_count, exclude_count, uncertain_count = self._count_decisions()
         total = len(self.judgments)
-        current = self.selected_index + 1
+        current = self.selected_index + 1 if total else 0
 
         status = (
             f"[{current}/{total}] "
             f"[green]✓INCLUDE: {include_count}[/]  "
             f"[red]✗EXCLUDE: {exclude_count}[/]  "
-            f"[yellow]?UNCERTAIN: {uncertain_count}[/]"
+            f"[orange]?UNCERTAIN: {uncertain_count}[/]"
         )
 
         if self.in_detail_view:
@@ -285,13 +371,12 @@ class ReviewApp(App):
             keys = "[bold]Esc[/] Back  [bold]f[/] Flip"
             if judgment.was_corrected:
                 keys += "  [bold]r[/] Reason"
-            keys += "  [bold]q[/] Quit"
             footer.update(f"{status}   {keys}")
         else:
             keys = "[bold]↑↓[/] Navigate  [bold]Enter[/] Details"
             if uncertain_count == 0:
                 keys += "  [bold]d[/] Review Done"
-            keys += "  [bold]q[/] Quit"
+            keys += "  [bold]Ctrl+Q[/] Quit"
             footer.update(f"{status}   {keys}")
 
     def _show_detail_view(self) -> None:
@@ -319,20 +404,20 @@ class ReviewApp(App):
         )
 
         # Change info section
-        content_parts.append("[bold cyan]📋 Change Information[/]")
+        content_parts.append("[bold ansi_blue]📋 Change Information[/]")
         content_parts.append(f"   [bold]Title:[/] {title}")
         content_parts.append(f"   [bold]Repo:[/] {repo}")
         content_parts.append(f"   [bold]URL:[/] {url}\n")
 
         # AI Decision section
-        content_parts.append("[bold cyan]🤖 AI Analysis[/]")
+        content_parts.append("[bold ansi_blue]🤖 AI Analysis[/]")
         content_parts.append(
             f"   [bold]Decision:[/] [{ai_color}]{ai_icon} {judgment.decision.value}[/]"
         )
         content_parts.append(f"   [bold]Reasoning:[/] {judgment.reasoning}\n")
 
         # Current Decision section
-        content_parts.append("[bold cyan]📊 Current Status[/]")
+        content_parts.append("[bold ansi_blue]📊 Current Status[/]")
         content_parts.append(
             f"   [bold]Decision:[/] [{current_color}]{current_icon} "
             f"{judgment.final_decision.value}[/]"
@@ -340,12 +425,12 @@ class ReviewApp(App):
 
         if judgment.was_corrected and judgment.user_decision:
             content_parts.append(
-                f"   [bold]User Override:[/] [cyan italic]"
+                f"   [bold]User Override:[/] [ansi_blue italic]"
                 f"{judgment.user_decision.value}[/]"
             )
             if judgment.user_reasoning:
                 content_parts.append(
-                    f"   [bold]User Reason:[/] [cyan italic]"
+                    f"   [bold]User Reason:[/] [ansi_blue italic]"
                     f"{judgment.user_reasoning}[/]"
                 )
 
@@ -364,7 +449,7 @@ class ReviewApp(App):
         self.in_detail_view = False
         list_container = self.query_one("#list-container", Container)
         list_container.remove_children()
-        list_container.mount(ScrollableContainer(id="changes-list"))
+        list_container.mount(ListScroll(id="changes-list"))
         self._refresh_list()
         self._refresh_footer()
 
@@ -415,6 +500,14 @@ class ReviewApp(App):
 
         self.push_screen(ReasonModal(judgment.user_reasoning or ""), handle_reason)
 
+    def _get_viewport_height(self) -> int:
+        """Get the viewport height for page navigation."""
+        try:
+            changes_list = self.query_one("#changes-list", ListScroll)
+            return max(1, changes_list.size.height)
+        except Exception:
+            return 10  # Fallback to reasonable default
+
     def _handle_detail_key(self, key: str) -> None:
         """Handle key events in detail view."""
         if key == "escape":
@@ -425,30 +518,47 @@ class ReviewApp(App):
             judgment = self.judgments[self.selected_index]
             if judgment.was_corrected:
                 self._edit_reason()
-        elif key == "q":
-            self.exit()
+
+    def _move_selection(self, new_index: int) -> None:
+        """Update selection to a new index."""
+        old_index = self.selected_index
+        self.selected_index = new_index
+        self._update_selection(old_index, self.selected_index)
+        self._refresh_footer()
 
     def _handle_list_key(self, key: str) -> None:
         """Handle key events in list view."""
-        if key in {"up", "k", "w"}:
-            if self.selected_index > 0:
-                self.selected_index -= 1
-                self._refresh_list()
-                self._refresh_footer()
-        elif key in {"down", "j", "s"}:
-            if self.selected_index < len(self.judgments) - 1:
-                self.selected_index += 1
-                self._refresh_list()
-                self._refresh_footer()
-        elif key == "enter":
+        if key in {"up", "k", "w"} and self.selected_index > 0:
+            self._move_selection(self.selected_index - 1)
+        elif (
+            key in {"down", "j", "s"} and self.selected_index < len(self.judgments) - 1
+        ):
+            self._move_selection(self.selected_index + 1)
+        elif key == "pageup" and self.selected_index > 0:
+            viewport_height = self._get_viewport_height()
+            self._move_selection(max(0, self.selected_index - viewport_height))
+        elif key == "pagedown" and self.selected_index < len(self.judgments) - 1:
+            viewport_height = self._get_viewport_height()
+            self._move_selection(
+                min(len(self.judgments) - 1, self.selected_index + viewport_height)
+            )
+        elif key == "home" and self.judgments and self.selected_index > 0:
+            self._move_selection(0)
+        elif (
+            key == "end"
+            and self.judgments
+            and self.selected_index < len(self.judgments) - 1
+        ):
+            self._move_selection(len(self.judgments) - 1)
+        elif key == "enter" and self.judgments:
             self._show_detail_view()
         elif key == "d":
             _, _, uncertain_count = self._count_decisions()
             if uncertain_count == 0:
                 self.accepted = True
                 self.exit()
-        elif key in {"q", "escape"}:
-            self.exit()
+        # Note: Escape only closes modals/detail view, not the main list
+        # Use Ctrl+Q to quit the app
 
     def on_key(self, event: Key) -> None:
         """Handle key events."""

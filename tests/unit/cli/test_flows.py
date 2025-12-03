@@ -1,6 +1,5 @@
 """Tests for CLI flows module."""
 
-import re
 from datetime import date
 from io import StringIO
 from unittest.mock import MagicMock, patch
@@ -12,13 +11,7 @@ from iptax.ai.models import Decision, Judgment
 from iptax.cli import flows
 from iptax.models import Change, Repository
 
-# Regex to strip ANSI escape codes
-ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
-
-
-def strip_ansi(text: str) -> str:
-    """Remove ANSI escape codes from text."""
-    return ANSI_ESCAPE.sub("", text)
+from .conftest import strip_ansi
 
 
 class TestFetchChanges:
@@ -48,7 +41,7 @@ class TestFetchChanges:
         assert result == mock_changes
         output = strip_ansi(console.file.getvalue())
         assert "Fetching changes" in output
-        assert "Found 1 changes" in output
+        assert "Found 1 change" in output
 
     @pytest.mark.unit
     def test_returns_empty_list(self):
@@ -225,4 +218,6 @@ class TestReview:
         ):
             flows.review(console, judgments, changes)
 
-        mock_display.assert_called_once_with(console, judgments, changes, False)
+        mock_display.assert_called_once_with(
+            console, judgments, changes, accepted=False
+        )

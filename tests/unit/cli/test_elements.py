@@ -1,6 +1,5 @@
 """Tests for CLI elements module."""
 
-import re
 from datetime import UTC, date, datetime
 from io import StringIO
 
@@ -11,13 +10,7 @@ from iptax.ai.models import Decision, Judgment
 from iptax.cli import elements
 from iptax.models import Change, HistoryEntry, Repository
 
-# Regex to strip ANSI escape codes
-ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
-
-
-def strip_ansi(text: str) -> str:
-    """Remove ANSI escape codes from text."""
-    return ANSI_ESCAPE.sub("", text)
+from .conftest import strip_ansi
 
 
 class TestDisplayChanges:
@@ -71,7 +64,7 @@ class TestDisplayChanges:
         )
 
         output = strip_ansi(console.file.getvalue())
-        assert "Found 1 changes" in output
+        assert "Found 1 change" in output
 
     @pytest.mark.unit
     def test_displays_change_title(self):
