@@ -505,8 +505,8 @@ class ReviewApp(App):
         try:
             changes_list = self.query_one("#changes-list", ListScroll)
             return max(1, changes_list.size.height)
-        except Exception:
-            return 10  # Fallback to reasonable default
+        except LookupError:
+            return 10  # Fallback when widget is missing
 
     def _handle_detail_key(self, key: str) -> None:
         """Handle key events in detail view."""

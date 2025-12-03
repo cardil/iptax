@@ -85,6 +85,11 @@ def review(
     Returns:
         ReviewResult with potentially modified judgments
     """
+    # Early return for empty judgments
+    if not judgments:
+        console.print("\n[yellow]No AI judgments to review.[/yellow]")
+        return ReviewResult(judgments=[], accepted=False)
+
     # Pre-review summary
     include_count = sum(1 for j in judgments if j.decision == Decision.INCLUDE)
     exclude_count = sum(1 for j in judgments if j.decision == Decision.EXCLUDE)
