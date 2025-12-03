@@ -10,8 +10,8 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
-class AIDecision(str, Enum):
-    """AI decision for a change."""
+class Decision(str, Enum):
+    """Decision for a change (from AI or user)."""
 
     INCLUDE = "INCLUDE"  # Change directly contributes to the product
     EXCLUDE = "EXCLUDE"  # Change is unrelated to the product
@@ -22,9 +22,9 @@ class Judgment(BaseModel):
     """AI judgment for a single change."""
 
     change_id: str = Field(..., description="Unique identifier: owner/repo#number")
-    decision: AIDecision
+    decision: Decision
     reasoning: str = Field(..., description="AI's reasoning for the decision")
-    user_decision: AIDecision | None = Field(None, description="User override decision")
+    user_decision: Decision | None = Field(None, description="User override decision")
     user_reasoning: str | None = Field(
         None, description="User's reasoning for override"
     )
@@ -40,7 +40,7 @@ class Judgment(BaseModel):
         return self.final_decision != self.decision
 
     @property
-    def final_decision(self) -> AIDecision:
+    def final_decision(self) -> Decision:
         """Return user decision if set, otherwise AI decision."""
         return self.user_decision if self.user_decision is not None else self.decision
 
@@ -56,7 +56,7 @@ class AIResponseItem(BaseModel):
     """Single item in AI response."""
 
     change_id: str
-    decision: AIDecision
+    decision: Decision
     reasoning: str
 
 

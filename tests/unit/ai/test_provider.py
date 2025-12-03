@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from iptax.ai.models import AIDecision, AIResponse
+from iptax.ai.models import AIResponse, Decision
 from iptax.ai.provider import AIDisabledError, AIProvider, AIProviderError
 from iptax.models import DisabledAIConfig, GeminiProviderConfig, VertexAIProviderConfig
 
@@ -216,11 +216,11 @@ judgments:
         assert len(response.judgments) == 2
 
         assert response.judgments[0].change_id == "github.com/org/repo#123"
-        assert response.judgments[0].decision == AIDecision.INCLUDE
+        assert response.judgments[0].decision == Decision.INCLUDE
         assert "core product functionality" in response.judgments[0].reasoning
 
         assert response.judgments[1].change_id == "github.com/org/repo#124"
-        assert response.judgments[1].decision == AIDecision.EXCLUDE
+        assert response.judgments[1].decision == Decision.EXCLUDE
         assert "documentation only" in response.judgments[1].reasoning
 
 
@@ -260,7 +260,7 @@ Hope this helps!"""
         assert isinstance(response, AIResponse)
         assert len(response.judgments) == 1
         assert response.judgments[0].change_id == "github.com/org/repo#123"
-        assert response.judgments[0].decision == AIDecision.INCLUDE
+        assert response.judgments[0].decision == Decision.INCLUDE
 
 
 def test_parse_response_plain_yaml(
@@ -280,7 +280,7 @@ def test_parse_response_plain_yaml(
         assert isinstance(response, AIResponse)
         assert len(response.judgments) == 1
         assert response.judgments[0].change_id == "github.com/org/repo#123"
-        assert response.judgments[0].decision == AIDecision.EXCLUDE
+        assert response.judgments[0].decision == Decision.EXCLUDE
 
 
 def test_parse_response_invalid_yaml(gemini_config: GeminiProviderConfig) -> None:
@@ -329,7 +329,7 @@ judgments:
 
         assert isinstance(response, AIResponse)
         assert len(response.judgments) == 1
-        assert response.judgments[0].decision == AIDecision.UNCERTAIN
+        assert response.judgments[0].decision == Decision.UNCERTAIN
 
 
 def test_parse_response_multiple_yaml_blocks(

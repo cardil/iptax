@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from iptax.ai.cache import DEFAULT_CACHE_PATH, JudgmentCacheManager
-from iptax.ai.models import AIDecision, Judgment, JudgmentCache
+from iptax.ai.models import Decision, Judgment, JudgmentCache
 
 
 class TestJudgmentModel:
@@ -15,9 +15,9 @@ class TestJudgmentModel:
         """Test was_corrected returns True when user overrides AI decision."""
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="AI thinks it's related",
-            user_decision=AIDecision.EXCLUDE,
+            user_decision=Decision.EXCLUDE,
             user_reasoning="Actually not related",
             product="TestProduct",
         )
@@ -27,9 +27,9 @@ class TestJudgmentModel:
         """Test was_corrected returns False when user agrees with AI."""
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="AI thinks it's related",
-            user_decision=AIDecision.INCLUDE,
+            user_decision=Decision.INCLUDE,
             user_reasoning="Confirmed",
             product="TestProduct",
         )
@@ -39,7 +39,7 @@ class TestJudgmentModel:
         """Test was_corrected returns False when no user decision."""
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="AI thinks it's related",
             product="TestProduct",
         )
@@ -72,7 +72,7 @@ class TestJudgmentCacheManager:
         cache_path = tmp_path / "cache.json"
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test",
             product="TestProduct",
         )
@@ -102,7 +102,7 @@ class TestJudgmentCacheManager:
         manager = JudgmentCacheManager(cache_path=cache_path)
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test",
             product="TestProduct",
         )
@@ -118,7 +118,7 @@ class TestJudgmentCacheManager:
 
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test",
             product="TestProduct",
         )
@@ -135,7 +135,7 @@ class TestJudgmentCacheManager:
 
         judgment1 = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="First",
             product="TestProduct",
         )
@@ -143,7 +143,7 @@ class TestJudgmentCacheManager:
 
         judgment2 = Judgment(
             change_id="test#1",
-            decision=AIDecision.EXCLUDE,
+            decision=Decision.EXCLUDE,
             reasoning="Second",
             product="TestProduct",
         )
@@ -159,7 +159,7 @@ class TestJudgmentCacheManager:
 
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test",
             product="TestProduct",
         )
@@ -184,19 +184,19 @@ class TestJudgmentCacheManager:
 
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="AI decision",
             product="TestProduct",
         )
         manager.add_judgment(judgment)
 
         success = manager.update_with_user_decision(
-            "test#1", AIDecision.EXCLUDE, "User correction"
+            "test#1", Decision.EXCLUDE, "User correction"
         )
 
         assert success is True
         updated = manager.get_judgment("test#1")
-        assert updated.user_decision == AIDecision.EXCLUDE
+        assert updated.user_decision == Decision.EXCLUDE
         assert updated.user_reasoning == "User correction"
         assert updated.was_corrected is True
 
@@ -206,7 +206,7 @@ class TestJudgmentCacheManager:
         manager = JudgmentCacheManager(cache_path=cache_path)
 
         success = manager.update_with_user_decision(
-            "nonexistent", AIDecision.EXCLUDE, "User correction"
+            "nonexistent", Decision.EXCLUDE, "User correction"
         )
 
         assert success is False
@@ -221,7 +221,7 @@ class TestJudgmentCacheManager:
             manager.add_judgment(
                 Judgment(
                     change_id=f"product1#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="Test",
                     product="Product1",
                 )
@@ -231,7 +231,7 @@ class TestJudgmentCacheManager:
             manager.add_judgment(
                 Judgment(
                     change_id=f"product2#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="Test",
                     product="Product2",
                 )
@@ -277,12 +277,12 @@ class TestJudgmentCacheManager:
         for i in range(3):
             j = Judgment(
                 change_id=f"test#{i}",
-                decision=AIDecision.INCLUDE,
+                decision=Decision.INCLUDE,
                 reasoning="AI",
                 product="TestProduct",
                 timestamp=base_time + timedelta(hours=i),
             )
-            j.user_decision = AIDecision.EXCLUDE
+            j.user_decision = Decision.EXCLUDE
             manager.add_judgment(j)
 
         # Add 2 correct judgments
@@ -290,7 +290,7 @@ class TestJudgmentCacheManager:
             manager.add_judgment(
                 Judgment(
                     change_id=f"test#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="AI",
                     product="TestProduct",
                     timestamp=base_time + timedelta(hours=i),
@@ -317,7 +317,7 @@ class TestJudgmentCacheManager:
             manager.add_judgment(
                 Judgment(
                     change_id=f"p1#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="Test",
                     product="Product1",
                 )
@@ -327,7 +327,7 @@ class TestJudgmentCacheManager:
             manager.add_judgment(
                 Judgment(
                     change_id=f"p2#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="Test",
                     product="Product2",
                 )
@@ -347,7 +347,7 @@ class TestJudgmentCacheManager:
         manager1 = JudgmentCacheManager(cache_path=cache_path)
         judgment = Judgment(
             change_id="test#1",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="Test",
             product="TestProduct",
         )
@@ -386,7 +386,7 @@ class TestGetHistoryForPrompt:
             manager.add_judgment(
                 Judgment(
                     change_id=f"p1#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="Test",
                     product="Product1",
                 )
@@ -396,7 +396,7 @@ class TestGetHistoryForPrompt:
             manager.add_judgment(
                 Judgment(
                     change_id=f"p2#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="Test",
                     product="Product2",
                 )
@@ -417,7 +417,7 @@ class TestGetHistoryForPrompt:
             manager.add_judgment(
                 Judgment(
                     change_id=f"test#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="Test",
                     product="TestProduct",
                 )
@@ -436,11 +436,11 @@ class TestGetHistoryForPrompt:
         for i in range(20):
             j = Judgment(
                 change_id=f"corrected#{i}",
-                decision=AIDecision.INCLUDE,
+                decision=Decision.INCLUDE,
                 reasoning="AI",
                 product="TestProduct",
             )
-            j.user_decision = AIDecision.EXCLUDE
+            j.user_decision = Decision.EXCLUDE
             manager.add_judgment(j)
 
         # Add 20 correct judgments
@@ -448,7 +448,7 @@ class TestGetHistoryForPrompt:
             manager.add_judgment(
                 Judgment(
                     change_id=f"correct#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="AI",
                     product="TestProduct",
                 )
@@ -475,7 +475,7 @@ class TestGetHistoryForPrompt:
             manager.add_judgment(
                 Judgment(
                     change_id=f"correct#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="AI",
                     product="TestProduct",
                 )
@@ -498,11 +498,11 @@ class TestGetHistoryForPrompt:
         for i in range(30):
             j = Judgment(
                 change_id=f"corrected#{i}",
-                decision=AIDecision.INCLUDE,
+                decision=Decision.INCLUDE,
                 reasoning="AI",
                 product="TestProduct",
             )
-            j.user_decision = AIDecision.EXCLUDE
+            j.user_decision = Decision.EXCLUDE
             manager.add_judgment(j)
 
         history = manager.get_history_for_prompt(
@@ -525,7 +525,7 @@ class TestGetHistoryForPrompt:
             manager.add_judgment(
                 Judgment(
                     change_id=f"test#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="Test",
                     product="TestProduct",
                     timestamp=base_time + timedelta(hours=i),
@@ -548,11 +548,11 @@ class TestGetHistoryForPrompt:
         for i in range(5):
             j = Judgment(
                 change_id=f"corrected#{i}",
-                decision=AIDecision.INCLUDE,
+                decision=Decision.INCLUDE,
                 reasoning="AI",
                 product="TestProduct",
             )
-            j.user_decision = AIDecision.EXCLUDE
+            j.user_decision = Decision.EXCLUDE
             manager.add_judgment(j)
 
         # Add 20 correct (target is 5)
@@ -560,7 +560,7 @@ class TestGetHistoryForPrompt:
             manager.add_judgment(
                 Judgment(
                     change_id=f"correct#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="AI",
                     product="TestProduct",
                 )
@@ -587,18 +587,18 @@ class TestGetHistoryForPrompt:
         for i in range(10):
             j = Judgment(
                 change_id=f"corrected#{i}",
-                decision=AIDecision.INCLUDE,
+                decision=Decision.INCLUDE,
                 reasoning="AI",
                 product="TestProduct",
             )
-            j.user_decision = AIDecision.EXCLUDE
+            j.user_decision = Decision.EXCLUDE
             manager.add_judgment(j)
 
         for i in range(10):
             manager.add_judgment(
                 Judgment(
                     change_id=f"correct#{i}",
-                    decision=AIDecision.INCLUDE,
+                    decision=Decision.INCLUDE,
                     reasoning="AI",
                     product="TestProduct",
                 )

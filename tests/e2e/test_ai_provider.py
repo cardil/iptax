@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from iptax.ai import AIProvider, build_judgment_prompt
-from iptax.ai.models import AIDecision, Judgment
+from iptax.ai.models import Decision, Judgment
 from iptax.config import load_settings
 from iptax.models import Change, DisabledAIConfig, Repository
 
@@ -99,16 +99,16 @@ def test_real_ai_judgment(ai_config, sample_changes: list[Change]) -> None:
     history = [
         Judgment(
             change_id="github.com/acme/parser-legacy#50",
-            decision=AIDecision.INCLUDE,
+            decision=Decision.INCLUDE,
             reasoning="This adds core parser functionality to the product",
             product="Acme Code Analysis Suite",
             timestamp=datetime.now(UTC),
         ),
         Judgment(
             change_id="github.com/acme/ci-tools#25",
-            decision=AIDecision.EXCLUDE,
+            decision=Decision.EXCLUDE,
             reasoning="This is general CI/CD infrastructure",
-            user_decision=AIDecision.INCLUDE,
+            user_decision=Decision.INCLUDE,
             user_reasoning="This CI tool is specifically for code analysis",
             product="Acme Code Analysis Suite",
             timestamp=datetime.now(UTC),
@@ -146,9 +146,9 @@ def test_real_ai_judgment(ai_config, sample_changes: list[Change]) -> None:
     for item in response.judgments:
         # Verify decision is valid
         assert item.decision in [
-            AIDecision.INCLUDE,
-            AIDecision.EXCLUDE,
-            AIDecision.UNCERTAIN,
+            Decision.INCLUDE,
+            Decision.EXCLUDE,
+            Decision.UNCERTAIN,
         ]
 
         # Verify reasoning is provided
@@ -170,8 +170,8 @@ def test_real_ai_judgment(ai_config, sample_changes: list[Change]) -> None:
         assert judgment is not None, f"Missing judgment for {change_id}"
         # These should be INCLUDE, but we allow UNCERTAIN for edge cases
         assert judgment.decision in [
-            AIDecision.INCLUDE,
-            AIDecision.UNCERTAIN,
+            Decision.INCLUDE,
+            Decision.UNCERTAIN,
         ], (
             f"Expected INCLUDE/UNCERTAIN for product change {change_id}, "
             f"got {judgment.decision}"
@@ -188,8 +188,8 @@ def test_real_ai_judgment(ai_config, sample_changes: list[Change]) -> None:
         assert judgment is not None, f"Missing judgment for {change_id}"
         # These should be EXCLUDE
         assert judgment.decision in [
-            AIDecision.EXCLUDE,
-            AIDecision.UNCERTAIN,
+            Decision.EXCLUDE,
+            Decision.UNCERTAIN,
         ], (
             f"Expected EXCLUDE/UNCERTAIN for personal change {change_id}, "
             f"got {judgment.decision}"
