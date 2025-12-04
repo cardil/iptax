@@ -1,0 +1,9 @@
+coverage:
+  status:
+    project:
+      default:
+        # Allow small coverage drops (e.g., due to defensive cleanup code)
+        threshold: 0.05%
+    patch:
+      default:
+        threshold: 0.05%
