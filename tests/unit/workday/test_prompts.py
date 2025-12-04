@@ -90,11 +90,16 @@ class TestPromptCredentialsAsync:
 class TestProgressController:
     """Test ProgressController class."""
 
+    def _create_mock_console(self) -> MagicMock:
+        """Create a mock console with is_jupyter=False to prevent ipywidgets warning."""
+        mock = MagicMock()
+        mock.is_jupyter = False
+        return mock
+
     def test_context_manager_creates_and_closes(self):
         """Test that ProgressController works as a context manager."""
         with patch("iptax.workday.prompts.Console") as mock_console_cls:
-            mock_console = MagicMock()
-            mock_console_cls.return_value = mock_console
+            mock_console_cls.return_value = self._create_mock_console()
 
             with ProgressController() as progress:
                 assert progress is not None
@@ -102,7 +107,8 @@ class TestProgressController:
 
     def test_create_starts_progress(self):
         """Test that create() starts the progress bar."""
-        with patch("iptax.workday.prompts.Console"):
+        with patch("iptax.workday.prompts.Console") as mock_console_cls:
+            mock_console_cls.return_value = self._create_mock_console()
             progress = ProgressController()
             progress.create(10, "Testing...")
 
@@ -114,7 +120,8 @@ class TestProgressController:
 
     def test_advance_updates_progress(self):
         """Test that advance() updates the progress bar."""
-        with patch("iptax.workday.prompts.Console"):
+        with patch("iptax.workday.prompts.Console") as mock_console_cls:
+            mock_console_cls.return_value = self._create_mock_console()
             progress = ProgressController()
             progress.create(5, "Starting...")
 
@@ -133,7 +140,8 @@ class TestProgressController:
 
     def test_stop_and_resume(self):
         """Test that stop() and resume() work correctly."""
-        with patch("iptax.workday.prompts.Console"):
+        with patch("iptax.workday.prompts.Console") as mock_console_cls:
+            mock_console_cls.return_value = self._create_mock_console()
             progress = ProgressController()
             progress.create(5, "Starting...")
 

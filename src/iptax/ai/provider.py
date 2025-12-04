@@ -4,15 +4,17 @@ This module provides the AIProvider class that handles communication with
 various AI providers (Gemini, Vertex AI) through the LiteLLM library.
 """
 
+import contextlib
 import logging
 import os
 import re
+import warnings
 from pathlib import Path
 from typing import Any
 
-import litellm
 import yaml
 from dotenv import load_dotenv
+from pydantic.warnings import PydanticDeprecatedSince20
 
 from iptax.models import (
     AIProviderConfig,
@@ -23,7 +25,60 @@ from iptax.models import (
 
 from .models import AIResponse
 
+# Filter litellm's Pydantic deprecation warnings before importing litellm.
+# litellm uses deprecated Pydantic class-based config that emits warnings
+# during import, and we cannot fix this in external library code.
+warnings.filterwarnings(
+    "ignore",
+    message=r"Support for class-based .config. is deprecated",
+    category=PydanticDeprecatedSince20,
+    module="litellm.types.llms.anthropic",
+)
+# litellm has internal Pydantic serialization issues at runtime
+warnings.filterwarnings(
+    "ignore",
+    message=r"Pydantic serializer warnings",
+    category=UserWarning,
+)
+
+# E402: litellm must be imported AFTER the warning filters above because
+# it emits deprecation warnings during import.
+import litellm  # noqa: E402
+
 logger = logging.getLogger(__name__)
+
+
+def cleanup_litellm_clients() -> None:
+    """Clean up cached litellm HTTP clients.
+
+    LiteLLM caches HTTP clients in `litellm.in_memory_llm_clients_cache`.
+    These should be cleaned up after use to prevent "I/O operation on
+    closed file" errors during Python interpreter shutdown (the clients'
+    __del__ methods try to log after stderr is closed).
+
+    Call this function when done with AI operations, typically at the end
+    of a CLI command or test session.
+    """
+    with contextlib.suppress(Exception):
+        cache = getattr(litellm, "in_memory_llm_clients_cache", None)
+        if cache is None:
+            return
+
+        cache_dict = getattr(cache, "cache_dict", None)
+        if cache_dict is None:
+            return
+
+        for key in list(cache_dict.keys()):
+            if key.startswith("httpx_client"):
+                with contextlib.suppress(Exception):
+                    item = cache_dict.get(key)
+                    if item is not None:
+                        client = getattr(item, "value", item)
+                        if hasattr(client, "close"):
+                            client.close()
+                        # Remove from cache to prevent __del__ from running
+                        with contextlib.suppress(Exception):
+                            del cache_dict[key]
 
 
 class AIProviderError(Exception):
@@ -94,6 +149,22 @@ class AIProvider:
         Raises:
             AIProviderError: If the API call fails or response is invalid
                 after all retries
+        """
+        try:
+            return self._judge_changes_impl(prompt)
+        finally:
+            # Clean up litellm HTTP clients to prevent "I/O operation on
+            # closed file" errors during Python interpreter shutdown
+            cleanup_litellm_clients()
+
+    def _judge_changes_impl(self, prompt: str) -> AIResponse:
+        """Internal implementation of judge_changes.
+
+        Args:
+            prompt: The prompt to send to the AI
+
+        Returns:
+            Parsed AI response with judgments
         """
         # Build parameters for LiteLLM
         model, api_params = self._build_llm_params()

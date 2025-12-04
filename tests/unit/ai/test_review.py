@@ -233,10 +233,14 @@ def test_colors_are_valid_rich_colors():
 
 
 # Textual TUI Tests using App.run_test()
+# Tests are consolidated to minimize app.run_test() calls (each takes ~0.2s overhead)
 
 
 class TestReviewApp:
-    """Tests for ReviewApp Textual application."""
+    """Tests for ReviewApp Textual application.
+
+    Tests are consolidated into minimal app instances for performance.
+    """
 
     @pytest.fixture
     def sample_changes(self):
@@ -277,131 +281,68 @@ class TestReviewApp:
         ]
 
     @pytest.mark.asyncio
-    async def test_app_mounts_successfully(self, sample_judgments, sample_changes):
-        """Test that ReviewApp mounts without errors."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test():
-            # App should mount successfully
-            assert app.is_running
+    async def test_app_basics_and_navigation(self, sample_judgments, sample_changes):
+        """Test app mounting, UI elements, navigation, and decision counting.
 
-    @pytest.mark.asyncio
-    async def test_app_shows_changes_list(self, sample_judgments, sample_changes):
-        """Test that ReviewApp displays changes list."""
+        Consolidates: mount, changes-list, all navigation keys, escape in list,
+        bounds checking, _count_decisions, and done-disabled-with-uncertain.
+        """
         app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test():
-            # Should have changes-list container
+        async with app.run_test() as pilot:
+            # === Mount and UI ===
+            assert app.is_running
             changes_list = app.query_one("#changes-list")
             assert changes_list is not None
 
-    @pytest.mark.asyncio
-    async def test_navigation_down(self, sample_judgments, sample_changes):
-        """Test down arrow navigation."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            assert app.selected_index == 0
-            await pilot.press("down")
-            assert app.selected_index == 1
-
-    @pytest.mark.asyncio
-    async def test_navigation_up(self, sample_judgments, sample_changes):
-        """Test up arrow navigation."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            app.selected_index = 1
-            app._refresh_list()
-            await pilot.press("up")
-            assert app.selected_index == 0
-
-    @pytest.mark.asyncio
-    async def test_navigation_vim_keys(self, sample_judgments, sample_changes):
-        """Test vim-style navigation keys."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            # j moves down
-            await pilot.press("j")
-            assert app.selected_index == 1
-            # k moves up
-            await pilot.press("k")
-            assert app.selected_index == 0
-
-    @pytest.mark.asyncio
-    async def test_navigation_wasd_keys(self, sample_judgments, sample_changes):
-        """Test WASD-style navigation keys."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            # s moves down
-            await pilot.press("s")
-            assert app.selected_index == 1
-            # w moves up
-            await pilot.press("w")
-            assert app.selected_index == 0
-
-    @pytest.mark.asyncio
-    async def test_enter_detail_view(self, sample_judgments, sample_changes):
-        """Test entering detail view with Enter."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            assert not app.in_detail_view
-            await pilot.press("enter")
-            assert app.in_detail_view
-
-    @pytest.mark.asyncio
-    async def test_escape_from_detail_view(self, sample_judgments, sample_changes):
-        """Test escaping from detail view."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            await pilot.press("enter")
-            assert app.in_detail_view
-            await pilot.press("escape")
-            assert not app.in_detail_view
-
-    @pytest.mark.asyncio
-    async def test_escape_does_nothing_in_list_view(
-        self, sample_judgments, sample_changes
-    ):
-        """Test that escape does nothing in list view (use Ctrl+C to quit)."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            await pilot.press("escape")
-            # App should still be running - escape only closes modals/detail view
-            assert app.is_running
-            assert not app.in_detail_view
-
-    @pytest.mark.asyncio
-    async def test_cannot_navigate_past_bounds(self, sample_judgments, sample_changes):
-        """Test that navigation respects list bounds."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            # At start, can't go up
-            await pilot.press("up")
-            assert app.selected_index == 0
-
-            # Go to end
-            await pilot.press("down")
-            assert app.selected_index == 1
-
-            # Can't go past end
-            await pilot.press("down")
-            assert app.selected_index == 1
-
-    @pytest.mark.asyncio
-    async def test_count_decisions(self, sample_judgments, sample_changes):
-        """Test _count_decisions method."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test():
+            # === Decision counting ===
             include, exclude, uncertain = app._count_decisions()
             assert include == 1
             assert exclude == 0
             assert uncertain == 1
 
-    @pytest.mark.asyncio
-    async def test_done_disabled_with_uncertain(self, sample_judgments, sample_changes):
-        """Test that 'd' doesn't exit when uncertain decisions exist."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            await pilot.press("d")
-            # Should still be running because there are uncertain decisions
+            # === Navigation: down/up arrows ===
+            assert app.selected_index == 0
+            await pilot.press("down")
+            assert app.selected_index == 1
+            await pilot.press("up")
+            assert app.selected_index == 0
+
+            # === Navigation: vim keys (j/k) ===
+            await pilot.press("j")
+            assert app.selected_index == 1
+            await pilot.press("k")
+            assert app.selected_index == 0
+
+            # === Navigation: WASD keys (s/w) ===
+            await pilot.press("s")
+            assert app.selected_index == 1
+            await pilot.press("w")
+            assert app.selected_index == 0
+
+            # === Bounds checking ===
+            await pilot.press("up")  # Can't go past start
+            assert app.selected_index == 0
+            await pilot.press("down")
+            await pilot.press("down")  # Can't go past end
+            assert app.selected_index == 1
+            await pilot.press("up")  # Reset to start
+            assert app.selected_index == 0
+
+            # === Detail view enter/escape ===
+            assert not app.in_detail_view
+            await pilot.press("enter")
+            assert app.in_detail_view
+            await pilot.press("escape")
+            assert not app.in_detail_view
+
+            # === Escape in list view does nothing ===
+            await pilot.press("escape")
             assert app.is_running
+            assert not app.in_detail_view
+
+            # === Done disabled with uncertain ===
+            await pilot.press("d")
+            assert app.is_running  # Still running - uncertain exists
             assert not app.accepted
 
     @pytest.mark.asyncio
@@ -474,294 +415,180 @@ class TestReviewResult:
         assert result.judgments == judgments
 
 
-class TestReviewAppDetailView:
-    """Tests for ReviewApp detail view functionality."""
-
-    @pytest.fixture
-    def sample_changes(self):
-        """Create sample changes for testing."""
-        return [
-            Change(
-                title="Add feature X",
-                repository=Repository(
-                    host="github.com", path="org/repo1", provider_type="github"
-                ),
-                number=100,
-            ),
-        ]
-
-    @pytest.fixture
-    def sample_judgments(self, sample_changes):
-        """Create sample judgments for testing."""
-        return [
-            Judgment(
-                change_id=sample_changes[0].get_change_id(),
-                decision=Decision.INCLUDE,
-                reasoning="Contributes to product",
-                product="Test Product",
-            ),
-        ]
+class TestReviewAppDetailAndOverride:
+    """Tests for detail view, overrides, and edge cases - consolidated."""
 
     @pytest.mark.asyncio
-    async def test_detail_view_shows_content(self, sample_judgments, sample_changes):
-        """Test that detail view shows judgment content."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            # Enter detail view
-            await pilot.press("enter")
-            assert app.in_detail_view
+    async def test_detail_view_flip_and_override(self):
+        """Test detail view operations: enter, flip, modal, escape, override display.
 
-    @pytest.mark.asyncio
-    async def test_flip_decision_in_detail_view(self, sample_judgments, sample_changes):
-        """Test flipping decision in detail view opens modal."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            await pilot.press("enter")
-            assert app.in_detail_view
-            # Flip should open modal
-            await pilot.press("f")
-            # Modal should be pushed - app still running
-            assert app.is_running
-
-    @pytest.mark.asyncio
-    async def test_escape_returns_to_list_from_detail(
-        self, sample_judgments, sample_changes
-    ):
-        """Test that escape from detail view returns to list (not quit)."""
-        app = ReviewApp(sample_judgments, sample_changes)
-        async with app.run_test() as pilot:
-            await pilot.press("enter")
-            assert app.in_detail_view
-            await pilot.press("escape")
-            # Should return to list, not quit
-            assert app.is_running
-            assert not app.in_detail_view
-
-
-class TestReviewAppWithUserOverride:
-    """Tests for ReviewApp with user overrides."""
-
-    @pytest.fixture
-    def sample_changes(self):
-        """Create sample changes for testing."""
-        return [
-            Change(
-                title="Test change",
-                repository=Repository(
-                    host="github.com", path="org/repo", provider_type="github"
-                ),
-                number=100,
+        Consolidates: detail view operations, override visibility, r key behavior.
+        """
+        change = Change(
+            title="Test change",
+            repository=Repository(
+                host="github.com", path="org/repo", provider_type="github"
             ),
-        ]
-
-    @pytest.fixture
-    def judgment_with_override(self, sample_changes):
-        """Create judgment with user override."""
+            number=100,
+        )
+        # Create judgment with override
         j = Judgment(
-            change_id=sample_changes[0].get_change_id(),
+            change_id=change.get_change_id(),
             decision=Decision.EXCLUDE,
             reasoning="Original AI reasoning",
             product="Test Product",
         )
         j.user_decision = Decision.INCLUDE
         j.user_reasoning = "User overrode to include"
-        return [j]
 
-    @pytest.mark.asyncio
-    async def test_shows_override_in_detail(
-        self, judgment_with_override, sample_changes
-    ):
-        """Test that user override is visible in detail view."""
-        app = ReviewApp(judgment_with_override, sample_changes)
+        app = ReviewApp([j], [change])
         async with app.run_test() as pilot:
+            # === Enter detail view ===
             await pilot.press("enter")
             assert app.in_detail_view
-            # Check the judgment shows the override
-            j = app.judgments[0]
+
+            # === Check override is visible ===
             assert j.was_corrected
             assert j.final_decision == Decision.INCLUDE
 
-    @pytest.mark.asyncio
-    async def test_edit_reason_key_in_detail(
-        self, judgment_with_override, sample_changes
-    ):
-        """Test that 'r' key works for editing reason when corrected."""
-        app = ReviewApp(judgment_with_override, sample_changes)
-        async with app.run_test() as pilot:
-            await pilot.press("enter")
-            assert app.in_detail_view
-            # Press r to edit reason
-            await pilot.press("r")
-            # Modal should be pushed
+            # === Flip opens modal ===
+            await pilot.press("f")
             assert app.is_running
 
-    @pytest.mark.asyncio
-    async def test_r_key_does_nothing_without_correction(self, sample_changes):
-        """Test that 'r' key does nothing when no correction exists."""
-        judgments = [
-            Judgment(
-                change_id=sample_changes[0].get_change_id(),
-                decision=Decision.INCLUDE,
-                reasoning="Test",
-                product="Test",
-            )
-        ]
-        app = ReviewApp(judgments, sample_changes)
-        async with app.run_test() as pilot:
-            await pilot.press("enter")
+            # === First escape closes modal, still in detail ===
+            await pilot.press("escape")
             assert app.in_detail_view
-            # r should do nothing - no correction yet
+
+            # === r key edits reason (since correction exists) ===
             await pilot.press("r")
-            # Still in detail view, app running
-            assert app.in_detail_view
             assert app.is_running
 
-
-class TestReviewAppMissingChange:
-    """Tests for ReviewApp when change is not in change_map."""
-
-    @pytest.fixture
-    def orphan_judgment(self):
-        """Create judgment for non-existent change."""
-        return [
-            Judgment(
-                change_id="nonexistent/repo#999",
-                decision=Decision.INCLUDE,
-                reasoning="Test",
-                product="Test",
-            )
-        ]
+            # === Escape modal, escape detail ===
+            await pilot.press("escape")
+            await pilot.press("escape")
+            assert not app.in_detail_view
 
     @pytest.mark.asyncio
-    async def test_handles_missing_change(self, orphan_judgment):
-        """Test that app handles judgments without matching change."""
-        app = ReviewApp(orphan_judgment, [])
+    async def test_r_key_and_missing_change(self):
+        """Test r key without correction and missing change handling.
+
+        Consolidates: r key does nothing without correction, orphan judgment handling.
+        """
+        # Test with orphan judgment (no matching change)
+        orphan = Judgment(
+            change_id="nonexistent/repo#999",
+            decision=Decision.INCLUDE,
+            reasoning="Test",
+            product="Test",
+        )
+        app = ReviewApp([orphan], [])
         async with app.run_test() as pilot:
             # Should mount without errors
             assert app.is_running
+
             # Enter detail view
             await pilot.press("enter")
             assert app.in_detail_view
 
+            # r should do nothing - no correction
+            await pilot.press("r")
+            assert app.in_detail_view
+            assert app.is_running
+
 
 class TestReasonModalInteraction:
-    """Tests for ReasonModal user interactions."""
+    """Tests for ReasonModal user interactions - consolidated into one test."""
 
     @pytest.mark.asyncio
-    async def test_modal_skip_button(self):
-        """Test that Skip button dismisses modal with None."""
-        from iptax.ai.review import ReasonModal
+    async def test_modal_all_interactions(self):
+        """Test all modal dismiss and save methods in sequence.
 
-        modal = ReasonModal("Initial reason")
-        result = None
-
-        def handle_result(value: str | None) -> None:
-            nonlocal result
-            result = value
-
-        # Create a minimal app to test modal
+        Consolidates: skip button, escape key, save button, enter key.
+        """
         from textual.app import App
 
-        class TestApp(App):
-            def on_mount(self) -> None:
-                self.push_screen(modal, handle_result)
+        from iptax.ai.review import ReasonModal
 
-        app = TestApp()
-        async with app.run_test() as pilot:
-            # Click skip button
+        results: list[str | None] = []
+
+        # Test 1: Skip button
+        modal1 = ReasonModal("Initial reason")
+
+        def capture1(v: str | None) -> None:
+            results.append(v)
+
+        class App1(App):
+            def on_mount(self) -> None:
+                self.push_screen(modal1, capture1)
+
+        async with App1().run_test() as pilot:
             await pilot.click("#skip-btn")
-            # Should dismiss with None
-            assert result is None
 
-    @pytest.mark.asyncio
-    async def test_modal_escape_key(self):
-        """Test that escape key dismisses modal with None."""
-        from iptax.ai.review import ReasonModal
+        assert results[-1] is None
 
-        modal = ReasonModal()
-        result = "not-set"
+        # Test 2: Escape key
+        modal2 = ReasonModal()
 
-        def handle_result(value: str | None) -> None:
-            nonlocal result
-            result = value
+        def capture2(v: str | None) -> None:
+            results.append(v)
 
-        from textual.app import App
-
-        class TestApp(App):
+        class App2(App):
             def on_mount(self) -> None:
-                self.push_screen(modal, handle_result)
+                self.push_screen(modal2, capture2)
 
-        app = TestApp()
-        async with app.run_test() as pilot:
+        async with App2().run_test() as pilot:
             await pilot.press("escape")
-            # Should dismiss with None
-            assert result is None
 
-    @pytest.mark.asyncio
-    async def test_modal_save_button(self):
-        """Test that Save button returns input value."""
-        from iptax.ai.review import ReasonModal
+        assert results[-1] is None
 
-        modal = ReasonModal()
-        result = None
+        # Test 3: Save button
+        modal3 = ReasonModal()
 
-        def handle_result(value: str | None) -> None:
-            nonlocal result
-            result = value
+        def capture3(v: str | None) -> None:
+            results.append(v)
 
-        from textual.app import App
-
-        class TestApp(App):
+        class App3(App):
             def on_mount(self) -> None:
-                self.push_screen(modal, handle_result)
+                self.push_screen(modal3, capture3)
 
-        app = TestApp()
-        async with app.run_test() as pilot:
-            # Type in input
-            reason_input = app.screen.query_one("#reason-input")
-            reason_input.value = "Test reason"
-            # Click save
+        app3 = App3()
+        async with app3.run_test() as pilot:
+            app3.screen.query_one("#reason-input").value = "Save button reason"
             await pilot.click("#save-btn")
-            # Should return the typed value
-            assert result == "Test reason"
+
+        assert results[-1] == "Save button reason"
+
+        # Test 4: Enter key
+        modal4 = ReasonModal()
+
+        def capture4(v: str | None) -> None:
+            results.append(v)
+
+        class App4(App):
+            def on_mount(self) -> None:
+                self.push_screen(modal4, capture4)
+
+        app4 = App4()
+        async with app4.run_test() as pilot:
+            inp = app4.screen.query_one("#reason-input")
+            inp.focus()
+            inp.value = "Enter key reason"
+            await pilot.press("enter")
+
+        assert results[-1] == "Enter key reason"
+
+
+class TestAdvancedNavigation:
+    """Tests for pagination and UNCERTAIN flip - consolidated."""
 
     @pytest.mark.asyncio
-    async def test_modal_input_submit(self):
-        """Test that Enter in input field submits the form."""
-        from iptax.ai.review import ReasonModal
+    async def test_page_navigation_and_uncertain_flip(self):
+        """Test PageUp/Down, Home/End, and flipping UNCERTAIN to INCLUDE.
 
-        modal = ReasonModal()
-        result = None
-
-        def handle_result(value: str | None) -> None:
-            nonlocal result
-            result = value
-
-        from textual.app import App
-
-        class TestApp(App):
-            def on_mount(self) -> None:
-                self.push_screen(modal, handle_result)
-
-        app = TestApp()
-        async with app.run_test() as pilot:
-            # Focus and type in input
-            reason_input = app.screen.query_one("#reason-input")
-            reason_input.focus()
-            reason_input.value = "Submitted reason"
-            # Press enter to submit
-            await pilot.press("enter")
-            # Should return the value
-            assert result == "Submitted reason"
-
-
-class TestNavigationKeys:
-    """Tests for extended navigation keys (PageUp/Down, Home, End)."""
-
-    @pytest.fixture
-    def many_changes(self):
-        """Create many changes for pagination testing."""
-        return [
+        Consolidates: page navigation keys, flip uncertain decision.
+        """
+        # Create 20 changes for pagination
+        changes = [
             Change(
                 title=f"Change {i}",
                 repository=Repository(
@@ -769,106 +596,41 @@ class TestNavigationKeys:
                 ),
                 number=i,
             )
-            for i in range(1, 21)  # Start from 1 since number must be > 0
+            for i in range(1, 21)
         ]
-
-    @pytest.fixture
-    def many_judgments(self, many_changes):
-        """Create many judgments for pagination testing."""
-        return [
+        judgments = [
             Judgment(
-                change_id=change.get_change_id(),
-                decision=Decision.INCLUDE,
+                change_id=c.get_change_id(),
+                decision=Decision.UNCERTAIN if i == 0 else Decision.INCLUDE,
                 reasoning="Test",
                 product="Test",
             )
-            for change in many_changes
+            for i, c in enumerate(changes)
         ]
 
-    @pytest.mark.asyncio
-    async def test_pagedown_navigation(self, many_judgments, many_changes):
-        """Test PageDown key moves selection down by viewport height."""
-        app = ReviewApp(many_judgments, many_changes)
+        app = ReviewApp(judgments, changes)
         async with app.run_test() as pilot:
-            assert app.selected_index == 0
-            await pilot.press("pagedown")
-            # Should have moved down
-            assert app.selected_index > 0
+            # === Page navigation ===
+            await pilot.press("end")
+            assert app.selected_index == len(judgments) - 1
 
-    @pytest.mark.asyncio
-    async def test_pageup_navigation(self, many_judgments, many_changes):
-        """Test PageUp key moves selection up by viewport height."""
-        app = ReviewApp(many_judgments, many_changes)
-        async with app.run_test() as pilot:
-            # Move down first
-            app.selected_index = 15
-            app._refresh_list()
-            await pilot.press("pageup")
-            # Should have moved up
-            assert app.selected_index < 15
-
-    @pytest.mark.asyncio
-    async def test_home_key(self, many_judgments, many_changes):
-        """Test Home key jumps to first item."""
-        app = ReviewApp(many_judgments, many_changes)
-        async with app.run_test() as pilot:
-            # Move to middle
-            app.selected_index = 10
-            app._refresh_list()
             await pilot.press("home")
             assert app.selected_index == 0
 
-    @pytest.mark.asyncio
-    async def test_end_key(self, many_judgments, many_changes):
-        """Test End key jumps to last item."""
-        app = ReviewApp(many_judgments, many_changes)
-        async with app.run_test() as pilot:
-            await pilot.press("end")
-            assert app.selected_index == len(many_judgments) - 1
+            await pilot.press("pagedown")
+            assert app.selected_index > 0
+            pagedown_pos = app.selected_index
 
+            await pilot.press("pageup")
+            assert app.selected_index < pagedown_pos
 
-class TestFlipUncertainDecision:
-    """Tests for flipping UNCERTAIN decisions."""
-
-    @pytest.fixture
-    def uncertain_change(self):
-        """Create a change for testing."""
-        return [
-            Change(
-                title="Uncertain change",
-                repository=Repository(
-                    host="github.com", path="org/repo", provider_type="github"
-                ),
-                number=100,
-            )
-        ]
-
-    @pytest.fixture
-    def uncertain_judgment(self, uncertain_change):
-        """Create an uncertain judgment."""
-        return [
-            Judgment(
-                change_id=uncertain_change[0].get_change_id(),
-                decision=Decision.UNCERTAIN,
-                reasoning="Cannot determine",
-                product="Test",
-            )
-        ]
-
-    @pytest.mark.asyncio
-    async def test_flip_uncertain_to_include(
-        self, uncertain_judgment, uncertain_change
-    ):
-        """Test flipping UNCERTAIN decision defaults to INCLUDE."""
-        app = ReviewApp(uncertain_judgment, uncertain_change)
-        async with app.run_test() as pilot:
-            await pilot.press("enter")  # Enter detail view
+            # === Flip UNCERTAIN to INCLUDE ===
+            await pilot.press("home")  # Go to first (UNCERTAIN)
+            await pilot.press("enter")
             assert app.in_detail_view
-            await pilot.press("f")  # Flip decision - opens modal
-            # Modal should be open, skip it
-            await pilot.press("escape")
-            # Decision should have been flipped to INCLUDE
-            assert uncertain_judgment[0].user_decision == Decision.INCLUDE
+            await pilot.press("f")  # Flip - opens modal
+            await pilot.press("escape")  # Skip modal
+            assert judgments[0].user_decision == Decision.INCLUDE
 
 
 class TestReviewJudgmentsFunction:
@@ -882,47 +644,3 @@ class TestReviewJudgmentsFunction:
         # verify the function signature exists and returns correct type
         # This is mainly for import/signature testing
         assert callable(review_judgments)
-
-
-class TestUserReasoningDisplay:
-    """Tests for displaying user reasoning in detail view."""
-
-    @pytest.fixture
-    def change_with_reasoning(self):
-        """Create a change for testing."""
-        return [
-            Change(
-                title="Test change",
-                repository=Repository(
-                    host="github.com", path="org/repo", provider_type="github"
-                ),
-                number=100,
-            )
-        ]
-
-    @pytest.fixture
-    def judgment_with_reasoning(self, change_with_reasoning):
-        """Create judgment with user reasoning."""
-        j = Judgment(
-            change_id=change_with_reasoning[0].get_change_id(),
-            decision=Decision.EXCLUDE,
-            reasoning="AI reasoning",
-            product="Test",
-        )
-        j.user_decision = Decision.INCLUDE
-        j.user_reasoning = "User explanation for override"
-        return [j]
-
-    @pytest.mark.asyncio
-    async def test_detail_view_shows_user_reasoning(
-        self, judgment_with_reasoning, change_with_reasoning
-    ):
-        """Test that detail view displays user reasoning when present."""
-        app = ReviewApp(judgment_with_reasoning, change_with_reasoning)
-        async with app.run_test() as pilot:
-            await pilot.press("enter")
-            assert app.in_detail_view
-            # Verify judgment has user reasoning
-            j = app.judgments[0]
-            assert j.user_reasoning == "User explanation for override"
-            assert j.was_corrected

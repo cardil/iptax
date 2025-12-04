@@ -81,19 +81,27 @@ async def _race_auth_detection(page: Page, login_form: Locator) -> str:
             return_when=asyncio.FIRST_COMPLETED,
         )
 
-        # Cancel pending tasks
+        # Cancel pending tasks and consume any exceptions
         for task in pending:
             task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
 
-        # Get the result from the winning task
+        # First, retrieve all task results to avoid "exception never retrieved"
+        # warning. Both tasks can end up in done if they finish quickly (common
+        # with mocks).
+        winning_result = None
         for task in done:
             try:
-                return task.result()
+                result = task.result()
+                if winning_result is None:
+                    winning_result = result
             except Exception as e:
                 # Expected: one task wins, the other times out. This is normal.
                 logger.debug("Auth detection race loser (expected): %s", e)
+
+        if winning_result is not None:
+            return winning_result
 
         # If both failed, check current state
         if _is_workday_url(page.url):
@@ -165,10 +173,10 @@ async def _submit_credentials_once(
             return_when=asyncio.FIRST_COMPLETED,
         )
 
-        # Cancel pending tasks
+        # Cancel pending tasks and consume any exceptions
         for task in pending:
             task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await task
 
         # Process completed tasks
@@ -209,21 +217,28 @@ def _process_login_race_result(
         BadCredentialsError: If credentials are wrong
         AuthenticationError: If login failed for other reasons
     """
+    # First, retrieve ALL task results to avoid "exception never retrieved"
+    # warning. Both tasks can end up in done if they finish quickly (common
+    # with mocks). We must retrieve all exceptions before raising any.
+    results: list[str] = []
     for task in done:
         try:
-            result = task.result()
-            if result == LOGIN_SUCCESS:
-                logger.info("SSO login successful - redirected to Workday")
-                return True
-            if result == LOGIN_FAILURE:
-                logger.warning("SSO login form reappeared - bad credentials")
-                _raise_bad_credentials()
+            results.append(task.result())
         except (AuthenticationError, BadCredentialsError):
             raise
         except Exception as e:
             # Expected: login race optimization - we race "wait for redirect" vs
             # "wait for form reappear". The loser always times out. This is normal.
             logger.debug("Race condition loser timeout (expected): %s", e)
+
+    # Now process the collected results
+    for result in results:
+        if result == LOGIN_SUCCESS:
+            logger.info("SSO login successful - redirected to Workday")
+            return True
+        if result == LOGIN_FAILURE:
+            logger.warning("SSO login form reappeared - bad credentials")
+            _raise_bad_credentials()
 
     # If we get here, both tasks failed unexpectedly
     if _is_workday_url(current_url):
