@@ -118,6 +118,24 @@ class CalendarEntriesCollector:
 
         return working_hours, time_off_hours, working_hours + time_off_hours
 
+    def get_entries_for_range(
+        self, start_date: date, end_date: date
+    ) -> list[CalendarEntry]:
+        """Get all entries within a date range.
+
+        Args:
+            start_date: Start of range (inclusive)
+            end_date: End of range (inclusive)
+
+        Returns:
+            List of calendar entries in the specified range
+        """
+        return [
+            entry
+            for entry in self.entries
+            if start_date <= entry.entry_date <= end_date
+        ]
+
 
 def _parse_calendar_entry(entry: dict) -> CalendarEntry | None:
     """Parse a single calendar entry from API response.

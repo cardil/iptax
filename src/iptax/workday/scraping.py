@@ -9,7 +9,7 @@ from collections.abc import Callable, Coroutine
 from datetime import date
 from typing import Any
 
-from iptax.models import WorkHours
+from iptax.models import WorkdayCalendarEntry, WorkHours
 from iptax.workday.browser import (
     CALENDAR_ENTRIES_API_PATTERN,
     ELEMENT_TIMEOUT,
@@ -283,7 +283,7 @@ async def extract_work_hours(
         progress_callback: Optional callback to report progress
 
     Returns:
-        WorkHours with aggregated data
+        WorkHours with aggregated data and individual calendar entries
     """
     # Navigate to previous week first, so when we set up the response handler
     # and navigate back to the first week, we capture its API response
@@ -381,10 +381,22 @@ async def extract_work_hours(
             total,
         )
 
+        # Get entries in the requested range and convert to WorkdayCalendarEntry
+        range_entries = [
+            WorkdayCalendarEntry(
+                entry_date=entry.entry_date,
+                title=entry.title,
+                entry_type=entry.entry_type,
+                hours=entry.hours,
+            )
+            for entry in collector.get_entries_for_range(start_date, end_date)
+        ]
+
         return WorkHours(
             working_days=working_days,
             absence_days=absence_days,
             total_hours=total,
+            calendar_entries=range_entries,
         )
 
     finally:

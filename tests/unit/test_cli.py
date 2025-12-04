@@ -65,7 +65,7 @@ def test_history_command_with_valid_month_format(
     # Create a test history file
     from datetime import UTC, date, datetime
 
-    from iptax.history import HistoryManager
+    from iptax.cache.history import HistoryManager
     from iptax.models import HistoryEntry
 
     # Set XDG_CACHE_HOME to temp directory
@@ -98,7 +98,7 @@ def test_history_command_with_missing_month(
     """Test that history command handles missing month correctly."""
     from datetime import UTC, date, datetime
 
-    from iptax.history import HistoryManager
+    from iptax.cache.history import HistoryManager
     from iptax.models import HistoryEntry
 
     # Set XDG_CACHE_HOME to temp directory

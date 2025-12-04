@@ -7,9 +7,9 @@ from rich.console import Console
 from iptax.ai.models import Decision, Judgment
 from iptax.ai.review import ReviewResult
 from iptax.ai.review import review_judgments as run_review_tui
+from iptax.cache.history import HistoryManager
 from iptax.config import load_settings as config_load_settings
 from iptax.did import fetch_changes as did_fetch_changes
-from iptax.history import HistoryManager
 from iptax.models import Change, Settings
 
 from .elements import display_review_results

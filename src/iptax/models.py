@@ -4,6 +4,7 @@ This module defines all data models used throughout the iptax application,
 including configuration settings, report data, and AI filtering structures.
 """
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Literal
@@ -65,6 +66,27 @@ MONTH_NAMES_BILINGUAL = {
     "11": ("November", "Listopad"),
     "12": ("December", "Grudzień"),
 }
+
+
+@dataclass(frozen=True)
+class ReportDateRanges:
+    """Date ranges for a report.
+
+    Separates Workday (full month) and Did (skewed) date ranges.
+    """
+
+    workday_start: date
+    workday_end: date
+    did_start: date
+    did_end: date
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return (
+            f"ReportDateRanges("
+            f"workday={self.workday_start} to {self.workday_end}, "
+            f"did={self.did_start} to {self.did_end})"
+        )
 
 
 def _validate_not_empty_string(v: str) -> str:
@@ -346,6 +368,32 @@ class WorkdayConfig(BaseModel):
         return self
 
 
+class WorkdayCalendarEntry(BaseModel):
+    """A single calendar entry from Workday.
+
+    Represents one entry that was extracted from Workday's calendar API.
+    Can be work hours, PTO, or holiday.
+    """
+
+    entry_date: date = Field(
+        ...,
+        description="Date of the entry",
+    )
+    title: str = Field(
+        ...,
+        description="Entry title (e.g., 'Work', 'Paid Holiday')",
+    )
+    entry_type: str = Field(
+        ...,
+        description="Entry type (e.g., 'Time Tracking', 'Time Off', 'Holiday Calendar Entry Type')",
+    )
+    hours: float = Field(
+        ...,
+        description="Hours for this entry",
+        ge=0,
+    )
+
+
 class WorkHours(BaseModel):
     """Work hours data from Workday.
 
@@ -367,6 +415,10 @@ class WorkHours(BaseModel):
         ...,
         description="Total working hours",
         ge=0,
+    )
+    calendar_entries: list[WorkdayCalendarEntry] = Field(
+        default_factory=list,
+        description="Individual calendar entries from Workday (for validation)",
     )
 
     @property
@@ -732,6 +784,68 @@ class AIJudgment(BaseModel):
             and self.decision not in ("UNCERTAIN", "ERROR")
             and self.user_decision != self.decision
         )
+
+
+class InFlightReport(BaseModel):
+    """In-flight report data being collected and reviewed.
+
+    Stores all data needed for a monthly report while it's being
+    prepared, before final generation. Allows users to collect data,
+    run AI filtering, and review across multiple sessions.
+    """
+
+    month: str = Field(
+        ...,
+        description="Report month in YYYY-MM format",
+    )
+    workday_start: date = Field(
+        ...,
+        description="Start date for Workday data collection",
+    )
+    workday_end: date = Field(
+        ...,
+        description="End date for Workday data collection",
+    )
+    changes_since: date = Field(
+        ...,
+        description="Start date for Did changes (skewed based on last report)",
+    )
+    changes_until: date = Field(
+        ...,
+        description="End date for Did changes (typically today)",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="When this in-flight report was created (UTC)",
+    )
+    changes: list[Change] = Field(
+        default_factory=list,
+        description="Did changes (PRs/MRs) collected",
+    )
+    judgments: list[AIJudgment] = Field(
+        default_factory=list,
+        description="AI judgments for changes (empty until AI runs)",
+    )
+    workday_entries: list[WorkdayCalendarEntry] = Field(
+        default_factory=list,
+        description="Workday calendar entries for validation",
+    )
+    workday_validated: bool = Field(
+        default=False,
+        description="Whether Workday data has been validated for completeness",
+    )
+    total_hours: float | None = Field(
+        default=None,
+        description="Total work hours from Workday (if collected)",
+    )
+    working_days: int | None = Field(
+        default=None,
+        description="Working days from Workday (if collected)",
+    )
+    absence_days: int | None = Field(
+        default=None,
+        description="Absence days from Workday (if collected)",
+    )
 
 
 class ReportData(BaseModel):

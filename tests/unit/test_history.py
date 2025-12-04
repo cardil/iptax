@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 import tomli_w
 
-from iptax.history import (
+from iptax.cache.history import (
     HistoryCorruptedError,
     HistoryError,
     HistoryManager,

@@ -9,6 +9,11 @@ import yaml
 from rich.console import Console
 
 from iptax.ai.tui import ai_progress
+from iptax.cache.history import (
+    HistoryCorruptedError,
+    HistoryManager,
+    get_history_path,
+)
 from iptax.cli import elements, flows, mocks, utils
 from iptax.config import (
     ConfigError,
@@ -19,7 +24,6 @@ from iptax.config import (
     load_settings as config_load_settings,
 )
 from iptax.did import DidIntegrationError
-from iptax.history import HistoryCorruptedError, HistoryManager, get_history_path
 from iptax.utils.env import get_cache_dir
 from iptax.utils.logging import setup_logging
 from iptax.workday import WorkdayClient, WorkdayError

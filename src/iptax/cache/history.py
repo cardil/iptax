@@ -537,3 +537,36 @@ def get_history_path() -> Path:
         Path to the default history file location
     """
     return HistoryManager._get_default_history_path()
+
+
+def get_last_report_date() -> date | None:
+    """Get the date of the most recent report.
+
+    Returns:
+        Date of the last report's cutoff, or None if no reports exist
+    """
+    manager = get_history_manager()
+    manager.load()
+
+    entries = manager.get_all_entries()
+    if not entries:
+        return None
+
+    # Get the most recent entry
+    latest_month = max(entries.keys())
+    return entries[latest_month].last_cutoff_date
+
+
+def save_report_date(report_date: date, month: str) -> None:
+    """Save a report date to history.
+
+    This is a convenience function for updating history after report generation.
+
+    Args:
+        report_date: The cutoff date for the report
+        month: The month being reported (YYYY-MM format)
+    """
+    manager = get_history_manager()
+    manager.load()
+    manager.add_entry(month, report_date)
+    manager.save()
