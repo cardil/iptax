@@ -11,6 +11,7 @@ Note: These tests fetch changes from did ONCE per test run to minimize API calls
 """
 
 import os
+import re
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -225,15 +226,19 @@ class TestDidIntegration:
         if not fetched_changes:
             pytest.skip("No changes found in test date range")
 
+        # Pattern for emoji codes like :rocket:, :bug:, :sparkles:
+        emoji_pattern = re.compile(r":[a-z_]+:")
+
         for change in fetched_changes:
-            # Verify no emoji codes remain
+            # Verify no common emoji codes remain
             assert ":rocket:" not in change.title
             assert ":bug:" not in change.title
             assert ":sparkles:" not in change.title
 
-            # Title shouldn't have emoji pattern
+            # Title shouldn't have emoji pattern (e.g., :word:)
             if change.title:
-                assert not (change.title.startswith(":") and ":" in change.title[1:])
+                match = emoji_pattern.search(change.title)
+                assert match is None, f"Found emoji {match.group()} in: {change.title}"
 
     def test_provider_filtering(
         self,
