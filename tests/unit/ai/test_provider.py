@@ -7,7 +7,12 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from iptax.ai.models import AIResponse, Decision
-from iptax.ai.provider import AIDisabledError, AIProvider, AIProviderError
+from iptax.ai.provider import (
+    AIDisabledError,
+    AIProvider,
+    AIProviderError,
+    cleanup_litellm_clients,
+)
 from iptax.models import DisabledAIConfig, GeminiProviderConfig, VertexAIProviderConfig
 
 
@@ -468,3 +473,82 @@ def test_build_correction_prompt(gemini_config: GeminiProviderConfig) -> None:
         assert "YAML" in prompt
         assert "```yaml" in prompt
         assert "judgments" in prompt
+
+
+class TestCleanupLitellmClients:
+    """Tests for cleanup_litellm_clients function."""
+
+    def test_cleanup_when_cache_is_none(self) -> None:
+        """Test cleanup when cache attribute doesn't exist."""
+        with patch("iptax.ai.provider.litellm") as mock_litellm:
+            # Remove the attribute entirely
+            del mock_litellm.in_memory_llm_clients_cache
+            # Should not raise
+            cleanup_litellm_clients()
+
+    def test_cleanup_when_cache_dict_is_none(self) -> None:
+        """Test cleanup when cache_dict attribute doesn't exist."""
+        with patch("iptax.ai.provider.litellm") as mock_litellm:
+            mock_cache = MagicMock()
+            del mock_cache.cache_dict
+            mock_litellm.in_memory_llm_clients_cache = mock_cache
+            # Should not raise
+            cleanup_litellm_clients()
+
+    def test_cleanup_closes_httpx_clients(self) -> None:
+        """Test that httpx clients are closed and removed from cache."""
+        with patch("iptax.ai.provider.litellm") as mock_litellm:
+            # Create mock client with close method
+            mock_client = MagicMock()
+            mock_client.close = MagicMock()
+
+            # Create mock cache entry (wraps client in item.value)
+            mock_item = MagicMock()
+            mock_item.value = mock_client
+
+            # Set up cache_dict
+            cache_dict = {
+                "httpx_client_key1": mock_item,
+                "httpx_client_key2": mock_client,  # Direct client (no .value)
+                "other_key": MagicMock(),  # Should be ignored
+            }
+            mock_cache = MagicMock()
+            mock_cache.cache_dict = cache_dict
+            mock_litellm.in_memory_llm_clients_cache = mock_cache
+
+            cleanup_litellm_clients()
+
+            # Verify close was called on httpx clients
+            mock_client.close.assert_called()
+            # other_key should not have close called
+            assert "other_key" in cache_dict
+
+    def test_cleanup_handles_close_exception(self) -> None:
+        """Test that exceptions during close are suppressed."""
+        with patch("iptax.ai.provider.litellm") as mock_litellm:
+            # Create mock client that raises on close
+            mock_client = MagicMock()
+            mock_client.close.side_effect = Exception("Close failed")
+
+            mock_item = MagicMock()
+            mock_item.value = mock_client
+
+            cache_dict = {"httpx_client_key": mock_item}
+            mock_cache = MagicMock()
+            mock_cache.cache_dict = cache_dict
+            mock_litellm.in_memory_llm_clients_cache = mock_cache
+
+            # Should not raise despite close() failing
+            cleanup_litellm_clients()
+
+    def test_cleanup_handles_getattr_exception(self) -> None:
+        """Test that exceptions during getattr are suppressed."""
+        with patch("iptax.ai.provider.litellm") as mock_litellm:
+            # Make getattr on cache raise
+            mock_litellm.in_memory_llm_clients_cache = MagicMock()
+            type(mock_litellm.in_memory_llm_clients_cache).cache_dict = property(
+                lambda _self: (_ for _ in ()).throw(Exception("getattr failed"))
+            )
+
+            # Should not raise
+            cleanup_litellm_clients()
