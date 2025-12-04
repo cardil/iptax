@@ -1,5 +1,6 @@
 """Pytest configuration for e2e tests."""
 
+import asyncio
 import logging
 import shutil
 import socket
@@ -172,3 +173,48 @@ def mock_workday_config(mock_server: MockServerThread) -> WorkdayConfig:
         url=mock_server.workday_url,
         auth="sso",  # Use SSO (not Kerberos) for mock
     )
+
+
+def _playwright_exception_handler(
+    loop: asyncio.AbstractEventLoop, context: dict
+) -> None:
+    """Custom exception handler to suppress Playwright timeout errors during cleanup.
+
+    During test cleanup, Playwright may have pending operations that timeout
+    when the browser closes. These are expected and shouldn't be logged as errors.
+    """
+    exception = context.get("exception")
+    if exception is not None:
+        # Suppress Playwright timeout errors during cleanup
+        exception_str = str(exception)
+        if "TimeoutError" in type(exception).__name__ or "Timeout" in exception_str:
+            logger.debug(
+                "Suppressed expected Playwright timeout during cleanup: %s", exception
+            )
+            return
+
+    # For non-timeout exceptions, use the default handler
+    loop.default_exception_handler(context)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def suppress_playwright_cleanup_errors():
+    """Install a custom exception handler to suppress Playwright cleanup errors.
+
+    This prevents "Future exception was never retrieved" errors that occur when
+    Playwright operations timeout during browser cleanup.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop during fixture setup - that's fine
+        yield
+        return
+
+    original_handler = loop.get_exception_handler()
+    loop.set_exception_handler(_playwright_exception_handler)
+
+    yield
+
+    # Restore original handler
+    loop.set_exception_handler(original_handler)

@@ -273,8 +273,10 @@ class TestWorkdayClientFetchWorkHours:
 
     @pytest.fixture
     def mock_console(self):
-        """Create a mock console."""
-        return MagicMock()
+        """Create a mock console with is_jupyter=False to prevent ipywidgets warning."""
+        mock = MagicMock()
+        mock.is_jupyter = False
+        return mock
 
     @pytest.fixture
     def config(self):
@@ -480,6 +482,7 @@ class TestWorkdayClientConsoleInjection:
         """Test that custom console is used when provided."""
         config = WorkdayConfig(enabled=True, url="https://workday.example.org")
         mock_console = MagicMock()
+        mock_console.is_jupyter = False
 
         client = WorkdayClient(config, console=mock_console)
 

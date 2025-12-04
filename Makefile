@@ -95,7 +95,7 @@ unit: $(GUARDS)/unit.passed  ## Run unit tests
 
 $(GUARDS)/unit.passed: $(VENV)/init.done $(SRC_FILES) $(TEST_FILES)
 	@mkdir -p $(GUARDS)
-	$(VENV_BIN)/pytest tests/unit/ -v
+	$(VENV_BIN)/pytest tests/unit/ -v --durations=10 --unused-fixtures
 	@touch $@
 
 .PHONY: e2e

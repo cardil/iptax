@@ -43,7 +43,7 @@ dependencies = [
     "playwright>=1.40.0",
 
     # PDF generation
-    "weasyprint>=60.0",
+    "weasyprint>=66.0",
     "jinja2>=3.1.2",
 
     # HTTP client
@@ -74,6 +74,7 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-timeout>=2.2.0",  # For test timeouts
     "pytest-xdist>=3.5.0",  # For parallel test execution
+    "pytest-unused-fixtures>=0.1.1",  # Detect unused test fixtures
     "flask>=3.0.0",  # For e2e mock servers
     "werkzeug>=3.0.0",  # Flask dependency for e2e mock servers
 
@@ -220,6 +221,11 @@ markers = [
 ]
 # Use thread-based timeout to allow proper cleanup of daemon threads
 timeout_method = "thread"
+# Filter external library runtime warnings that we cannot fix
+filterwarnings = [
+    # litellm has internal Pydantic serialization issues at runtime
+    "ignore:Pydantic serializer warnings:UserWarning",
+]
 
 [tool.coverage.run]
 source = ["src"]
