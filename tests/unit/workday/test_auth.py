@@ -107,6 +107,44 @@ class TestProcessLoginRaceResult:
         with pytest.raises(AuthenticationError):
             _process_login_race_result(done, "https://auth.example.org/sso")
 
+    def test_login_race_multiple_tasks_both_success(self) -> None:
+        """Test when multiple tasks complete and both have success."""
+        # Both tasks complete with success (all results collected before processing)
+        task1 = MagicMock()
+        task1.result.return_value = "success"
+        task2 = MagicMock()
+        task2.result.return_value = "success"
+        done = {task1, task2}
+        result = _process_login_race_result(done, "https://auth.example.org/sso")
+        assert result is True
+
+    def test_login_race_one_task_raises_other_success(self) -> None:
+        """Test when one task raises exception but other succeeds."""
+        # One task raises exception (timeout), other has success
+        task1 = MagicMock()
+        task1.result.side_effect = Exception("Timeout")
+        task2 = MagicMock()
+        task2.result.return_value = "success"
+        done = {task1, task2}
+        result = _process_login_race_result(done, "https://auth.example.org/sso")
+        assert result is True
+
+    def test_login_race_auth_exception_propagates(self) -> None:
+        """Test that AuthenticationError from task is re-raised."""
+        task = MagicMock()
+        task.result.side_effect = AuthenticationError("Auth failed")
+        done = {task}
+        with pytest.raises(AuthenticationError, match="Auth failed"):
+            _process_login_race_result(done, "https://auth.example.org/sso")
+
+    def test_login_race_bad_credentials_exception_propagates(self) -> None:
+        """Test that BadCredentialsError from task is re-raised."""
+        task = MagicMock()
+        task.result.side_effect = BadCredentialsError("Wrong password")
+        done = {task}
+        with pytest.raises(BadCredentialsError, match="Wrong password"):
+            _process_login_race_result(done, "https://auth.example.org/sso")
+
 
 class TestAuthenticate:
     """Test authenticate function."""
