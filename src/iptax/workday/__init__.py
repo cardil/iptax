@@ -4,7 +4,6 @@ from iptax.workday.client import WorkdayClient
 from iptax.workday.models import (
     AuthenticationError,
     CalendarEntriesCollector,
-    CalendarEntry,
     NavigationError,
     WorkdayError,
 )
@@ -14,7 +13,6 @@ from iptax.workday.utils import calculate_working_days
 __all__ = [
     "AuthenticationError",
     "CalendarEntriesCollector",
-    "CalendarEntry",
     "NavigationError",
     "WorkdayClient",
     "WorkdayError",

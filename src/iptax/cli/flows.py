@@ -17,7 +17,6 @@ from iptax.did import fetch_changes as did_fetch_changes
 from iptax.models import Change, Decision, InFlightReport, Judgment, Settings
 from iptax.timing import resolve_date_ranges
 from iptax.workday.client import WorkdayClient
-from iptax.workday.models import CalendarEntry
 from iptax.workday.validation import validate_workday_coverage
 
 from .elements import (
@@ -171,16 +170,9 @@ async def _fetch_workday_data(
     work_hours = await client.fetch_work_hours(start_date, end_date, headless=True)
 
     # Validate coverage
-    calendar_entries = [
-        CalendarEntry(
-            entry_date=e.entry_date,
-            title=e.title,
-            entry_type=e.entry_type,
-            hours=e.hours,
-        )
-        for e in work_hours.calendar_entries
-    ]
-    missing = validate_workday_coverage(calendar_entries, start_date, end_date)
+    missing = validate_workday_coverage(
+        work_hours.calendar_entries, start_date, end_date
+    )
 
     if missing:
         console.print(

@@ -8,7 +8,7 @@ under Polish law.
 
 from datetime import date, timedelta
 
-from .models import CalendarEntry
+from iptax.models import WorkdayCalendarEntry
 
 # Weekday constants (Monday=0, Sunday=6)
 FRIDAY_WEEKDAY = 4
@@ -43,7 +43,7 @@ def get_workdays_in_range(start_date: date, end_date: date) -> list[date]:
 
 
 def validate_workday_coverage(
-    entries: list[CalendarEntry],
+    entries: list[WorkdayCalendarEntry],
     start_date: date,
     end_date: date,
 ) -> list[date]:
@@ -66,13 +66,17 @@ def validate_workday_coverage(
         List of dates that are missing entries. Empty list means complete coverage.
 
     Example:
-        >>> from .models import CalendarEntry
+        >>> from iptax.models import WorkdayCalendarEntry
         >>> start = date(2024, 11, 1)
         >>> end = date(2024, 11, 30)
         >>> entries = [
-        ...     CalendarEntry(date(2024, 11, 1), "Work", "Time Tracking", 8.0),
-        ...     CalendarEntry(
-        ...         date(2024, 11, 4), "Holiday", "Holiday Calendar Entry Type", 0.0
+        ...     WorkdayCalendarEntry(
+        ...         entry_date=date(2024, 11, 1), title="Work",
+        ...         entry_type="Time Tracking", hours=8.0
+        ...     ),
+        ...     WorkdayCalendarEntry(
+        ...         entry_date=date(2024, 11, 4), title="Holiday",
+        ...         entry_type="Holiday Calendar Entry Type", hours=0.0
         ...     ),
         ... ]
         >>> missing = validate_workday_coverage(entries, start, end)

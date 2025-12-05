@@ -6,10 +6,10 @@ from datetime import date
 
 import pytest
 
+from iptax.models import WorkdayCalendarEntry
 from iptax.workday.models import (
     AuthenticationError,
     CalendarEntriesCollector,
-    CalendarEntry,
     NavigationError,
     WorkdayError,
     _parse_calendar_entry,
@@ -299,19 +299,19 @@ class TestCalendarEntriesCollector:
         """Test calculating hours for a specific month."""
         collector = CalendarEntriesCollector()
         collector.entries = [
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2025, 11, 10),
                 title="Regular/Time Worked",
                 entry_type="Time Tracking",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2025, 11, 11),
                 title="Paid Holiday",
                 entry_type="Time Tracking",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2025, 11, 28),
                 title="Paid Time Off in Hours",
                 entry_type="Time Tracking",
@@ -327,13 +327,13 @@ class TestCalendarEntriesCollector:
         """Test that get_hours_for_month filters entries by month and year."""
         collector = CalendarEntriesCollector()
         collector.entries = [
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2025, 11, 10),
                 title="Regular/Time Worked",
                 entry_type="Time Tracking",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2025, 12, 5),
                 title="Regular/Time Worked",
                 entry_type="Time Tracking",
@@ -348,13 +348,13 @@ class TestCalendarEntriesCollector:
         """Test that Time Off type entries are skipped."""
         collector = CalendarEntriesCollector()
         collector.entries = [
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2025, 11, 10),
                 title="Regular/Time Worked",
                 entry_type="Time Tracking",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2025, 11, 28),
                 title="TOIL",
                 entry_type="Time Off",

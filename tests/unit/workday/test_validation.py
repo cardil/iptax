@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from iptax.workday.models import CalendarEntry
+from iptax.models import WorkdayCalendarEntry
 from iptax.workday.validation import get_workdays_in_range, validate_workday_coverage
 
 
@@ -74,31 +74,31 @@ class TestValidateWorkdayCoverage:
 
         # Create entries for all workdays
         entries = [
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 4),
                 title="Work",
                 entry_type="work",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 5),
                 title="Work",
                 entry_type="work",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 6),
                 title="Work",
                 entry_type="work",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 7),
                 title="Work",
                 entry_type="work",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 8),
                 title="Work",
                 entry_type="work",
@@ -117,19 +117,19 @@ class TestValidateWorkdayCoverage:
 
         # Missing Wednesday and Friday
         entries = [
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 4),
                 title="Work",
                 entry_type="work",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 5),
                 title="Work",
                 entry_type="work",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 7),
                 title="Work",
                 entry_type="work",
@@ -150,13 +150,13 @@ class TestValidateWorkdayCoverage:
 
         # Only have Friday and Monday, no Saturday/Sunday
         entries = [
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 1),
                 title="Work",
                 entry_type="work",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 4),
                 title="Work",
                 entry_type="work",
@@ -175,19 +175,19 @@ class TestValidateWorkdayCoverage:
 
         # Mix of work and PTO
         entries = [
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 4),
                 title="Work",
                 entry_type="work",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 5),
                 title="Vacation",
                 entry_type="pto",
                 hours=8.0,
             ),
-            CalendarEntry(
+            WorkdayCalendarEntry(
                 entry_date=date(2024, 11, 6),
                 title="Holiday",
                 entry_type="holiday",
