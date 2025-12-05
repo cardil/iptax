@@ -528,7 +528,12 @@ def _convert_gitlab_mr(stat: MergedRequest, provider_name: str) -> Change:
         raise InvalidStatDataError("Missing path_with_namespace in project dict")
 
     # Get title from data dict
-    title = stat.data.get("title", "")
+    stat_data = stat.data
+    if not isinstance(stat_data, dict):
+        raise InvalidStatDataError(
+            f"Expected data dict, got {type(stat_data).__name__}"
+        )
+    title = stat_data.get("title", "")
     if not title:
         raise InvalidStatDataError(f"Missing title for {repo_path}!{number}")
 

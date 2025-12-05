@@ -8,10 +8,15 @@ and review process. The cache allows users to:
 """
 
 import json
+import logging
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from iptax.models import InFlightReport
 from iptax.utils.env import get_cache_dir
+
+logger = logging.getLogger(__name__)
 
 
 class InFlightCache:
@@ -80,16 +85,19 @@ class InFlightCache:
             month: Month in YYYY-MM format
 
         Returns:
-            InFlightReport if exists, None otherwise
+            InFlightReport if exists, None otherwise (also None for corrupted files)
         """
         cache_path = self._get_cache_path(month)
         if not cache_path.exists():
             return None
 
-        with cache_path.open("r") as f:
-            data = json.load(f)
-
-        return InFlightReport(**data)
+        try:
+            with cache_path.open("r") as f:
+                data = json.load(f)
+            return InFlightReport(**data)
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.warning("Corrupted cache file %s: %s", cache_path, e)
+            return None
 
     def save(self, report: InFlightReport) -> Path:
         """Save in-flight report to cache.

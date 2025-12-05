@@ -420,6 +420,11 @@ def _display_collection_summary(console: Console, report: InFlightReport) -> Non
             console.print("  [yellow]⚠ Workday validation: INCOMPLETE[/yellow]")
 
 
+# Month alias sets for _resolve_review_month
+_LATEST_ALIASES = {"latest", "current"}
+_PREVIOUS_ALIASES = {"last", "previous", "prev"}
+
+
 def _resolve_review_month(
     month_spec: str | None,
     available_reports: list[str],
@@ -427,7 +432,7 @@ def _resolve_review_month(
     """Resolve month specification to a concrete month key.
 
     Args:
-        month_spec: Month specification (None|latest|last|YYYY-MM)
+        month_spec: Month specification (None|latest|current|last|previous|prev|YYYY-MM)
         available_reports: List of available month keys
 
     Returns:
@@ -436,11 +441,11 @@ def _resolve_review_month(
     if not available_reports:
         return None
 
-    if month_spec is None or month_spec == "latest":
+    if month_spec is None or month_spec in _LATEST_ALIASES:
         # Return the most recent
         return max(available_reports)
 
-    if month_spec == "last":
+    if month_spec in _PREVIOUS_ALIASES:
         # Return second most recent if available, else most recent
         sorted_reports = sorted(available_reports)
         if len(sorted_reports) >= MIN_REPORTS_FOR_LAST:
