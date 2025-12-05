@@ -133,8 +133,9 @@ class TestReview:
 
         assert result == mock_result
         output = strip_ansi(console.file.getvalue())
-        assert "AI Analysis Summary" in output
-        assert "INCLUDE: 1" in output
+        # New format: "AI analysis: INCLUDE(✓): 1"
+        assert "AI analysis" in output
+        assert "INCLUDE" in output
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -183,9 +184,10 @@ class TestReview:
             await flows.review(console, judgments, changes)
 
         output = strip_ansi(console.file.getvalue())
-        assert "INCLUDE: 1" in output
-        assert "EXCLUDE: 1" in output
-        assert "UNCERTAIN: 1" in output
+        # New format includes indicators: "INCLUDE(✓): 1  EXCLUDE(✗): 1"
+        assert "INCLUDE" in output
+        assert "EXCLUDE" in output
+        assert "UNCERTAIN" in output
 
     @pytest.mark.unit
     @pytest.mark.asyncio

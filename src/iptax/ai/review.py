@@ -508,8 +508,17 @@ class ReviewApp(App):
         except LookupError:
             return 10  # Fallback when widget is missing
 
+    def _has_modal_open(self) -> bool:
+        """Check if a modal screen is currently open."""
+        # screen_stack has at least the main screen; more than 1 means modal is open
+        return len(self.screen_stack) > 1
+
     def _handle_detail_key(self, key: str) -> None:
         """Handle key events in detail view."""
+        # Don't process keys if a modal is open (modal handles its own escape)
+        if self._has_modal_open():
+            return
+
         if key == "escape":
             self._show_list_view()
         elif key == "f":

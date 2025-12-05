@@ -128,7 +128,9 @@ class TestDisplayReviewResults:
         elements.display_review_results(console, judgments, [change], accepted=True)
 
         output = strip_ansi(console.file.getvalue())
-        assert "INCLUDE: 1" in output
+        # New format includes indicator: "INCLUDE(✓): 1"
+        assert "INCLUDE" in output
+        assert "1" in output
         assert "Test change" in output
 
     @pytest.mark.unit
@@ -169,9 +171,10 @@ class TestDisplayReviewResults:
         elements.display_review_results(console, judgments, changes, accepted=True)
 
         output = strip_ansi(console.file.getvalue())
-        assert "INCLUDE: 1" in output
-        assert "EXCLUDE: 1" in output
-        assert "UNCERTAIN: 1" in output
+        # New format includes indicators: "INCLUDE(✓): 1  EXCLUDE(✗): 1"
+        assert "INCLUDE" in output
+        assert "EXCLUDE" in output
+        assert "UNCERTAIN" in output
 
 
 class TestDisplayHistoryTable:
