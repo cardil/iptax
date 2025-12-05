@@ -14,6 +14,8 @@ from iptax.cache.history import (
     HistoryManager,
     get_history_manager,
     get_history_path,
+    get_last_report_date,
+    save_report_date,
 )
 from iptax.models import HistoryEntry
 
@@ -122,6 +124,20 @@ class TestHistoryLoadSave:
         with pytest.raises(HistoryCorruptedError, match="Cannot parse"):
             manager.load()
 
+    def test_load_generic_exception(self, tmp_path: Path) -> None:
+        """Test loading handles generic exceptions (lines 116-117)."""
+        history_path = tmp_path / "history.toml"
+        history_path.write_text("[valid]\nkey = 'value'", encoding="utf-8")
+
+        manager = HistoryManager(history_path=history_path)
+
+        # Mock the file open to raise a generic exception after TOML parsing
+        with (
+            patch.object(Path, "open", side_effect=OSError("Permission denied")),
+            pytest.raises(HistoryCorruptedError, match="Failed to load"),
+        ):
+            manager.load()
+
     def test_load_invalid_entry(self, tmp_path: Path) -> None:
         """Test loading history with invalid entry data."""
         history_path = tmp_path / "history.toml"
@@ -177,6 +193,45 @@ class TestHistoryLoadSave:
 
         assert history_path.parent.exists()
         assert history_path.exists()
+
+    def test_save_failure(self, tmp_path: Path) -> None:
+        """Test save handles exceptions (lines 146-147)."""
+        history_path = tmp_path / "history.toml"
+        manager = HistoryManager(history_path=history_path)
+        manager._loaded = True
+        manager._history["2024-10"] = HistoryEntry(
+            last_cutoff_date=date(2024, 10, 25),
+            generated_at=datetime.now(UTC),
+        )
+
+        # Mock open to raise exception during save
+        with (
+            patch.object(Path, "open", side_effect=OSError("Disk full")),
+            pytest.raises(HistoryError, match="Failed to save"),
+        ):
+            manager.save()
+
+    def test_ensure_loaded_auto_loads(self, tmp_path: Path) -> None:
+        """Test _ensure_loaded auto-loads when not loaded (line 152)."""
+        history_path = tmp_path / "history.toml"
+        # Create valid history
+        data = {
+            "2024-10": {
+                "last_cutoff_date": "2024-10-25",
+                "generated_at": "2024-10-26T10:00:00Z",
+            }
+        }
+        with history_path.open("wb") as f:
+            tomli_w.dump(data, f)
+
+        manager = HistoryManager(history_path=history_path)
+        assert not manager._loaded
+
+        # Call a method that uses _ensure_loaded
+        result = manager.has_entry("2024-10")
+
+        assert manager._loaded
+        assert result is True
 
 
 class TestHistoryEntries:
@@ -385,6 +440,25 @@ class TestDateRangeCalculation:
         with pytest.raises(ValueError, match="Invalid month format"):
             manager.get_date_range("invalid")
 
+    @patch("iptax.cache.history.questionary")
+    def test_get_date_range_first_report_january(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test first report in January handles year boundary (lines 356-357)."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+        manager._loaded = True
+
+        # Mock user input for cutoff date
+        mock_text = Mock()
+        mock_text.ask.return_value = "2023-12-25"
+        mock_questionary.text.return_value = mock_text
+        mock_questionary.print = Mock()
+
+        start, end = manager.get_date_range("2024-01", prompt_first=True)
+
+        assert start == date(2023, 12, 26)  # User input + 1
+        assert end == date(2024, 1, 31)  # Last day of January
+
     def test_check_date_range_span_normal(self, tmp_path: Path) -> None:
         """Test date range span check for normal range."""
         manager = HistoryManager(history_path=tmp_path / "history.toml")
@@ -432,6 +506,67 @@ class TestDateRangeCalculation:
 
         result = manager.check_date_range_span(start, end, warn_days=31)
         assert result is False
+
+    @patch("iptax.cache.history.questionary")
+    def test_check_date_range_span_months_missed_message(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test date range span shows months missed message (lines 401-406)."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+
+        # Range spans ~90 days (approximately 3 months)
+        start = date(2024, 8, 1)
+        end = date(2024, 10, 31)
+
+        mock_questionary.print = Mock()
+        mock_select = Mock()
+        mock_select.ask.return_value = (
+            "Continue with this range (may include too many changes)"
+        )
+        mock_questionary.select.return_value = mock_select
+
+        result = manager.check_date_range_span(start, end, warn_days=31)
+        assert result is True
+
+        # Verify print was called with months missed message
+        print_calls = [str(call) for call in mock_questionary.print.call_args_list]
+        assert any("month" in call for call in print_calls)
+
+    @patch("iptax.cache.history.questionary")
+    def test_check_date_range_span_user_quits(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test date range span when user quits (line 418)."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+
+        start = date(2024, 9, 1)
+        end = date(2024, 11, 30)
+
+        mock_questionary.print = Mock()
+        mock_select = Mock()
+        mock_select.ask.return_value = "Quit and generate missing month reports first"
+        mock_questionary.select.return_value = mock_select
+
+        with pytest.raises(KeyboardInterrupt):
+            manager.check_date_range_span(start, end, warn_days=31)
+
+    @patch("iptax.cache.history.questionary")
+    def test_check_date_range_span_user_cancels_none(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test date range span when user returns None (line 417)."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+
+        start = date(2024, 9, 1)
+        end = date(2024, 11, 30)
+
+        mock_questionary.print = Mock()
+        mock_select = Mock()
+        mock_select.ask.return_value = None
+        mock_questionary.select.return_value = mock_select
+
+        with pytest.raises(KeyboardInterrupt):
+            manager.check_date_range_span(start, end, warn_days=31)
 
 
 class TestRegenerationPrompt:
@@ -487,6 +622,53 @@ class TestRegenerationPrompt:
         with pytest.raises(KeyboardInterrupt):
             manager.prompt_regenerate("2024-10")
 
+    @patch("iptax.cache.history.questionary")
+    def test_prompt_regenerate_with_regenerated_at(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test prompt shows regenerated_at if present (lines 449-450)."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+        manager._loaded = True
+
+        manager._history["2024-10"] = HistoryEntry(
+            last_cutoff_date=date(2024, 10, 25),
+            generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+            regenerated_at=datetime(2024, 10, 28, 14, 30, 0, tzinfo=UTC),
+        )
+
+        mock_questionary.print = Mock()
+        mock_select = Mock()
+        mock_select.ask.return_value = "Regenerate (overwrites existing files)"
+        mock_questionary.select.return_value = mock_select
+
+        result = manager.prompt_regenerate("2024-10")
+        assert result is True
+
+        # Verify regenerated_at message was printed
+        print_calls = [str(call) for call in mock_questionary.print.call_args_list]
+        assert any("regenerated" in call.lower() for call in print_calls)
+
+    @patch("iptax.cache.history.questionary")
+    def test_prompt_regenerate_returns_none(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test prompt when select returns None."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+        manager._loaded = True
+
+        manager._history["2024-10"] = HistoryEntry(
+            last_cutoff_date=date(2024, 10, 25),
+            generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+        )
+
+        mock_questionary.print = Mock()
+        mock_select = Mock()
+        mock_select.ask.return_value = None
+        mock_questionary.select.return_value = mock_select
+
+        with pytest.raises(KeyboardInterrupt):
+            manager.prompt_regenerate("2024-10")
+
 
 class TestConvenienceFunctions:
     """Test convenience functions."""
@@ -502,3 +684,235 @@ class TestConvenienceFunctions:
         path = get_history_path()
         assert isinstance(path, Path)
         assert str(path).endswith("history.toml")
+
+    def test_get_last_report_date_with_entries(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Test get_last_report_date with existing entries (lines 556-557)."""
+        # Set up test environment
+        cache_dir = tmp_path / "cache" / "iptax"
+        cache_dir.mkdir(parents=True)
+        history_path = cache_dir / "history.toml"
+
+        # Create history with entries
+        data = {
+            "2024-09": {
+                "last_cutoff_date": "2024-09-25",
+                "generated_at": "2024-09-26T10:00:00Z",
+            },
+            "2024-10": {
+                "last_cutoff_date": "2024-10-25",
+                "generated_at": "2024-10-26T10:00:00Z",
+            },
+        }
+        with history_path.open("wb") as f:
+            tomli_w.dump(data, f)
+
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+        result = get_last_report_date()
+        assert result == date(2024, 10, 25)  # Most recent entry
+
+    def test_get_last_report_date_empty(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Test get_last_report_date with no entries."""
+        cache_dir = tmp_path / "cache" / "iptax"
+        cache_dir.mkdir(parents=True)
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+        result = get_last_report_date()
+        assert result is None
+
+    def test_save_report_date(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Test save_report_date convenience function (lines 569-572)."""
+        cache_dir = tmp_path / "cache" / "iptax"
+        cache_dir.mkdir(parents=True)
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+        save_report_date(date(2024, 11, 25), "2024-11")
+
+        # Verify it was saved
+        history_path = cache_dir / "history.toml"
+        assert history_path.exists()
+
+        with history_path.open("rb") as f:
+            data = tomllib.load(f)
+
+        assert "2024-11" in data
+        assert data["2024-11"]["last_cutoff_date"] == date(2024, 11, 25)
+
+
+class TestHandleCorruptedFile:
+    """Test handle_corrupted_file method."""
+
+    @patch("iptax.cache.history.questionary")
+    @patch("iptax.cache.history.shutil")
+    def test_handle_corrupted_backup(
+        self, mock_shutil: Mock, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test handle_corrupted_file with backup option (lines 492-510)."""
+        history_path = tmp_path / "history.toml"
+        history_path.write_text("corrupted content", encoding="utf-8")
+
+        manager = HistoryManager(history_path=history_path)
+
+        mock_questionary.print = Mock()
+        mock_select = Mock()
+        mock_select.ask.return_value = "Backup and create new history (safe)"
+        mock_questionary.select.return_value = mock_select
+
+        with pytest.raises(SystemExit) as exc_info:
+            manager.handle_corrupted_file()
+
+        assert exc_info.value.code == 0
+        mock_shutil.copy2.assert_called_once()
+
+    @patch("iptax.cache.history.questionary")
+    def test_handle_corrupted_fix_manually(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test handle_corrupted_file with fix manually option (lines 512-518)."""
+        history_path = tmp_path / "history.toml"
+        history_path.write_text("corrupted content", encoding="utf-8")
+
+        manager = HistoryManager(history_path=history_path)
+
+        mock_questionary.print = Mock()
+        mock_select = Mock()
+        mock_select.ask.return_value = "Fix manually (advanced)"
+        mock_questionary.select.return_value = mock_select
+
+        with pytest.raises(SystemExit) as exc_info:
+            manager.handle_corrupted_file()
+
+        assert exc_info.value.code == 1
+
+    @patch("iptax.cache.history.questionary")
+    def test_handle_corrupted_quit(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test handle_corrupted_file when user quits (line 489-490)."""
+        history_path = tmp_path / "history.toml"
+        history_path.write_text("corrupted content", encoding="utf-8")
+
+        manager = HistoryManager(history_path=history_path)
+
+        mock_questionary.print = Mock()
+        mock_select = Mock()
+        mock_select.ask.return_value = "Quit"
+        mock_questionary.select.return_value = mock_select
+
+        with pytest.raises(KeyboardInterrupt):
+            manager.handle_corrupted_file()
+
+    @patch("iptax.cache.history.questionary")
+    def test_handle_corrupted_returns_none(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test handle_corrupted_file when select returns None."""
+        history_path = tmp_path / "history.toml"
+        history_path.write_text("corrupted content", encoding="utf-8")
+
+        manager = HistoryManager(history_path=history_path)
+
+        mock_questionary.print = Mock()
+        mock_select = Mock()
+        mock_select.ask.return_value = None
+        mock_questionary.select.return_value = mock_select
+
+        with pytest.raises(KeyboardInterrupt):
+            manager.handle_corrupted_file()
+
+
+class TestPromptFirstCutoff:
+    """Test _prompt_first_cutoff method."""
+
+    @patch("iptax.cache.history.questionary")
+    def test_prompt_first_cutoff_user_cancels(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test _prompt_first_cutoff when user cancels (line 288)."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+
+        mock_questionary.print = Mock()
+        mock_text = Mock()
+        mock_text.ask.return_value = None  # User cancelled
+        mock_questionary.text.return_value = mock_text
+
+        with pytest.raises(KeyboardInterrupt, match="User cancelled"):
+            manager._prompt_first_cutoff()
+
+    @patch("iptax.cache.history.questionary")
+    def test_prompt_first_cutoff_empty_uses_default(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test _prompt_first_cutoff with empty response uses default (line 291)."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+
+        mock_questionary.print = Mock()
+        mock_text = Mock()
+        mock_text.ask.return_value = ""  # Empty response
+        mock_questionary.text.return_value = mock_text
+
+        default_date = date(2024, 10, 25)
+        result = manager._prompt_first_cutoff(default_date)
+        assert result == default_date
+
+    @patch("iptax.cache.history.questionary")
+    def test_prompt_first_cutoff_invalid_then_valid(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test _prompt_first_cutoff with invalid date then valid (lines 295-300)."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+
+        mock_questionary.print = Mock()
+        mock_text = Mock()
+        # First call returns invalid, second returns valid
+        mock_text.ask.side_effect = ["invalid-date", "2024-10-25"]
+        mock_questionary.text.return_value = mock_text
+
+        result = manager._prompt_first_cutoff(date(2024, 10, 20))
+        assert result == date(2024, 10, 25)
+
+        # Verify error was printed
+        print_calls = [str(call) for call in mock_questionary.print.call_args_list]
+        assert any("Invalid date format" in call for call in print_calls)
+
+    @patch("iptax.cache.history.questionary")
+    def test_prompt_first_cutoff_future_date_then_valid(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test _prompt_first_cutoff with future date then valid (lines 304-308)."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+
+        mock_questionary.print = Mock()
+        mock_text = Mock()
+        # First call returns future date, second returns valid past date
+        mock_text.ask.side_effect = ["2099-12-31", "2024-10-25"]
+        mock_questionary.text.return_value = mock_text
+
+        result = manager._prompt_first_cutoff(date(2024, 10, 20))
+        assert result == date(2024, 10, 25)
+
+        # Verify error was printed
+        print_calls = [str(call) for call in mock_questionary.print.call_args_list]
+        assert any("future" in call.lower() for call in print_calls)
+
+    @patch("iptax.cache.history.questionary")
+    def test_prompt_first_cutoff_no_default_date(
+        self, mock_questionary: Mock, tmp_path: Path
+    ) -> None:
+        """Test _prompt_first_cutoff calculates default when None (lines 268-277)."""
+        manager = HistoryManager(history_path=tmp_path / "history.toml")
+
+        mock_questionary.print = Mock()
+        mock_text = Mock()
+        mock_text.ask.return_value = "2024-10-25"
+        mock_questionary.text.return_value = mock_text
+
+        # Call without default_date
+        result = manager._prompt_first_cutoff(None)
+        assert result == date(2024, 10, 25)
