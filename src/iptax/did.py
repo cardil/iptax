@@ -14,6 +14,7 @@ from typing import Literal, cast
 import did.base
 import did.cli
 from did.plugins.github import Issue
+from did.plugins.gitlab import MergedRequest
 
 from iptax.models import Change, Repository, Settings
 
@@ -61,15 +62,22 @@ def fetch_changes(
     # Fetch changes from all configured providers
     all_changes: list[Change] = []
 
+    logger.info(f"Fetching changes from {len(settings.did.providers)} providers")
     for provider_name in settings.did.providers:
         try:
+            logger.info(
+                f"Fetching from provider '{provider_name}': "
+                f"{start_date} to {end_date}"
+            )
             changes = _fetch_provider_changes(provider_name, start_date, end_date)
+            logger.info(f"Provider '{provider_name}' returned {len(changes)} changes")
             all_changes.extend(changes)
         except Exception as e:
             raise DidIntegrationError(
                 f"Failed to fetch changes from provider '{provider_name}': {e}"
             ) from e
 
+    logger.info(f"Total changes from all providers: {len(all_changes)}")
     return all_changes
 
 
@@ -121,8 +129,21 @@ def _fetch_provider_changes(
             stderr_content=stderr_capture.getvalue(), provider_name=provider_name
         )
 
+        # Log stdout output for debugging
+        stdout_content = stdout_capture.getvalue()
+        if stdout_content:
+            logger.debug(
+                f"did CLI stdout for '{provider_name}': {stdout_content[:500]}"
+            )
+
         # Extract merged stats from result
-        merged_stats = _extract_merged_stats(result)
+        logger.debug(f"did CLI result type: {type(result).__name__}")
+        if isinstance(result, tuple) and len(result) > 0:
+            logger.debug(f"did CLI result[0] type: {type(result[0]).__name__}")
+        merged_stats = _extract_merged_stats(result, provider_name)
+        logger.debug(
+            f"Extracted {len(merged_stats)} merged stats for '{provider_name}'"
+        )
 
         # Convert did stats to Change objects
         return _convert_stats_to_changes(merged_stats, provider_name)
@@ -134,7 +155,7 @@ def _fetch_provider_changes(
         raise DidIntegrationError(f"Failed to call did.cli.main(): {e}") from e
 
 
-def _extract_merged_stats(result: object) -> list[Issue]:
+def _extract_merged_stats(result: object, provider_name: str) -> list[Issue]:
     """Extract merged PR/MR stats from did CLI result.
 
     Uses object type with strict runtime validation. Returns empty list ONLY when
@@ -142,6 +163,7 @@ def _extract_merged_stats(result: object) -> list[Issue]:
 
     Args:
         result: Result from did.cli.main()
+        provider_name: Provider name to match (e.g., "github.com", "gitlab.cee")
 
     Returns:
         List of Issue objects from did SDK (empty list only if input is empty list)
@@ -152,42 +174,135 @@ def _extract_merged_stats(result: object) -> list[Issue]:
     # Validate and extract user stats
     user_stats = _validate_and_extract_user_stats(result)
 
-    # Validate user stats structure
-    if not hasattr(user_stats, "stats"):
-        raise DidIntegrationError(
-            f"User stats object (type: {type(user_stats).__name__}) "
-            "missing 'stats' attribute"
-        )
+    # Validate and get stats list
+    stats_list = _validate_stats_attribute(user_stats)
 
-    if not isinstance(user_stats.stats, list):
-        raise DidIntegrationError(
-            f"User stats.stats is not a list (type: {type(user_stats.stats).__name__})"
-        )
+    logger.debug(f"user_stats.stats has {len(stats_list)} provider groups")
 
     # Empty user stats means no activity in the period - this is valid
-    if len(user_stats.stats) == 0:
+    if len(stats_list) == 0:
         return []
 
-    # Validate and extract provider stats
-    provider_stats_group = user_stats.stats[0]
-    if not hasattr(provider_stats_group, "stats"):
-        raise DidIntegrationError("Provider stats group missing 'stats' attribute")
+    # Find the provider stats group for the current provider
+    provider_stats_group = _find_provider_group(stats_list, provider_name)
 
-    if not isinstance(provider_stats_group.stats, list):
-        raise DidIntegrationError("Provider stats.stats is not a list")
-
-    if len(provider_stats_group.stats) == 0:
+    if provider_stats_group is None:
+        logger.debug(f"No matching provider group found for '{provider_name}'")
         return []
 
-    # Find the merged PRs/MRs stats - MUST exist since we requested it
-    for stat in provider_stats_group.stats:
-        if _is_merged_stat(stat):
-            if not hasattr(stat, "stats"):
-                raise DidIntegrationError(
-                    "Merged stat object missing 'stats' attribute"
-                )
-            # Cast to list[Issue] - did SDK uses Issue type for both PRs and MRs
-            return cast(list[Issue], stat.stats)
+    # Validate and get provider stats
+    provider_stats = _validate_provider_stats(provider_stats_group)
+
+    if len(provider_stats) == 0:
+        return []
+
+    # Find and return merged stats
+    return _find_merged_stats(provider_stats)
+
+
+def _validate_stats_attribute(obj: object) -> list[object]:
+    """Validate and return stats attribute from an object.
+
+    Args:
+        obj: Object to validate
+
+    Returns:
+        List of stats
+
+    Raises:
+        DidIntegrationError: If stats attribute is missing or not a list
+    """
+    if not hasattr(obj, "stats"):
+        raise DidIntegrationError(
+            f"Object (type: {type(obj).__name__}) missing 'stats' attribute"
+        )
+
+    stats = obj.stats
+    if not isinstance(stats, list):
+        raise DidIntegrationError(f"stats is not a list (type: {type(stats).__name__})")
+
+    return stats
+
+
+def _find_provider_group(stats_list: list[object], provider_name: str) -> object | None:
+    """Find the matching provider group from stats list.
+
+    Args:
+        stats_list: List of provider group objects
+        provider_name: Provider name to match
+
+    Returns:
+        Matching provider group or None
+    """
+    provider_lower = provider_name.lower()
+
+    for group in stats_list:
+        group_name = type(group).__name__.lower()
+        logger.debug(
+            f"Checking provider group: {type(group).__name__} for provider match"
+        )
+
+        is_github_match = "github" in group_name and "github" in provider_lower
+        is_gitlab_match = "gitlab" in group_name and "gitlab" in provider_lower
+
+        if is_github_match or is_gitlab_match:
+            return group
+
+    return None
+
+
+def _validate_provider_stats(provider_stats_group: object) -> list[object]:
+    """Validate provider stats group and return its stats list.
+
+    Args:
+        provider_stats_group: Provider stats group object
+
+    Returns:
+        List of stat objects
+
+    Raises:
+        DidIntegrationError: If validation fails
+    """
+    logger.debug(
+        f"provider_stats_group type: {type(provider_stats_group).__name__}, "
+        f"has stats: {hasattr(provider_stats_group, 'stats')}"
+    )
+
+    stats = _validate_stats_attribute(provider_stats_group)
+
+    logger.debug(f"provider_stats_group.stats has {len(stats)} stat types")
+
+    return stats
+
+
+def _find_merged_stats(provider_stats: list[object]) -> list[Issue]:
+    """Find merged PR/MR stats from provider stats list.
+
+    Args:
+        provider_stats: List of stat objects
+
+    Returns:
+        List of Issue objects (merged PRs/MRs)
+
+    Raises:
+        DidIntegrationError: If merged stats not found or invalid
+    """
+    for stat in provider_stats:
+        stat_class = stat.__class__.__name__
+        logger.debug(
+            f"Checking stat type: {stat_class}, "
+            f"is_merged: {_is_merged_stat(stat)}, "
+            f"has stats: {hasattr(stat, 'stats')}"
+        )
+
+        if not _is_merged_stat(stat):
+            continue
+
+        if not hasattr(stat, "stats"):
+            raise DidIntegrationError("Merged stat object missing 'stats' attribute")
+
+        # Cast to list[Issue] - did SDK uses Issue type for both PRs and MRs
+        return cast(list[Issue], stat.stats)
 
     # We requested merged stats in CLI but didn't find them - error
     raise DidIntegrationError(
@@ -274,12 +389,14 @@ def _convert_stats_to_changes(stats: list[Issue], provider_name: str) -> list[Ch
         except InvalidStatDataError as e:
             # Log expected data validation issues as warnings
             stat_type = type(stat).__name__
+            # Log all available attributes for debugging
+            attrs = [a for a in dir(stat) if not a.startswith("_")]
             logger.warning(
-                "Skipping invalid stat from %s: %s (stat type: %s, repr: %r)",
+                "Skipping invalid stat from %s: %s (stat type: %s, attrs: %s)",
                 provider_name,
                 e,
                 stat_type,
-                stat,
+                attrs,
             )
             continue
     return changes
@@ -317,7 +434,7 @@ def _convert_to_change(stat: object, provider_name: str) -> Change:
     """Convert a did stat object into a Change object.
 
     Args:
-        stat: A did stat object (Issue or MergeRequest from did plugins)
+        stat: A did stat object (Issue or MergeRequestMerged from did plugins)
         provider_name: Provider name for host determination
 
     Returns:
@@ -326,35 +443,40 @@ def _convert_to_change(stat: object, provider_name: str) -> Change:
     Raises:
         InvalidStatDataError: If required data is missing or invalid
     """
-    # Access object attributes directly (no parsing!)
-    # did's Issue/MergeRequest objects have: owner, project, id, title, data
-    owner = getattr(stat, "owner", None)
-    project = getattr(stat, "project", None)
-    id_value = getattr(stat, "id", None)
-    title = getattr(stat, "title", "")
+    # Handle GitLab MergedRequest objects (different structure)
+    if isinstance(stat, MergedRequest):
+        return _convert_gitlab_mr(stat, provider_name)
+
+    # Handle GitHub Issue objects (used for PRs)
+    if isinstance(stat, Issue):
+        return _convert_github_pr(stat, provider_name)
+
+    # Unknown type - try to handle generically with logging
+    stat_type = type(stat).__name__
+    raise InvalidStatDataError(f"Unknown stat type: {stat_type}")
+
+
+def _convert_github_pr(stat: Issue, provider_name: str) -> Change:
+    """Convert a GitHub Issue (PR) to a Change object.
+
+    GitHub Issue objects have: owner, project, id, title as attributes.
+    """
+    owner = stat.owner
+    project = stat.project
+    number = stat.id
+    title = stat.title
 
     # Validate required fields
     if not owner:
         raise InvalidStatDataError("Missing owner field")
     if not project:
         raise InvalidStatDataError(f"Missing project field for owner '{owner}'")
-    if not id_value:
+    if not number:
         raise InvalidStatDataError(f"Missing id field for {owner}/{project}")
     if not title:
         raise InvalidStatDataError(
-            f"Missing title field for {owner}/{project}#{id_value}"
+            f"Missing title field for {owner}/{project}#{number}"
         )
-
-    # Convert id to integer
-    try:
-        number = int(id_value)
-    except (ValueError, TypeError) as e:
-        raise InvalidStatDataError(
-            f"Invalid id '{id_value}' for {owner}/{project}: {e}"
-        ) from e
-
-    if number <= 0:
-        raise InvalidStatDataError(f"Non-positive id {number} for {owner}/{project}")
 
     # Clean emoji from title
     title = _clean_emoji(title)
@@ -362,17 +484,64 @@ def _convert_to_change(stat: object, provider_name: str) -> Change:
     # Build repository path
     repo_path = f"{owner}/{project}"
 
-    # Determine provider type from host
-    provider_type = _determine_provider_type(provider_name)
+    # Create Repository object
+    repository = Repository(
+        host=provider_name,
+        path=repo_path,
+        provider_type="github",
+    )
+
+    return Change(
+        title=title,
+        repository=repository,
+        number=number,
+        merged_at=None,
+    )
+
+
+def _convert_gitlab_mr(stat: MergedRequest, provider_name: str) -> Change:
+    """Convert a GitLab MergeRequestMerged to a Change object.
+
+    GitLab MergeRequestMerged objects have:
+    - iid() as a method returning the MR number
+    - project as a dict with 'path_with_namespace'
+    - title in data dict
+    """
+    # Get MR number via iid() method
+    try:
+        number = stat.iid()
+    except Exception as e:
+        raise InvalidStatDataError(f"Failed to get iid: {e}") from e
+
+    if not number:
+        raise InvalidStatDataError("Missing iid for GitLab MR")
+
+    # Get project path from project dict
+    project_dict = stat.project
+    if not isinstance(project_dict, dict):
+        raise InvalidStatDataError(
+            f"Expected project dict, got {type(project_dict).__name__}"
+        )
+
+    repo_path = project_dict.get("path_with_namespace")
+    if not repo_path:
+        raise InvalidStatDataError("Missing path_with_namespace in project dict")
+
+    # Get title from data dict
+    title = stat.data.get("title", "")
+    if not title:
+        raise InvalidStatDataError(f"Missing title for {repo_path}!{number}")
+
+    # Clean emoji from title
+    title = _clean_emoji(title)
 
     # Create Repository object
     repository = Repository(
         host=provider_name,
         path=repo_path,
-        provider_type=provider_type,
+        provider_type="gitlab",
     )
 
-    # Create Change object (merged_at not available from did stats)
     return Change(
         title=title,
         repository=repository,

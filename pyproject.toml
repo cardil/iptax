@@ -155,6 +155,7 @@ select = [
     "RSE",  # flake8-raise
     "RET",  # flake8-return
     "ICN",  # flake8-import-conventions
+    "TID252",  # flake8-tidy-imports: ban relative imports from parent modules
 ]
 ignore = [
     "E501",    # line too long, handled by black

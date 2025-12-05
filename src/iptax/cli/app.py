@@ -18,7 +18,7 @@ from iptax.cache.history import (
     get_history_path,
 )
 from iptax.cache.inflight import InFlightCache
-from iptax.cli import elements, flows, utils
+from iptax.cli import elements, flows
 from iptax.cli.flows import DateRangeOverrides, FlowOptions
 from iptax.config import (
     ConfigError,
@@ -29,6 +29,7 @@ from iptax.config import (
     load_settings as config_load_settings,
 )
 from iptax.did import DidIntegrationError
+from iptax.timing import resolve_date_ranges
 from iptax.utils.env import get_cache_dir
 from iptax.utils.logging import setup_logging
 from iptax.workday import WorkdayClient, WorkdayError
@@ -37,6 +38,60 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 # Month string format constant (YYYY-MM)
 MONTH_STRING_LENGTH = 7
+
+# Shared option definitions for reuse across commands
+MONTH_OPTION_HELP = "Month to target (None=auto-detect, 'current', 'last', or YYYY-MM)"
+
+
+def month_option(f: F) -> F:
+    """Shared --month option decorator."""
+    return click.option("--month", help=MONTH_OPTION_HELP)(f)
+
+
+def force_option(f: F) -> F:
+    """Shared --force option decorator."""
+    return click.option(
+        "--force", is_flag=True, help="Discard existing in-flight data"
+    )(f)
+
+
+def skip_ai_option(f: F) -> F:
+    """Shared --skip-ai option decorator."""
+    return click.option("--skip-ai", is_flag=True, help="Skip AI filtering")(f)
+
+
+def skip_review_option(f: F) -> F:
+    """Shared --skip-review option decorator."""
+    return click.option("--skip-review", is_flag=True, help="Skip interactive review")(
+        f
+    )
+
+
+def skip_workday_option(f: F) -> F:
+    """Shared --skip-workday option decorator."""
+    return click.option(
+        "--skip-workday", is_flag=True, help="Skip Workday integration"
+    )(f)
+
+
+def skip_did_option(f: F) -> F:
+    """Shared --skip-did option decorator."""
+    return click.option("--skip-did", is_flag=True, help="Skip Did collection")(f)
+
+
+def date_override_options(f: F) -> F:
+    """Add all date override options."""
+    return click.option("--did-end", help="Override Did end date (YYYY-MM-DD)")(
+        click.option("--did-start", help="Override Did start date (YYYY-MM-DD)")(
+            click.option(
+                "--workday-end", help="Override Workday end date (YYYY-MM-DD)"
+            )(
+                click.option(
+                    "--workday-start", help="Override Workday start date (YYYY-MM-DD)"
+                )(f)
+            )
+        )
+    )
 
 
 def _setup_logging() -> None:
@@ -84,27 +139,52 @@ def _parse_date(date_str: str) -> date:
 @click.group(invoke_without_command=True)
 @click.pass_context
 @click.version_option()
-def cli(ctx: click.Context) -> None:
+@month_option
+@skip_ai_option
+@skip_review_option
+@skip_workday_option
+@force_option
+def cli(  # noqa: PLR0913  # CLI group needs many options for flexibility
+    ctx: click.Context,
+    month: str | None,
+    skip_ai: bool,
+    skip_review: bool,
+    skip_workday: bool,
+    force: bool,
+) -> None:
     """IP Tax Reporter - Automated tax report generator for Polish IP tax
     deduction program."""
-    # If no subcommand, invoke report
+    # Store options in context for subcommands
+    ctx.ensure_object(dict)
+    ctx.obj["month"] = month
+    ctx.obj["skip_ai"] = skip_ai
+    ctx.obj["skip_review"] = skip_review
+    ctx.obj["skip_workday"] = skip_workday
+    ctx.obj["force"] = force
+
+    # If no subcommand, invoke report with the group options
     if ctx.invoked_subcommand is None:
-        ctx.invoke(report)
+        ctx.invoke(
+            report,
+            month=month,
+            skip_ai=skip_ai,
+            skip_review=skip_review,
+            skip_workday=skip_workday,
+            force=force,
+            workday_start=None,
+            workday_end=None,
+            did_start=None,
+            did_end=None,
+        )
 
 
 @cli.command()
-@click.option(
-    "--month",
-    help="Month to report (None=auto-detect, 'current', 'last', or YYYY-MM)",
-)
-@click.option("--skip-ai", is_flag=True, help="Skip AI filtering")
-@click.option("--skip-review", is_flag=True, help="Skip interactive review")
-@click.option("--skip-workday", is_flag=True, help="Skip Workday integration")
-@click.option("--force-new", is_flag=True, help="Discard existing in-flight data")
-@click.option("--workday-start", help="Override Workday start date (YYYY-MM-DD)")
-@click.option("--workday-end", help="Override Workday end date (YYYY-MM-DD)")
-@click.option("--did-start", help="Override Did start date (YYYY-MM-DD)")
-@click.option("--did-end", help="Override Did end date (YYYY-MM-DD)")
+@month_option
+@skip_ai_option
+@skip_review_option
+@skip_workday_option
+@force_option
+@date_override_options
 @async_command
 async def report(  # noqa: PLR0913  # CLI commands need many options for flexibility
     # Core parameters
@@ -113,7 +193,7 @@ async def report(  # noqa: PLR0913  # CLI commands need many options for flexibi
     skip_ai: bool,
     skip_review: bool,
     skip_workday: bool,
-    force_new: bool,
+    force: bool,
     # Date range overrides (optional advanced usage)
     workday_start: str | None,
     workday_end: str | None,
@@ -140,13 +220,15 @@ async def report(  # noqa: PLR0913  # CLI commands need many options for flexibi
             skip_workday=skip_workday,
             skip_ai=skip_ai,
             skip_review=skip_review,
-            force_new=force_new,
+            force=force,
         )
 
         # Run report flow
-        await flows.report_flow(
+        success = await flows.report_flow(
             console, month=month, options=options, overrides=overrides
         )
+        if not success:
+            sys.exit(1)
 
     except ConfigError as e:
         click.secho(f"Configuration error: {e}", fg="red", err=True)
@@ -168,16 +250,11 @@ async def report(  # noqa: PLR0913  # CLI commands need many options for flexibi
 
 
 @cli.command()
-@click.option(
-    "--month",
-    help="Month to collect (None=auto-detect, 'current', 'last', or YYYY-MM)",
-)
-@click.option("--skip-did", is_flag=True, help="Skip Did collection")
-@click.option("--skip-workday", is_flag=True, help="Skip Workday collection")
-@click.option("--workday-start", help="Override Workday start date (YYYY-MM-DD)")
-@click.option("--workday-end", help="Override Workday end date (YYYY-MM-DD)")
-@click.option("--did-start", help="Override Did start date (YYYY-MM-DD)")
-@click.option("--did-end", help="Override Did end date (YYYY-MM-DD)")
+@month_option
+@skip_did_option
+@skip_workday_option
+@force_option
+@date_override_options
 @async_command
 async def collect(  # noqa: PLR0913  # CLI commands need many options for flexibility
     # Core parameters
@@ -185,6 +262,7 @@ async def collect(  # noqa: PLR0913  # CLI commands need many options for flexib
     # Skip flags
     skip_did: bool,
     skip_workday: bool,
+    force: bool,
     # Date range overrides (optional advanced usage)
     workday_start: str | None,
     workday_end: str | None,
@@ -210,12 +288,15 @@ async def collect(  # noqa: PLR0913  # CLI commands need many options for flexib
         options = FlowOptions(
             skip_did=skip_did,
             skip_workday=skip_workday,
+            force=force,
         )
 
         # Run collect flow
-        await flows.collect_flow(
+        success = await flows.collect_flow(
             console, month=month, options=options, overrides=overrides
         )
+        if not success:
+            sys.exit(1)
 
     except ConfigError as e:
         click.secho(f"Configuration error: {e}", fg="red", err=True)
@@ -234,13 +315,17 @@ async def collect(  # noqa: PLR0913  # CLI commands need many options for flexib
 
 
 @cli.command()
+@month_option
+@force_option
 @async_command
-async def review() -> None:
+async def review(month: str | None, force: bool) -> None:
     """Review AI judgments for in-flight report."""
     console = Console()
 
     try:
-        await flows.review_flow(console)
+        success = await flows.review_flow(console, month=month, force=force)
+        if not success:
+            sys.exit(1)
 
     except ConfigError as e:
         click.secho(f"Configuration error: {e}", fg="red", err=True)
@@ -449,8 +534,8 @@ def workday(month: str | None, foreground: bool, no_kerberos: bool) -> None:
             settings.workday.auth = "sso"
             console.print("[yellow]⚠[/yellow] Kerberos disabled, using SSO login form")
 
-        # Resolve date range using new utilities
-        ranges = utils.resolve_date_ranges(month)
+        # Resolve date range using timing module
+        ranges = resolve_date_ranges(month)
         console.print(
             f"[cyan]📅[/cyan] Date range: "
             f"{ranges.workday_start} to {ranges.workday_end}"

@@ -61,9 +61,31 @@ class JudgmentCacheManager:
     def add_judgment(self, judgment: Judgment) -> None:
         """Add or update a judgment in the cache.
 
+        If an existing judgment has a user decision and the new judgment's
+        final decision matches, the existing is preserved (not overwritten).
+        If decisions differ, the new judgment is saved.
+
         Args:
             judgment: The judgment to add
         """
+        existing = self.cache.judgments.get(judgment.change_id)
+        if existing and existing.user_decision is not None:
+            # Check if decisions match - if so, preserve existing
+            if existing.final_decision == judgment.final_decision:
+                logger.debug(
+                    f"Preserving existing judgment for '{judgment.change_id}': "
+                    f"user_decision={existing.user_decision.value}, "
+                    f"final={existing.final_decision.value}"
+                )
+                return
+            # Decisions differ - log and update
+            cached_val = existing.final_decision.value
+            new_val = judgment.final_decision.value
+            logger.debug(
+                f"Updating judgment for '{judgment.change_id}': "
+                f"cached={cached_val} → new={new_val}"
+            )
+
         self.cache.judgments[judgment.change_id] = judgment
         self.save()
 

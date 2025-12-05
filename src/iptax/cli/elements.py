@@ -10,6 +10,65 @@ from rich.table import Table
 from iptax.models import Change, Decision, HistoryEntry, Judgment
 
 
+def count_decisions(
+    judgments: list[Judgment],
+    *,
+    use_final: bool = True,
+) -> tuple[int, int, int]:
+    """Count judgments by decision type.
+
+    Args:
+        judgments: List of judgments to count
+        use_final: If True, use final_decision; if False, use decision (AI)
+
+    Returns:
+        Tuple of (include_count, exclude_count, uncertain_count)
+    """
+    if use_final:
+        include_count = sum(
+            1 for j in judgments if j.final_decision == Decision.INCLUDE
+        )
+        exclude_count = sum(
+            1 for j in judgments if j.final_decision == Decision.EXCLUDE
+        )
+        uncertain_count = sum(
+            1 for j in judgments if j.final_decision == Decision.UNCERTAIN
+        )
+    else:
+        include_count = sum(1 for j in judgments if j.decision == Decision.INCLUDE)
+        exclude_count = sum(1 for j in judgments if j.decision == Decision.EXCLUDE)
+        uncertain_count = sum(1 for j in judgments if j.decision == Decision.UNCERTAIN)
+    return include_count, exclude_count, uncertain_count
+
+
+def format_decision_summary(
+    include_count: int,
+    exclude_count: int,
+    uncertain_count: int,
+    *,
+    uncertain_color: str = "yellow",
+) -> str:
+    """Format decision counts as a Rich-markup summary string.
+
+    Args:
+        include_count: Number of INCLUDE decisions
+        exclude_count: Number of EXCLUDE decisions
+        uncertain_count: Number of UNCERTAIN decisions
+        uncertain_color: Color for uncertain count (yellow or orange)
+
+    Returns:
+        Rich-formatted summary string with only non-zero counts
+    """
+    summary_parts = []
+    if include_count > 0:
+        summary_parts.append(f"[green]INCLUDE(✓): {include_count}[/]")
+    if exclude_count > 0:
+        summary_parts.append(f"[red]EXCLUDE(✗): {exclude_count}[/]")
+    if uncertain_count > 0:
+        summary_parts.append(f"[{uncertain_color}]UNCERTAIN(?): {uncertain_count}[/]")
+    return "  ".join(summary_parts)
+
+
 def display_changes(
     console: Console,
     changes: list[Change],
@@ -68,20 +127,12 @@ def display_review_results(
         console.print("\n[yellow]Review cancelled (quit)[/]")
         return
 
-    # Count decisions
-    include_count = sum(1 for j in judgments if j.final_decision == Decision.INCLUDE)
-    exclude_count = sum(1 for j in judgments if j.final_decision == Decision.EXCLUDE)
-    uncertain_count = sum(
-        1 for j in judgments if j.final_decision == Decision.UNCERTAIN
-    )
+    # Count and format decisions using shared utilities
+    include_count, exclude_count, uncertain_count = count_decisions(judgments)
+    summary = format_decision_summary(include_count, exclude_count, uncertain_count)
 
     # Print summary
-    console.print(
-        f"\n[bold]Review complete:[/] "
-        f"[green]✓INCLUDE: {include_count}[/]  "
-        f"[red]✗EXCLUDE: {exclude_count}[/]  "
-        f"[yellow]?UNCERTAIN: {uncertain_count}[/]"
-    )
+    console.print(f"\n[bold]Review complete:[/] {summary}")
 
     # Print approved list with user action indicator
     console.print("\n[bold]Approved changes:[/]")

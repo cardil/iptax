@@ -99,7 +99,8 @@ class TestReview:
     """Tests for review flow."""
 
     @pytest.mark.unit
-    def test_shows_summary_and_calls_tui(self):
+    @pytest.mark.asyncio
+    async def test_shows_summary_and_calls_tui(self):
         """Test that review shows summary and calls TUI."""
         console = Console(file=StringIO(), force_terminal=True)
         changes = [
@@ -128,7 +129,7 @@ class TestReview:
             patch.object(flows, "run_review_tui", return_value=mock_result),
             patch.object(flows, "display_review_results"),
         ):
-            result = flows.review(console, judgments, changes)
+            result = await flows.review(console, judgments, changes)
 
         assert result == mock_result
         output = strip_ansi(console.file.getvalue())
@@ -136,7 +137,8 @@ class TestReview:
         assert "INCLUDE: 1" in output
 
     @pytest.mark.unit
-    def test_shows_all_decision_counts(self):
+    @pytest.mark.asyncio
+    async def test_shows_all_decision_counts(self):
         """Test that review shows counts for all decision types."""
         console = Console(file=StringIO(), force_terminal=True)
         changes = [
@@ -178,7 +180,7 @@ class TestReview:
             patch.object(flows, "run_review_tui", return_value=mock_result),
             patch.object(flows, "display_review_results"),
         ):
-            flows.review(console, judgments, changes)
+            await flows.review(console, judgments, changes)
 
         output = strip_ansi(console.file.getvalue())
         assert "INCLUDE: 1" in output
@@ -186,7 +188,8 @@ class TestReview:
         assert "UNCERTAIN: 1" in output
 
     @pytest.mark.unit
-    def test_calls_display_results_after_tui(self):
+    @pytest.mark.asyncio
+    async def test_calls_display_results_after_tui(self):
         """Test that review calls display_review_results after TUI."""
         console = Console(file=StringIO(), force_terminal=True)
         changes = [
@@ -215,7 +218,7 @@ class TestReview:
             patch.object(flows, "run_review_tui", return_value=mock_result),
             patch.object(flows, "display_review_results") as mock_display,
         ):
-            flows.review(console, judgments, changes)
+            await flows.review(console, judgments, changes)
 
         mock_display.assert_called_once_with(
             console, judgments, changes, accepted=False

@@ -89,6 +89,27 @@ def get_cache_dir() -> Path:
     return get_home_dir() / ".cache" / "iptax"
 
 
+def get_today() -> date:
+    """Get today's date.
+
+    Supports IPTAX_FAKE_DATE environment variable for testing.
+    Format: YYYY-MM-DD (e.g., "2024-11-25")
+
+    Returns:
+        Today's date (or fake date if IPTAX_FAKE_DATE is set)
+    """
+    fake_date = os.environ.get("IPTAX_FAKE_DATE")
+    if fake_date:
+        try:
+            return datetime.strptime(fake_date, "%Y-%m-%d").date()
+        except ValueError:
+            logger.warning(
+                "Invalid IPTAX_FAKE_DATE '%s' (expected YYYY-MM-DD). Using real date.",
+                fake_date,
+            )
+    return date.today()
+
+
 def get_month_end_date(year: int, month: int) -> date:
     """Get the last day of a given month.
 

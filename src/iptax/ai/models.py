@@ -1,15 +1,12 @@
 """Pydantic data models for AI-powered filtering and decisions.
 
-This module re-exports core types from iptax.models and defines
-AI-specific cache structures.
+This module defines AI-specific cache and response structures.
+Core types like Decision and Judgment are in iptax.models.
 """
 
 from pydantic import BaseModel, Field
 
-# Re-export core types from models
 from iptax.models import Decision, Judgment
-
-__all__ = ["AIResponse", "AIResponseItem", "Decision", "Judgment", "JudgmentCache"]
 
 
 class JudgmentCache(BaseModel):
