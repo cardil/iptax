@@ -7,8 +7,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
-from iptax.ai.models import Decision, Judgment
-from iptax.models import Change, HistoryEntry
+from iptax.models import Change, Decision, HistoryEntry, Judgment
 
 
 def display_changes(

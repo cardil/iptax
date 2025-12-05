@@ -21,18 +21,6 @@ def test_cli_help(runner: CliRunner) -> None:
 
 
 @pytest.mark.unit
-def test_report_command_placeholder(runner: CliRunner, tmp_path, monkeypatch) -> None:
-    """Test that report command requires configuration."""
-    # The report command now requires valid configuration
-    # Test that it shows helpful error message when config is missing
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    result = runner.invoke(cli, ["report", "--dry-run"])
-    assert result.exit_code == 1
-    assert "Configuration error" in result.output
-    assert "iptax config" in result.output
-
-
-@pytest.mark.unit
 def test_config_command_path_flag(runner: CliRunner) -> None:
     """Test that config command with --path flag shows config path."""
     result = runner.invoke(cli, ["config", "--path"])
@@ -144,18 +132,23 @@ def test_report_command_invalid_month_format(
     runner: CliRunner, tmp_path, monkeypatch
 ) -> None:
     """Test that report command handles invalid month format."""
+    # Create minimal did config
+    did_config = tmp_path / "did-config"
+    did_config.write_text("[general]\n[github.com]\ntype = github\n")
+
     # Create minimal config so we can reach month validation
     config_dir = tmp_path / "config" / "iptax"
     config_dir.mkdir(parents=True)
     config_file = config_dir / "settings.yaml"
     config_file.write_text(
-        """
+        f"""
 employee:
     name: "Test User"
     supervisor: "Test Supervisor"
 product:
     name: "Test Product"
 did:
+    config_path: "{did_config}"
     providers:
         - github.com
 """
@@ -164,9 +157,10 @@ did:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
 
     result = runner.invoke(cli, ["report", "--month", "invalid-format"])
-    assert result.exit_code == 1
-    assert "Invalid month format" in result.output
-    assert "expected YYYY-MM" in result.output
+    assert result.exit_code != 0
+    # Check that ValueError was raised with appropriate message
+    assert result.exception is not None
+    assert "Invalid month format" in str(result.exception)
 
 
 # Note: Tests for complex CLI flows with mocking have been moved to

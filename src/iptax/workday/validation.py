@@ -71,7 +71,9 @@ def validate_workday_coverage(
         >>> end = date(2024, 11, 30)
         >>> entries = [
         ...     CalendarEntry(date(2024, 11, 1), "Work", "Time Tracking", 8.0),
-        ...     CalendarEntry(date(2024, 11, 4), "Holiday", "Holiday Calendar Entry Type", 0.0),
+        ...     CalendarEntry(
+        ...         date(2024, 11, 4), "Holiday", "Holiday Calendar Entry Type", 0.0
+        ...     ),
         ... ]
         >>> missing = validate_workday_coverage(entries, start, end)
         >>> if missing:

@@ -1,20 +1,25 @@
 """Command-line interface for iptax."""
 
+import asyncio
 import sys
-import time
+from collections.abc import Callable
+from datetime import date
+from functools import wraps
+from typing import Any, TypeVar
 
 import click
 import questionary
 import yaml
 from rich.console import Console
 
-from iptax.ai.tui import ai_progress
 from iptax.cache.history import (
     HistoryCorruptedError,
     HistoryManager,
     get_history_path,
 )
-from iptax.cli import elements, flows, mocks, utils
+from iptax.cache.inflight import InFlightCache
+from iptax.cli import elements, flows, utils
+from iptax.cli.flows import DateRangeOverrides, FlowOptions
 from iptax.config import (
     ConfigError,
     create_default_config,
@@ -28,6 +33,11 @@ from iptax.utils.env import get_cache_dir
 from iptax.utils.logging import setup_logging
 from iptax.workday import WorkdayClient, WorkdayError
 
+F = TypeVar("F", bound=Callable[..., Any])
+
+# Month string format constant (YYYY-MM)
+MONTH_STRING_LENGTH = 7
+
 
 def _setup_logging() -> None:
     """Setup logging to user's cache directory.
@@ -40,50 +50,103 @@ def _setup_logging() -> None:
     setup_logging(log_file)
 
 
-@click.group()
+def async_command(f: F) -> F:
+    """Decorator to run async click commands.
+
+    Wraps an async function to be run with asyncio.run().
+    This is a generic decorator for Click commands which can have various signatures.
+    """
+
+    @wraps(f)
+    def wrapper(*args: object, **kwargs: object) -> object:
+        return asyncio.run(f(*args, **kwargs))
+
+    # Generic decorator - can't preserve exact return type
+    # without complex generics (type:ignore[return-value])
+    return wrapper  # type: ignore[return-value]
+
+
+def _parse_date(date_str: str) -> date:
+    """Parse date string in YYYY-MM-DD format.
+
+    Raises:
+        click.BadParameter: If date format is invalid
+    """
+    try:
+        return date.fromisoformat(date_str)
+    except ValueError as e:
+        # Re-raise as Click parameter error for better CLI error messages
+        raise click.BadParameter(
+            f"Invalid date format '{date_str}', expected YYYY-MM-DD"
+        ) from e
+
+
+@click.group(invoke_without_command=True)
+@click.pass_context
 @click.version_option()
-def cli() -> None:
+def cli(ctx: click.Context) -> None:
     """IP Tax Reporter - Automated tax report generator for Polish IP tax
     deduction program."""
-    pass
+    # If no subcommand, invoke report
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(report)
 
 
 @cli.command()
-@click.option("--month", help="Month to generate report for (YYYY-MM format)")
-@click.option("--skip-ai", is_flag=True, help="Skip AI filtering")
-@click.option("--skip-workday", is_flag=True, help="Skip Workday integration")
 @click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Show what would be generated without creating files",
+    "--month",
+    help="Month to report (None=auto-detect, 'current', 'last', or YYYY-MM)",
 )
-def report(
+@click.option("--skip-ai", is_flag=True, help="Skip AI filtering")
+@click.option("--skip-review", is_flag=True, help="Skip interactive review")
+@click.option("--skip-workday", is_flag=True, help="Skip Workday integration")
+@click.option("--force-new", is_flag=True, help="Discard existing in-flight data")
+@click.option("--workday-start", help="Override Workday start date (YYYY-MM-DD)")
+@click.option("--workday-end", help="Override Workday end date (YYYY-MM-DD)")
+@click.option("--did-start", help="Override Did start date (YYYY-MM-DD)")
+@click.option("--did-end", help="Override Did end date (YYYY-MM-DD)")
+@async_command
+async def report(  # noqa: PLR0913  # CLI commands need many options for flexibility
+    # Core parameters
     month: str | None,
-    skip_ai: bool,  # noqa: ARG001 - placeholder for future AI filtering implementation
-    skip_workday: bool,  # noqa: ARG001 - placeholder for future Workday integration
-    dry_run: bool,
+    # Skip flags for different steps
+    skip_ai: bool,
+    skip_review: bool,
+    skip_workday: bool,
+    force_new: bool,
+    # Date range overrides (optional advanced usage)
+    workday_start: str | None,
+    workday_end: str | None,
+    did_start: str | None,
+    did_end: str | None,
 ) -> None:
-    """Generate IP tax report for the specified month (default: current month)."""
+    """Generate IP tax report (default command if no subcommand specified).
+
+    Many parameters needed: core month, skip flags for stages, date overrides.
+    """
     console = Console()
 
     try:
-        settings = flows.load_settings(console)
-        flows.load_history(console)
+        # Parse date overrides
+        overrides = DateRangeOverrides(
+            workday_start=_parse_date(workday_start) if workday_start else None,
+            workday_end=_parse_date(workday_end) if workday_end else None,
+            did_start=_parse_date(did_start) if did_start else None,
+            did_end=_parse_date(did_end) if did_end else None,
+        )
 
-        # Get month key and date range
-        month_key = _parse_month(month)
-        start_date, end_date = utils.get_date_range(month_key)
+        # Set up options
+        options = FlowOptions(
+            skip_workday=skip_workday,
+            skip_ai=skip_ai,
+            skip_review=skip_review,
+            force_new=force_new,
+        )
 
-        # Fetch and display changes
-        changes = flows.fetch_changes(console, settings, start_date, end_date)
-        elements.display_changes(console, changes, start_date, end_date)
-
-        if dry_run:
-            console.print("\n[yellow]Dry run - no files created[/yellow]")
-        elif changes:
-            console.print(
-                "\n[yellow]Note: Full report generation not yet implemented[/yellow]"
-            )
+        # Run report flow
+        await flows.report_flow(
+            console, month=month, options=options, overrides=overrides
+        )
 
     except ConfigError as e:
         click.secho(f"Configuration error: {e}", fg="red", err=True)
@@ -96,22 +159,136 @@ def report(
     except HistoryCorruptedError as e:
         click.secho(f"History error: {e}", fg="red", err=True)
         sys.exit(1)
+    except WorkdayError as e:
+        click.secho(f"Workday error: {e}", fg="red", err=True)
+        sys.exit(1)
     except KeyboardInterrupt:
         console.print("\n\n[yellow]Report generation cancelled[/yellow]")
         sys.exit(1)
 
 
-def _parse_month(month: str | None) -> str:
-    """Parse month string, exit on error."""
+@cli.command()
+@click.option(
+    "--month",
+    help="Month to collect (None=auto-detect, 'current', 'last', or YYYY-MM)",
+)
+@click.option("--skip-did", is_flag=True, help="Skip Did collection")
+@click.option("--skip-workday", is_flag=True, help="Skip Workday collection")
+@click.option("--workday-start", help="Override Workday start date (YYYY-MM-DD)")
+@click.option("--workday-end", help="Override Workday end date (YYYY-MM-DD)")
+@click.option("--did-start", help="Override Did start date (YYYY-MM-DD)")
+@click.option("--did-end", help="Override Did end date (YYYY-MM-DD)")
+@async_command
+async def collect(  # noqa: PLR0913  # CLI commands need many options for flexibility
+    # Core parameters
+    month: str | None,
+    # Skip flags
+    skip_did: bool,
+    skip_workday: bool,
+    # Date range overrides (optional advanced usage)
+    workday_start: str | None,
+    workday_end: str | None,
+    did_start: str | None,
+    did_end: str | None,
+) -> None:
+    """Collect data for a monthly report.
+
+    Many parameters needed: core month, skip flags, date overrides.
+    """
+    console = Console()
+
     try:
-        return utils.parse_month_key(month)
-    except ValueError:
-        click.secho(
-            f"Error: Invalid month format '{month}', expected YYYY-MM",
-            fg="red",
-            err=True,
+        # Parse date overrides
+        overrides = DateRangeOverrides(
+            workday_start=_parse_date(workday_start) if workday_start else None,
+            workday_end=_parse_date(workday_end) if workday_end else None,
+            did_start=_parse_date(did_start) if did_start else None,
+            did_end=_parse_date(did_end) if did_end else None,
         )
+
+        # Set up options
+        options = FlowOptions(
+            skip_did=skip_did,
+            skip_workday=skip_workday,
+        )
+
+        # Run collect flow
+        await flows.collect_flow(
+            console, month=month, options=options, overrides=overrides
+        )
+
+    except ConfigError as e:
+        click.secho(f"Configuration error: {e}", fg="red", err=True)
+        click.echo("\nRun 'iptax config' to configure the application.")
         sys.exit(1)
+    except DidIntegrationError as e:
+        click.secho(f"Did integration error: {e}", fg="red", err=True)
+        click.echo("\nCheck your did configuration and try again.")
+        sys.exit(1)
+    except WorkdayError as e:
+        click.secho(f"Workday error: {e}", fg="red", err=True)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n\n[yellow]Collection cancelled[/yellow]")
+        sys.exit(1)
+
+
+@cli.command()
+@async_command
+async def review() -> None:
+    """Review AI judgments for in-flight report."""
+    console = Console()
+
+    try:
+        await flows.review_flow(console)
+
+    except ConfigError as e:
+        click.secho(f"Configuration error: {e}", fg="red", err=True)
+        click.echo("\nRun 'iptax config' to configure the application.")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n\n[yellow]Review cancelled[/yellow]")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("action", type=click.Choice(["list", "clear"]))
+@click.option("--month", help="Month to target (YYYY-MM, for 'clear' only)")
+def cache(action: str, month: str | None) -> None:
+    """Manage in-flight report cache.
+
+    Actions:
+        list  - List all in-flight reports
+        clear - Clear in-flight cache (all or specific month)
+    """
+    cache_mgr = InFlightCache()
+
+    if action == "list":
+        reports = cache_mgr.list_all()
+        if not reports:
+            click.echo("No in-flight reports found.")
+        else:
+            click.echo("In-flight reports:")
+            for month_key in sorted(reports):
+                click.echo(f"  • {month_key}")
+
+    elif action == "clear":
+        if month:
+            if cache_mgr.delete(month):
+                click.secho(f"✓ Cleared in-flight report for {month}", fg="green")
+            else:
+                click.secho(f"No in-flight report found for {month}", fg="yellow")
+        else:
+            # Clear all
+            confirm = questionary.confirm(
+                "Clear ALL in-flight reports?",
+                default=False,
+            ).unsafe_ask()
+            if confirm:
+                count = cache_mgr.clear_all()
+                click.secho(f"✓ Cleared {count} in-flight report(s)", fg="green")
+            else:
+                click.echo("Cancelled.")
 
 
 @cli.command()
@@ -214,11 +391,18 @@ def history(month: str | None, output_format: str, path: bool) -> None:
 
     # Filter by month if specified
     if month:
-        month_key = _parse_month(month)
-        if month_key not in entries:
-            click.secho(f"No history entry found for {month_key}", fg="yellow")
+        # Validate month format (YYYY-MM)
+        if not month or len(month) != MONTH_STRING_LENGTH or month[4] != "-":
+            click.secho(
+                f"Invalid month format '{month}', expected YYYY-MM",
+                fg="red",
+                err=True,
+            )
+            sys.exit(1)
+        if month not in entries:
+            click.secho(f"No history entry found for {month}", fg="yellow")
             sys.exit(0)
-        entries = {month_key: entries[month_key]}
+        entries = {month: entries[month]}
 
     # Handle empty history
     if not entries:
@@ -265,10 +449,12 @@ def workday(month: str | None, foreground: bool, no_kerberos: bool) -> None:
             settings.workday.auth = "sso"
             console.print("[yellow]⚠[/yellow] Kerberos disabled, using SSO login form")
 
-        # Get month key and date range
-        month_key = _parse_month(month)
-        start_date, end_date = utils.get_date_range(month_key)
-        console.print(f"[cyan]📅[/cyan] Date range: {start_date} to {end_date}")
+        # Resolve date range using new utilities
+        ranges = utils.resolve_date_ranges(month)
+        console.print(
+            f"[cyan]📅[/cyan] Date range: "
+            f"{ranges.workday_start} to {ranges.workday_end}"
+        )
 
         # Create Workday client and fetch hours
         client = WorkdayClient(settings.workday)
@@ -278,7 +464,10 @@ def workday(month: str | None, foreground: bool, no_kerberos: bool) -> None:
 
         console.print("[cyan]🔍[/cyan] Fetching work hours...")
         work_hours = client.get_work_hours(
-            start_date, end_date, interactive=interactive, headless=headless
+            ranges.workday_start,
+            ranges.workday_end,
+            interactive=interactive,
+            headless=headless,
         )
 
         # Display results
@@ -299,30 +488,6 @@ def workday(month: str | None, foreground: bool, no_kerberos: bool) -> None:
     except KeyboardInterrupt:
         console.print("\n\n[yellow]Operation cancelled[/yellow]")
         sys.exit(1)
-
-
-# TODO(ksuszyns): Remove this command after integrating AI review into report command
-@cli.command("ai-test")
-@click.option("--mock-count", default=15, help="Number of mock changes to generate")
-def ai_test(mock_count: int) -> None:
-    """Test AI review UI with mock data (temporary command).
-
-    This command generates mock changes and judgments to test the TUI
-    without making real AI calls. It will be removed once integrated
-    into the report command.
-    """
-    console = Console()
-
-    # Generate mock data
-    mock_changes = mocks.generate_mock_changes(mock_count)
-    mock_judgments = mocks.generate_mock_judgments(mock_changes)
-
-    # Show spinner demo
-    with ai_progress(console, "Simulating AI processing..."):
-        time.sleep(1)
-
-    # Run review flow
-    flows.review(console, mock_judgments, mock_changes)
 
 
 def main() -> None:

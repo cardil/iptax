@@ -7,9 +7,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from rich.console import Console
 
-from iptax.ai.models import Decision, Judgment
 from iptax.cli import flows
-from iptax.models import Change, Repository
+from iptax.models import Change, Decision, Judgment, Repository
 
 from .conftest import strip_ansi
 

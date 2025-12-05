@@ -358,7 +358,7 @@ class TestDateRangeCalculation:
         with pytest.raises(HistoryError, match="No previous report found"):
             manager.get_date_range("2024-10", prompt_first=False)
 
-    @patch("iptax.history.questionary")
+    @patch("iptax.cache.history.questionary")
     def test_get_date_range_first_report_with_prompt(
         self, mock_questionary: Mock, tmp_path: Path
     ) -> None:
@@ -395,7 +395,7 @@ class TestDateRangeCalculation:
         result = manager.check_date_range_span(start, end, warn_days=31)
         assert result is True
 
-    @patch("iptax.history.questionary")
+    @patch("iptax.cache.history.questionary")
     def test_check_date_range_span_too_long_continue(
         self, mock_questionary: Mock, tmp_path: Path
     ) -> None:
@@ -415,7 +415,7 @@ class TestDateRangeCalculation:
         result = manager.check_date_range_span(start, end, warn_days=31)
         assert result is True
 
-    @patch("iptax.history.questionary")
+    @patch("iptax.cache.history.questionary")
     def test_check_date_range_span_too_long_adjust(
         self, mock_questionary: Mock, tmp_path: Path
     ) -> None:
@@ -445,7 +445,7 @@ class TestRegenerationPrompt:
         result = manager.prompt_regenerate("2024-10")
         assert result is True
 
-    @patch("iptax.history.questionary")
+    @patch("iptax.cache.history.questionary")
     def test_prompt_regenerate_existing_yes(
         self, mock_questionary: Mock, tmp_path: Path
     ) -> None:
@@ -466,7 +466,7 @@ class TestRegenerationPrompt:
         result = manager.prompt_regenerate("2024-10")
         assert result is True
 
-    @patch("iptax.history.questionary")
+    @patch("iptax.cache.history.questionary")
     def test_prompt_regenerate_existing_cancel(
         self, mock_questionary: Mock, tmp_path: Path
     ) -> None:

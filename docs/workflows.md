@@ -345,7 +345,8 @@ iptax [OPTIONS]  # same as above (default command)
 **Options:**
 
 ```text
---month YYYY-MM|current|last    Generate report for specific month (default: auto-detect)
+--month YYYY-MM|current|last    Generate report for specific month
+                                (default: auto-detect)
 --workday-start YYYY-MM-DD      Override Workday start date
 --workday-end YYYY-MM-DD        Override Workday end date
 --did-start YYYY-MM-DD          Override Did start date

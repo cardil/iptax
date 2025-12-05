@@ -9,9 +9,7 @@ from textual.events import Key
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
-from iptax.models import Change
-
-from .models import Decision, Judgment
+from iptax.models import Change, Decision, Judgment
 
 # Decision icons
 ICONS = {
@@ -37,26 +35,29 @@ class ListScroll(VerticalScroll):
     # Override to remove all navigation bindings - we handle them in the app
     BINDINGS: ClassVar[list] = []
 
+    # Textual widget method override - intentionally untyped to match parent
     def scroll_visible(  # type: ignore[no-untyped-def]
         self,
-        *args,  # noqa: ANN002
-        **kwargs,  # noqa: ANN003
+        *args,  # noqa: ANN002 - Textual widget signature
+        **kwargs,  # noqa: ANN003 - Textual widget signature
     ) -> None:
         """Override to prevent automatic scroll-to-visible behavior."""
         pass
 
+    # Textual widget method override - intentionally untyped to match parent
     def scroll_to_widget(  # type: ignore[no-untyped-def,override]
         self,
-        *args,  # noqa: ANN002
-        **kwargs,  # noqa: ANN003
+        *args,  # noqa: ANN002 - Textual widget signature
+        **kwargs,  # noqa: ANN003 - Textual widget signature
     ) -> None:
         """Override to prevent scroll-to-widget behavior."""
         pass
 
+    # Textual widget method override - intentionally untyped to match parent
     def scroll_to_center(  # type: ignore[no-untyped-def]
         self,
-        *args,  # noqa: ANN002
-        **kwargs,  # noqa: ANN003
+        *args,  # noqa: ANN002 - Textual widget signature
+        **kwargs,  # noqa: ANN003 - Textual widget signature
     ) -> None:
         """Override to prevent scroll-to-center behavior."""
         pass

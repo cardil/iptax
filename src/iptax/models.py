@@ -6,6 +6,7 @@ including configuration settings, report data, and AI filtering structures.
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from enum import Enum
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -385,7 +386,10 @@ class WorkdayCalendarEntry(BaseModel):
     )
     entry_type: str = Field(
         ...,
-        description="Entry type (e.g., 'Time Tracking', 'Time Off', 'Holiday Calendar Entry Type')",
+        description=(
+            "Entry type (e.g., 'Time Tracking', 'Time Off', "
+            "'Holiday Calendar Entry Type')"
+        ),
     )
     hours: float = Field(
         ...,
@@ -717,61 +721,57 @@ class Change(BaseModel):
         return f"{self.repository.path}#{self.number}"
 
 
-class AIJudgment(BaseModel):
-    """AI judgment for a single code change.
+class Decision(str, Enum):
+    """Decision for a change (from AI or user)."""
 
-    Stores the AI's decision about whether a change is relevant to the product,
-    along with the reasoning and any user overrides.
+    INCLUDE = "INCLUDE"  # Change directly contributes to the product
+    EXCLUDE = "EXCLUDE"  # Change is unrelated to the product
+    UNCERTAIN = "UNCERTAIN"  # Cannot determine with confidence
+
+
+class Judgment(BaseModel):
+    """AI judgment for a single change.
+
+    Complete judgment with all metadata for storage and review.
     """
 
-    change_id: str = Field(
-        ...,
-        description="Unique change identifier (host/path#number)",
-    )
+    change_id: str = Field(..., description="Unique identifier: owner/repo#number")
     url: str = Field(
-        ...,
+        default="",
         description="Full PR/MR URL",
     )
     description: str = Field(
-        ...,
+        default="",
         description="Full PR/MR description",
     )
-    decision: Literal["INCLUDE", "EXCLUDE", "UNCERTAIN", "ERROR"] = Field(
+    decision: Decision = Field(
         ...,
         description="AI's initial decision",
     )
-    user_decision: Literal["INCLUDE", "EXCLUDE"] | None = Field(
-        default=None,
-        description="Final decision after user review (may differ from AI)",
-    )
-    reasoning: str = Field(
-        ...,
-        description="AI's explanation for the decision",
-    )
+    user_decision: Decision | None = Field(None, description="User override decision")
+    reasoning: str = Field(..., description="AI's reasoning for the decision")
     user_reasoning: str | None = Field(
-        default=None,
-        description="Optional human explanation when overriding",
+        None, description="User's reasoning for override"
     )
-    product: str = Field(
-        ...,
-        description="Product name this judgment is for",
-    )
+    product: str = Field(..., description="Product name this judgment is for")
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         description="When this judgment was made (UTC)",
     )
     ai_provider: str = Field(
-        ...,
-        description="AI provider and model used (e.g., 'gemini-1.5-pro')",
+        default="",
+        description="AI provider and model used (e.g., 'gemini/gemini-2.5-pro')",
     )
 
-    def get_final_decision(self) -> Literal["INCLUDE", "EXCLUDE", "UNCERTAIN", "ERROR"]:
-        """Get the final decision, considering user override.
+    @property
+    def was_corrected(self) -> bool:
+        """Return True if user overrode the AI's decision."""
+        return self.final_decision != self.decision
 
-        Returns:
-            The user's decision if provided, otherwise the AI's decision
-        """
-        return self.user_decision or self.decision
+    @property
+    def final_decision(self) -> Decision:
+        """Return user decision if set, otherwise AI decision."""
+        return self.user_decision if self.user_decision is not None else self.decision
 
     def was_overridden(self) -> bool:
         """Check if the user overrode the AI's decision.
@@ -779,11 +779,11 @@ class AIJudgment(BaseModel):
         Returns:
             True if user decision differs from AI decision
         """
-        return (
-            self.user_decision is not None
-            and self.decision not in ("UNCERTAIN", "ERROR")
-            and self.user_decision != self.decision
-        )
+        if self.user_decision is None:
+            return False
+        if self.decision == Decision.UNCERTAIN:
+            return False
+        return self.user_decision != self.decision
 
 
 class InFlightReport(BaseModel):
@@ -822,7 +822,7 @@ class InFlightReport(BaseModel):
         default_factory=list,
         description="Did changes (PRs/MRs) collected",
     )
-    judgments: list[AIJudgment] = Field(
+    judgments: list[Judgment] = Field(
         default_factory=list,
         description="AI judgments for changes (empty until AI runs)",
     )

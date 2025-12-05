@@ -83,3 +83,52 @@ class TestGetDateRange:
         start, end = utils.get_date_range("2024-12")
         assert start == date(2024, 12, 1)
         assert end == date(2024, 12, 31)
+
+
+class TestResolveDateRanges:
+    """Tests for resolve_date_ranges function."""
+
+    @pytest.mark.unit
+    def test_explicit_month(self):
+        """Test resolving with explicit month (YYYY-MM)."""
+        ranges = utils.resolve_date_ranges("2024-11")
+
+        assert ranges.workday_start == date(2024, 11, 1)
+        assert ranges.workday_end == date(2024, 11, 30)
+        # Did dates should be skewed (tested separately)
+        assert ranges.did_start <= ranges.did_end
+
+    @pytest.mark.unit
+    def test_workday_range_full_month(self):
+        """Test that workday range covers full calendar month."""
+        ranges = utils.resolve_date_ranges("2024-02")  # February
+
+        assert ranges.workday_start == date(2024, 2, 1)
+        assert ranges.workday_end == date(2024, 2, 29)  # Leap year
+
+    @pytest.mark.unit
+    def test_with_overrides(self):
+        """Test resolving with date overrides."""
+        ranges = utils.resolve_date_ranges(
+            "2024-11",
+            workday_start=date(2024, 11, 5),
+            workday_end=date(2024, 11, 25),
+            did_start=date(2024, 10, 20),
+            did_end=date(2024, 11, 20),
+        )
+
+        assert ranges.workday_start == date(2024, 11, 5)
+        assert ranges.workday_end == date(2024, 11, 25)
+        assert ranges.did_start == date(2024, 10, 20)
+        assert ranges.did_end == date(2024, 11, 20)
+
+    @pytest.mark.unit
+    def test_partial_overrides(self):
+        """Test that partial overrides work."""
+        ranges = utils.resolve_date_ranges(
+            "2024-11",
+            workday_start=date(2024, 11, 5),  # Only override start
+        )
+
+        assert ranges.workday_start == date(2024, 11, 5)
+        assert ranges.workday_end == date(2024, 11, 30)  # Default end

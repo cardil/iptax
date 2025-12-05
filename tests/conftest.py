@@ -33,3 +33,47 @@ def isolated_home(tmp_path: Path, monkeypatch) -> Path:
     # Set HOME to temp directory
     monkeypatch.setenv("HOME", str(tmp_path))
     return tmp_path
+
+
+@pytest.fixture
+def make_judgment():
+    """Factory fixture for creating Judgment instances with defaults."""
+    from iptax.ai.models import Decision, Judgment
+
+    def _make(
+        change_id: str = "test#1",
+        decision: Decision | str = Decision.INCLUDE,
+        reasoning: str = "Test reasoning",
+        product: str = "Test Product",
+        **kwargs: str | Decision | None,
+    ) -> Judgment:
+        """Create a Judgment with sensible defaults for testing.
+
+        Args:
+            change_id: Change ID (default: "test#1")
+            decision: AI decision (default: INCLUDE)
+            reasoning: AI reasoning (default: "Test reasoning")
+            product: Product name (default: "Test Product")
+            **kwargs: Additional Judgment fields (url, description,
+                ai_provider, user_decision)
+
+        Returns:
+            Judgment instance
+        """
+        # Set defaults for fields with empty string defaults in the model
+        defaults = {
+            "url": "https://test.com/pr/1",
+            "description": "Test change",
+            "ai_provider": "test-provider",
+        }
+        defaults.update(kwargs)
+
+        return Judgment(
+            change_id=change_id,
+            decision=decision,
+            reasoning=reasoning,
+            product=product,
+            **defaults,
+        )
+
+    return _make
