@@ -103,6 +103,17 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+      - name: Upload coverage artifacts
+        if: matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            coverage.xml
+            coverage.md
+            htmlcov/
+          retention-days: 14
+
   verify:
     name: Full Verification
     needs: checks
