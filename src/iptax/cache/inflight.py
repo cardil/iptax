@@ -9,6 +9,7 @@ and review process. The cache allows users to:
 
 import json
 import logging
+import re
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -56,6 +57,19 @@ class InFlightCache:
         """
         return get_cache_dir() / "inflight"
 
+    @staticmethod
+    def _validate_month_format(month: str) -> None:
+        """Validate month format to prevent path traversal.
+
+        Args:
+            month: Month string to validate
+
+        Raises:
+            ValueError: If month format is invalid
+        """
+        if not re.match(r"^\d{4}-\d{2}$", month):
+            raise ValueError(f"Invalid month format: {month}. Expected YYYY-MM.")
+
     def _get_cache_path(self, month: str) -> Path:
         """Get path to cache file for a month.
 
@@ -64,7 +78,11 @@ class InFlightCache:
 
         Returns:
             Path to the cache file
+
+        Raises:
+            ValueError: If month format is invalid (path traversal prevention)
         """
+        self._validate_month_format(month)
         return self.cache_dir / f"{month}.json"
 
     def exists(self, month: str) -> bool:
@@ -150,7 +168,9 @@ class InFlightCache:
         months = []
         for cache_file in self.cache_dir.glob("*.json"):
             month = cache_file.stem
-            months.append(month)
+            # Only include valid YYYY-MM format files
+            if re.match(r"^\d{4}-\d{2}$", month):
+                months.append(month)
 
         return sorted(months)
 

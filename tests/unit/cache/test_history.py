@@ -32,6 +32,7 @@ class TestHistoryManager:
     ) -> None:
         """Test initialization with default path."""
         test_home = tmp_path / "test_home"
+        monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
         monkeypatch.setenv("HOME", str(test_home))
         manager = HistoryManager()
 

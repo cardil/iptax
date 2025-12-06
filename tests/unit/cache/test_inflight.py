@@ -3,6 +3,8 @@
 from datetime import date
 from pathlib import Path
 
+import pytest
+
 from iptax.cache.inflight import InFlightCache
 from iptax.models import InFlightReport
 
@@ -152,3 +154,39 @@ class TestInFlightCache:
 
         cache.save(report)
         assert cache_dir.exists()
+
+    def test_invalid_month_format_raises_error(self, tmp_path: Path) -> None:
+        """Test that invalid month format raises ValueError."""
+        cache = InFlightCache(cache_dir=tmp_path)
+
+        with pytest.raises(ValueError, match="Invalid month format"):
+            cache.load("../../../tmp/evil")
+
+    def test_path_traversal_attempt_raises_error(self, tmp_path: Path) -> None:
+        """Test that path traversal attempts are rejected."""
+        cache = InFlightCache(cache_dir=tmp_path)
+
+        with pytest.raises(ValueError, match="Invalid month format"):
+            cache.exists("2024-11/../../../etc/passwd")
+
+    def test_list_all_filters_invalid_files(self, tmp_path: Path) -> None:
+        """Test that list_all only returns valid YYYY-MM format files."""
+        cache = InFlightCache(cache_dir=tmp_path)
+
+        # Create a valid report
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+        )
+        cache.save(report)
+
+        # Create an invalid file manually
+        (tmp_path / "invalid.json").write_text("{}")
+        (tmp_path / "not-a-month.json").write_text("{}")
+
+        # Should only return valid month
+        reports = cache.list_all()
+        assert reports == ["2024-11"]

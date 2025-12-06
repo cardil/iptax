@@ -135,7 +135,9 @@ The main `iptax report` command follows this workflow:
       start_date = cutoff_date from the last report in history
     - If NO previous report (first run):
       start_date = 25th of month before specified month (fallback)
-    - end_date = today (when tool is executed)
+    - end_date:
+      * Days 1-10 (finalization): last day of specified month
+      * Days 11-31 (active work): today (when tool is executed)
 
 2.3 Validate date ranges:
     - Ensure start_date <= end_date for both ranges

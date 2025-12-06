@@ -187,6 +187,8 @@ def get_did_range(month: str) -> tuple[date, date]:
 
     if last_report is not None:
         start_date = last_report + timedelta(days=1)
+        # Ensure start_date doesn't exceed today (e.g., if report already run today)
+        start_date = min(start_date, today)
     else:
         if target_month == 1:
             prev_year = target_year - 1
