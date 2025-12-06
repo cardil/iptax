@@ -13,6 +13,7 @@ def build_judgment_prompt(
     product: str,
     changes: list[Change],
     history: list[Judgment],
+    hints: list[str] | None = None,
 ) -> str:
     """Build the batch prompt for AI judgment.
 
@@ -24,6 +25,7 @@ def build_judgment_prompt(
         product: The product name to judge changes against
         changes: List of changes to evaluate
         history: Previous judgments (including corrected ones) for context
+        hints: Optional list of hints to provide context to AI
 
     Returns:
         Formatted prompt with YAML delimiters for easy extraction
@@ -47,6 +49,19 @@ def build_judgment_prompt(
         f"You are judging whether code changes belong to the product: {product}",
         "",
     ]
+
+    # Add hints section if provided
+    if hints:
+        prompt_parts.extend(
+            [
+                "## Additional insights:",
+                "",
+                "",
+            ]
+        )
+        for hint in hints:
+            prompt_parts.append(f"- {hint}")
+        prompt_parts.append("")
 
     # Add history section if available
     if history:

@@ -226,6 +226,28 @@ class AIProviderConfigBase(BaseModel):
             "Maximum tokens for AI responses " "(provider-specific defaults if None)"
         ),
     )
+    hints: list[str] = Field(
+        default_factory=list,
+        description="Optional hints to provide context to AI for evaluation",
+    )
+    max_learnings: int = Field(
+        default=20,
+        ge=0,
+        le=100,
+        description="Maximum number of learning entries for AI context",
+    )
+    correction_ratio: float = Field(
+        default=0.75,
+        description="Target ratio of corrections vs correct entries (0.0-1.0)",
+    )
+
+    @field_validator("correction_ratio")
+    @classmethod
+    def validate_correction_ratio(cls, v: float) -> float:
+        """Validate correction ratio is in valid range."""
+        if not 0.0 <= v <= 1.0:
+            raise ValueError("Correction ratio must be between 0.0 and 1.0")
+        return v
 
 
 class GeminiProviderConfig(AIProviderConfigBase):
@@ -559,10 +581,17 @@ class Settings(BaseModel):
         # Create parent directory if it doesn't exist
         path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Convert to dict, excluding defaults but preserving discriminator fields
+        data = self.model_dump(mode="python", exclude_none=True, exclude_defaults=True)
+        
+        # Ensure AI provider discriminator is preserved
+        if "ai" in data and isinstance(self.ai, (GeminiProviderConfig, VertexAIProviderConfig)):
+            data["ai"]["provider"] = self.ai.provider
+
         # Convert to dict and write to file
         with path.open("w", encoding="utf-8") as f:
             yaml.safe_dump(
-                self.model_dump(mode="python", exclude_none=True),
+                data,
                 f,
                 default_flow_style=False,
                 allow_unicode=True,

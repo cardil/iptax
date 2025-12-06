@@ -248,6 +248,9 @@ class TestGeminiProviderConfig:
         assert config.api_key_file is None
         assert config.enable_reasoning is True
         assert config.max_tokens is None
+        assert config.hints == []
+        assert config.max_learnings == 20
+        assert config.correction_ratio == 0.75
 
     def test_custom_values(self):
         """Test creating GeminiProviderConfig with custom values."""
@@ -304,6 +307,9 @@ class TestVertexAIProviderConfig:
         assert config.credentials_file is None
         assert config.enable_reasoning is True
         assert config.max_tokens is None
+        assert config.hints == []
+        assert config.max_learnings == 20
+        assert config.correction_ratio == 0.75
 
     def test_custom_values(self):
         """Test creating VertexAIProviderConfig with custom values."""
@@ -356,6 +362,80 @@ class TestVertexAIProviderConfig:
         """Test that provider field is locked to 'vertex'."""
         config = VertexAIProviderConfig(project_id="test")
         assert config.provider == "vertex"
+
+
+class TestAIProviderConfigAdvancedOptions:
+    """Test advanced AI configuration options (hints, learnings, correction ratio)."""
+
+    def test_gemini_with_hints(self):
+        """Test GeminiProviderConfig with hints."""
+        hints = ["Focus on user-facing features", "Exclude infrastructure"]
+        config = GeminiProviderConfig(hints=hints)
+
+        assert config.hints == hints
+        assert len(config.hints) == 2
+
+    def test_gemini_with_custom_learnings(self):
+        """Test GeminiProviderConfig with custom max_learnings."""
+        config = GeminiProviderConfig(max_learnings=50)
+
+        assert config.max_learnings == 50
+
+    def test_gemini_with_custom_correction_ratio(self):
+        """Test GeminiProviderConfig with custom correction_ratio."""
+        config = GeminiProviderConfig(correction_ratio=0.9)
+
+        assert config.correction_ratio == 0.9
+
+    def test_correction_ratio_validation_minimum(self):
+        """Test that correction_ratio cannot be less than 0.0."""
+        with pytest.raises(ValidationError) as exc_info:
+            GeminiProviderConfig(correction_ratio=-0.1)
+
+        assert "Correction ratio must be between 0.0 and 1.0" in str(exc_info.value)
+
+    def test_correction_ratio_validation_maximum(self):
+        """Test that correction_ratio cannot be greater than 1.0."""
+        with pytest.raises(ValidationError) as exc_info:
+            GeminiProviderConfig(correction_ratio=1.1)
+
+        assert "Correction ratio must be between 0.0 and 1.0" in str(exc_info.value)
+
+    def test_correction_ratio_boundary_values(self):
+        """Test that boundary values 0.0 and 1.0 are valid."""
+        config_min = GeminiProviderConfig(correction_ratio=0.0)
+        assert config_min.correction_ratio == 0.0
+
+        config_max = GeminiProviderConfig(correction_ratio=1.0)
+        assert config_max.correction_ratio == 1.0
+
+    def test_max_learnings_validation_minimum(self):
+        """Test that max_learnings cannot be negative."""
+        with pytest.raises(ValidationError) as exc_info:
+            GeminiProviderConfig(max_learnings=-1)
+
+        assert "greater than or equal to 0" in str(exc_info.value).lower()
+
+    def test_max_learnings_validation_maximum(self):
+        """Test that max_learnings cannot exceed 100."""
+        with pytest.raises(ValidationError) as exc_info:
+            GeminiProviderConfig(max_learnings=101)
+
+        assert "less than or equal to 100" in str(exc_info.value).lower()
+
+    def test_vertex_with_all_advanced_options(self):
+        """Test VertexAIProviderConfig with all advanced options."""
+        hints = ["Hint 1", "Hint 2"]
+        config = VertexAIProviderConfig(
+            project_id="test-project",
+            hints=hints,
+            max_learnings=30,
+            correction_ratio=0.8,
+        )
+
+        assert config.hints == hints
+        assert config.max_learnings == 30
+        assert config.correction_ratio == 0.8
 
 
 class TestDisabledAIConfig:
@@ -1019,6 +1099,62 @@ class TestSettings:
 
         mode = yaml_file.stat().st_mode
         assert stat.S_IMODE(mode) == 0o600
+
+    def test_to_yaml_file_excludes_default_values(self, tmp_path):
+        """Test that to_yaml_file excludes default values from YAML."""
+        did_config = tmp_path / "did_config"
+        did_config.write_text("[general]\n")
+
+        settings = Settings(
+            employee=EmployeeInfo(name="John Doe", supervisor="Jane Smith"),
+            product=ProductConfig(name="Test Product"),
+            ai=GeminiProviderConfig(),  # All defaults
+            did=DidConfig(config_path=str(did_config), providers=["github.com"]),
+        )
+
+        yaml_file = tmp_path / "settings.yaml"
+        settings.to_yaml_file(yaml_file)
+
+        # Read YAML content
+        with yaml_file.open() as f:
+            content = f.read()
+
+        # Default values should NOT be in YAML
+        # hints should not appear (empty list is default)
+        assert "hints:" not in content
+        # max_learnings should not appear (20 is default)
+        assert "max_learnings:" not in content
+        # correction_ratio should not appear (0.75 is default)
+        assert "correction_ratio:" not in content
+
+    def test_to_yaml_file_includes_non_default_values(self, tmp_path):
+        """Test that to_yaml_file includes non-default values in YAML."""
+        did_config = tmp_path / "did_config"
+        did_config.write_text("[general]\n")
+
+        settings = Settings(
+            employee=EmployeeInfo(name="John Doe", supervisor="Jane Smith"),
+            product=ProductConfig(name="Test Product"),
+            ai=GeminiProviderConfig(
+                hints=["Custom hint"],
+                max_learnings=30,
+                correction_ratio=0.9,
+            ),
+            did=DidConfig(config_path=str(did_config), providers=["github.com"]),
+        )
+
+        yaml_file = tmp_path / "settings.yaml"
+        settings.to_yaml_file(yaml_file)
+
+        # Read YAML content
+        with yaml_file.open() as f:
+            content = f.read()
+
+        # Non-default values SHOULD be in YAML
+        assert "hints:" in content
+        assert "Custom hint" in content
+        assert "max_learnings: 30" in content
+        assert "correction_ratio: 0.9" in content
 
 
 class TestHistoryEntry:

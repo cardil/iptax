@@ -554,6 +554,7 @@ class TestCreateInteractiveConfig:
             mock_confirm_instance = Mock()
             mock_confirm_instance.unsafe_ask.side_effect = [
                 True,  # Enable AI
+                False,  # Configure advanced AI options
                 False,  # Use .env file
                 False,  # Enable Workday
             ]
@@ -614,6 +615,7 @@ class TestCreateInteractiveConfig:
             mock_confirm_instance = Mock()
             mock_confirm_instance.unsafe_ask.side_effect = [
                 True,  # Enable AI
+                False,  # Configure advanced AI options
                 False,  # Enable Workday
             ]
             mock_confirm.return_value = mock_confirm_instance

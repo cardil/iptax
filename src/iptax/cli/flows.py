@@ -320,14 +320,23 @@ def _run_ai_filtering(
     """
     # Load history from AI cache for learning context
     ai_cache = JudgmentCacheManager()
-    history = ai_cache.get_history_for_prompt(settings.product.name)
+    history = ai_cache.get_history_for_prompt(
+        settings.product.name,
+        max_entries=settings.ai.max_learnings,
+        correction_ratio=settings.ai.correction_ratio,
+    )
     if history:
         console.print(
             f"[cyan]📚[/cyan] Using {len(history)} cached judgments for context"
         )
 
     # Build prompt for all changes at once (batch processing)
-    prompt = build_judgment_prompt(settings.product.name, changes, history=history)
+    prompt = build_judgment_prompt(
+        settings.product.name,
+        changes,
+        history=history,
+        hints=settings.ai.hints if settings.ai.hints else None,
+    )
 
     # Call AI provider with spinner
     provider = AIProvider(settings.ai)
