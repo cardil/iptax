@@ -1073,3 +1073,111 @@ class TestRunAiFiltering:
         assert call_kwargs[1]["history"] == cached_judgments
         output = strip_ansi(console.file.getvalue())
         assert "Using 1 cached judgments" in output
+
+    @pytest.mark.unit
+    def test_uses_ai_config_advanced_options(self):
+        """Test that AI config advanced options are passed to prompt builder."""
+        from iptax.models import GeminiProviderConfig
+
+        console = Console(file=StringIO(), force_terminal=True)
+        mock_settings = MagicMock()
+        mock_settings.product.name = "TestProduct"
+        mock_settings.ai = GeminiProviderConfig(
+            model="gemini-1.5-pro",
+            hints=["Focus on security fixes", "Ignore documentation changes"],
+            max_learnings=50,
+            correction_ratio=0.5,
+        )
+
+        changes = [
+            Change(
+                title="Security fix",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+            )
+        ]
+
+        mock_response = MagicMock()
+        mock_response.judgments = [
+            MagicMock(
+                change_id=changes[0].get_change_id(),
+                decision=Decision.INCLUDE,
+                reasoning="Security fix",
+            )
+        ]
+
+        with (
+            patch.object(flows, "JudgmentCacheManager") as mock_cache_cls,
+            patch.object(flows, "build_judgment_prompt") as mock_build,
+            patch.object(flows, "AIProvider") as mock_provider_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.get_history_for_prompt.return_value = []
+            mock_cache_cls.return_value = mock_cache
+
+            mock_provider = MagicMock()
+            mock_provider.judge_changes.return_value = mock_response
+            mock_provider_cls.return_value = mock_provider
+
+            mock_build.return_value = "prompt"
+
+            flows._run_ai_filtering(console, changes, mock_settings)
+
+        # Check that get_history_for_prompt was called with custom values
+        mock_cache.get_history_for_prompt.assert_called_once_with(
+            "TestProduct",
+            max_entries=50,
+            correction_ratio=0.5,
+        )
+
+        # Check that build_judgment_prompt was called with hints
+        mock_build.assert_called_once()
+        call_kwargs = mock_build.call_args
+        assert call_kwargs[1]["hints"] == [
+            "Focus on security fixes",
+            "Ignore documentation changes",
+        ]
+
+    @pytest.mark.unit
+    def test_uses_defaults_for_disabled_ai_config(self):
+        """Test that default values are used when AI is disabled config type."""
+        from iptax.models import DisabledAIConfig
+
+        console = Console(file=StringIO(), force_terminal=True)
+        mock_settings = MagicMock()
+        mock_settings.product.name = "TestProduct"
+        mock_settings.ai = DisabledAIConfig()
+
+        mock_response = MagicMock()
+        mock_response.judgments = []
+
+        with (
+            patch.object(flows, "JudgmentCacheManager") as mock_cache_cls,
+            patch.object(flows, "build_judgment_prompt") as mock_build,
+            patch.object(flows, "AIProvider") as mock_provider_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.get_history_for_prompt.return_value = []
+            mock_cache_cls.return_value = mock_cache
+
+            mock_provider = MagicMock()
+            mock_provider.judge_changes.return_value = mock_response
+            mock_provider_cls.return_value = mock_provider
+
+            mock_build.return_value = "prompt"
+
+            flows._run_ai_filtering(console, [], mock_settings)
+
+        # Check that get_history_for_prompt was called with defaults
+        mock_cache.get_history_for_prompt.assert_called_once()
+        call_kwargs = mock_cache.get_history_for_prompt.call_args
+        # Defaults from AIProviderConfigBase
+        assert call_kwargs[1]["max_entries"] == 20
+        assert call_kwargs[1]["correction_ratio"] == 0.75
+
+        # Check that hints is None
+        mock_build.assert_called_once()
+        build_kwargs = mock_build.call_args
+        assert build_kwargs[1]["hints"] is None
