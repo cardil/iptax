@@ -551,10 +551,12 @@ class TestCreateInteractiveConfig:
             mock_text.return_value = mock_text_instance
 
             # Mock confirm inputs
+            # Order: Enable AI → Use .env file → Configure advanced → Workday
             mock_confirm_instance = Mock()
             mock_confirm_instance.unsafe_ask.side_effect = [
                 True,  # Enable AI
-                False,  # Use .env file
+                False,  # Use .env file for API key
+                False,  # Configure advanced AI options
                 False,  # Enable Workday
             ]
             mock_confirm.return_value = mock_confirm_instance
@@ -614,6 +616,7 @@ class TestCreateInteractiveConfig:
             mock_confirm_instance = Mock()
             mock_confirm_instance.unsafe_ask.side_effect = [
                 True,  # Enable AI
+                False,  # Configure advanced AI options
                 False,  # Enable Workday
             ]
             mock_confirm.return_value = mock_confirm_instance
@@ -903,3 +906,284 @@ class TestEdgeCases:
         # Should overwrite
         settings = Settings.from_yaml_file(settings_file)
         assert settings.employee.name == "Your Name"
+
+
+class TestInteractiveAdvancedAIOptions:
+    """Test advanced AI options in interactive configuration."""
+
+    def test_interactive_config_with_gemini_and_advanced_options(self, tmp_path):
+        """Test interactive configuration with Gemini AI and advanced options."""
+        did_config_file = tmp_path / "did-config"
+        did_config_file.write_text("[general]\n[github]\ntype = github\n")
+
+        settings_file = tmp_path / "settings.yaml"
+
+        configurator = Configurator(
+            settings_path=settings_file,
+            did_config_path=did_config_file,
+        )
+
+        with (
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.select") as mock_select,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
+        ):
+
+            # Mock text inputs
+            mock_text_instance = Mock()
+            mock_text_instance.unsafe_ask.side_effect = [
+                "John Doe",  # Employee name
+                "Jane Smith",  # Supervisor name
+                "Test Product",  # Product name
+                "80",  # Creative percentage
+                "~/Documents/iptax/{year}/",  # Output dir
+                "gemini-1.5-pro",  # AI model
+                "GEMINI_API_KEY",  # API key env
+                # Advanced options:
+                "Focus on security",  # Hint 1
+                "Ignore docs",  # Hint 2
+                "",  # Empty hint to stop
+                "50",  # Max learnings
+                "60",  # Correction ratio %
+                str(did_config_file),  # did config path
+            ]
+            mock_text.return_value = mock_text_instance
+
+            # Mock confirm inputs
+            # Order: Enable AI → Use .env file → Configure advanced → Workday
+            mock_confirm_instance = Mock()
+            mock_confirm_instance.unsafe_ask.side_effect = [
+                True,  # Enable AI
+                False,  # Use .env file (comes before advanced options!)
+                True,  # Configure advanced AI options
+                False,  # Enable Workday
+            ]
+            mock_confirm.return_value = mock_confirm_instance
+
+            # Mock select (AI provider)
+            mock_select_instance = Mock()
+            mock_select_instance.unsafe_ask.return_value = "gemini"
+            mock_select.return_value = mock_select_instance
+
+            # Mock checkbox
+            mock_checkbox_instance = Mock()
+            mock_checkbox_instance.unsafe_ask.return_value = ["github.com"]
+            mock_checkbox.return_value = mock_checkbox_instance
+
+            configurator.create(interactive=True)
+
+        settings = Settings.from_yaml_file(settings_file)
+        assert isinstance(settings.ai, GeminiProviderConfig)
+        assert settings.ai.hints == ["Focus on security", "Ignore docs"]
+        assert settings.ai.max_learnings == 50
+        assert settings.ai.correction_ratio == 0.6
+
+    def test_interactive_config_with_vertex_and_advanced_options(self, tmp_path):
+        """Test interactive configuration with Vertex AI and advanced options."""
+        did_config_file = tmp_path / "did-config"
+        did_config_file.write_text("[general]\n[github]\ntype = github\n")
+
+        settings_file = tmp_path / "settings.yaml"
+
+        configurator = Configurator(
+            settings_path=settings_file,
+            did_config_path=did_config_file,
+        )
+
+        with (
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.select") as mock_select,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
+        ):
+
+            # Mock text inputs
+            mock_text_instance = Mock()
+            mock_text_instance.unsafe_ask.side_effect = [
+                "John Doe",  # Employee name
+                "Jane Smith",  # Supervisor name
+                "Test Product",  # Product name
+                "80",  # Creative percentage
+                "~/Documents/iptax/{year}/",  # Output dir
+                "gemini-1.5-pro",  # AI model
+                "my-gcp-project",  # Project ID
+                "us-central1",  # Location
+                "",  # Credentials file (empty)
+                # Advanced options:
+                "Security first",  # Hint 1
+                "",  # Empty hint to stop
+                "30",  # Max learnings
+                "80",  # Correction ratio %
+                str(did_config_file),  # did config path
+            ]
+            mock_text.return_value = mock_text_instance
+
+            # Mock confirm inputs
+            mock_confirm_instance = Mock()
+            mock_confirm_instance.unsafe_ask.side_effect = [
+                True,  # Enable AI
+                True,  # Configure advanced AI options
+                False,  # Enable Workday
+            ]
+            mock_confirm.return_value = mock_confirm_instance
+
+            # Mock select (AI provider)
+            mock_select_instance = Mock()
+            mock_select_instance.unsafe_ask.return_value = "vertex"
+            mock_select.return_value = mock_select_instance
+
+            # Mock checkbox
+            mock_checkbox_instance = Mock()
+            mock_checkbox_instance.unsafe_ask.return_value = ["github.com"]
+            mock_checkbox.return_value = mock_checkbox_instance
+
+            configurator.create(interactive=True)
+
+        settings = Settings.from_yaml_file(settings_file)
+        assert isinstance(settings.ai, VertexAIProviderConfig)
+        assert settings.ai.hints == ["Security first"]
+        assert settings.ai.max_learnings == 30
+        assert settings.ai.correction_ratio == 0.8
+
+    def test_interactive_config_skip_advanced_options(self, tmp_path):
+        """Test interactive configuration skipping advanced options uses defaults."""
+        did_config_file = tmp_path / "did-config"
+        did_config_file.write_text("[general]\n[github]\ntype = github\n")
+
+        settings_file = tmp_path / "settings.yaml"
+
+        configurator = Configurator(
+            settings_path=settings_file,
+            did_config_path=did_config_file,
+        )
+
+        with (
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.select") as mock_select,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
+        ):
+
+            # Mock text inputs
+            mock_text_instance = Mock()
+            mock_text_instance.unsafe_ask.side_effect = [
+                "John Doe",  # Employee name
+                "Jane Smith",  # Supervisor name
+                "Test Product",  # Product name
+                "80",  # Creative percentage
+                "~/Documents/iptax/{year}/",  # Output dir
+                "gemini-1.5-pro",  # AI model
+                "GEMINI_API_KEY",  # API key env
+                str(did_config_file),  # did config path
+            ]
+            mock_text.return_value = mock_text_instance
+
+            # Mock confirm inputs
+            mock_confirm_instance = Mock()
+            mock_confirm_instance.unsafe_ask.side_effect = [
+                True,  # Enable AI
+                False,  # Use .env file for API key
+                False,  # Skip advanced AI options
+                False,  # Enable Workday
+            ]
+            mock_confirm.return_value = mock_confirm_instance
+
+            # Mock select (AI provider)
+            mock_select_instance = Mock()
+            mock_select_instance.unsafe_ask.return_value = "gemini"
+            mock_select.return_value = mock_select_instance
+
+            # Mock checkbox
+            mock_checkbox_instance = Mock()
+            mock_checkbox_instance.unsafe_ask.return_value = ["github.com"]
+            mock_checkbox.return_value = mock_checkbox_instance
+
+            configurator.create(interactive=True)
+
+        settings = Settings.from_yaml_file(settings_file)
+        assert isinstance(settings.ai, GeminiProviderConfig)
+        # Defaults should be used
+        assert settings.ai.hints == []
+        assert settings.ai.max_learnings == 20
+        assert settings.ai.correction_ratio == 0.75
+
+    def test_interactive_config_preserves_existing_advanced_options(self, tmp_path):
+        """Test that existing advanced options are preserved when updating config."""
+        did_config_file = tmp_path / "did-config"
+        did_config_file.write_text("[general]\n[github]\ntype = github\n")
+
+        # Create existing settings with advanced options
+        settings_file = tmp_path / "settings.yaml"
+        existing_settings = Settings(
+            employee={"name": "Old Name", "supervisor": "Old Super"},
+            product={"name": "Old Product"},
+            ai=GeminiProviderConfig(
+                model="gemini-1.5-pro",
+                hints=["Existing hint"],
+                max_learnings=40,
+                correction_ratio=0.5,
+            ),
+            did={"config_path": str(did_config_file), "providers": ["github"]},
+        )
+        existing_settings.to_yaml_file(settings_file)
+
+        configurator = Configurator(
+            settings_path=settings_file,
+            did_config_path=did_config_file,
+        )
+
+        with (
+            patch("iptax.config.interactive.questionary.text") as mock_text,
+            patch("iptax.config.interactive.questionary.confirm") as mock_confirm,
+            patch("iptax.config.interactive.questionary.select") as mock_select,
+            patch("iptax.config.interactive.questionary.checkbox") as mock_checkbox,
+            patch("iptax.config.interactive.questionary.print"),
+        ):
+
+            # Mock text inputs - keep all defaults
+            mock_text_instance = Mock()
+            mock_text_instance.unsafe_ask.side_effect = [
+                "Old Name",  # Employee name (default)
+                "Old Super",  # Supervisor name (default)
+                "Old Product",  # Product name (default)
+                "80",  # Creative percentage
+                "~/Documents/iptax/{year}/",  # Output dir
+                "gemini-1.5-pro",  # AI model (default)
+                "GEMINI_API_KEY",  # API key env
+                str(did_config_file),  # did config path
+            ]
+            mock_text.return_value = mock_text_instance
+
+            # Mock confirm inputs - skip advanced to preserve existing
+            mock_confirm_instance = Mock()
+            mock_confirm_instance.unsafe_ask.side_effect = [
+                True,  # Enable AI
+                False,  # Use .env file for API key
+                False,  # Skip advanced AI options (keeps existing)
+                False,  # Enable Workday
+            ]
+            mock_confirm.return_value = mock_confirm_instance
+
+            # Mock select (AI provider)
+            mock_select_instance = Mock()
+            mock_select_instance.unsafe_ask.return_value = "gemini"
+            mock_select.return_value = mock_select_instance
+
+            # Mock checkbox
+            mock_checkbox_instance = Mock()
+            mock_checkbox_instance.unsafe_ask.return_value = ["github"]
+            mock_checkbox.return_value = mock_checkbox_instance
+
+            # Configurator.create() auto-loads existing settings from file
+            configurator.create(interactive=True)
+
+        settings = Settings.from_yaml_file(settings_file)
+        assert isinstance(settings.ai, GeminiProviderConfig)
+        # Should preserve existing advanced options (from auto-loaded defaults)
+        assert settings.ai.hints == ["Existing hint"]
+        assert settings.ai.max_learnings == 40
+        assert settings.ai.correction_ratio == 0.5

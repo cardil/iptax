@@ -302,3 +302,102 @@ def test_github_and_gitlab_changes() -> None:
         "https://gitlab.example.org/group/subgroup/project/-/merge_requests/456"
         in prompt
     )
+
+
+def test_with_hints(sample_change: Change) -> None:
+    """Test prompt building with hints."""
+    hints = ["Focus on user-facing features", "Exclude infrastructure repos"]
+    prompt = build_judgment_prompt(
+        product="Test Product",
+        changes=[sample_change],
+        history=[],
+        hints=hints,
+    )
+
+    # Should include hints section
+    assert "Additional insights:" in prompt
+
+    # Should include all hints
+    for hint in hints:
+        assert hint in prompt
+        assert f"- {hint}" in prompt
+
+
+def test_without_hints(sample_change: Change) -> None:
+    """Test prompt building without hints (None)."""
+    prompt = build_judgment_prompt(
+        product="Test Product",
+        changes=[sample_change],
+        history=[],
+        hints=None,
+    )
+
+    # Should NOT include hints section
+    assert "Additional insights:" not in prompt
+
+
+def test_with_empty_hints_list(sample_change: Change) -> None:
+    """Test prompt building with empty hints list."""
+    prompt = build_judgment_prompt(
+        product="Test Product",
+        changes=[sample_change],
+        history=[],
+        hints=[],
+    )
+
+    # Should NOT include hints section (empty list is falsy)
+    assert "Additional insights:" not in prompt
+
+
+def test_hints_appear_before_history(
+    sample_change: Change, confirmed_judgment: Judgment
+) -> None:
+    """Test that hints section appears before history section."""
+    hints = ["Custom hint"]
+    prompt = build_judgment_prompt(
+        product="Test Product",
+        changes=[sample_change],
+        history=[confirmed_judgment],
+        hints=hints,
+    )
+
+    # Both sections should be present
+    assert "Additional insights:" in prompt
+    assert "Previous Judgment History" in prompt
+
+    # Hints should appear before history
+    hints_pos = prompt.find("Additional insights:")
+    history_pos = prompt.find("Previous Judgment History")
+    assert hints_pos < history_pos
+
+
+def test_hints_with_multiple_changes_and_history(
+    sample_changes: list[Change],
+    confirmed_judgment: Judgment,
+    corrected_judgment: Judgment,
+) -> None:
+    """Test prompt with hints, multiple changes, and history."""
+    hints = ["Hint 1", "Hint 2"]
+    prompt = build_judgment_prompt(
+        product="Test Product",
+        changes=sample_changes,
+        history=[confirmed_judgment, corrected_judgment],
+        hints=hints,
+    )
+
+    # All sections should be present
+    assert "Additional insights:" in prompt
+    assert "Previous Judgment History" in prompt
+    assert "Current Changes to Judge" in prompt
+
+    # All hints should be present
+    for hint in hints:
+        assert hint in prompt
+
+    # All changes should be present
+    for change in sample_changes:
+        assert change.title in prompt
+
+    # All history items should be present
+    assert confirmed_judgment.change_id in prompt
+    assert corrected_judgment.change_id in prompt
