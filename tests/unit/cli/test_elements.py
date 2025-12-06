@@ -129,8 +129,11 @@ class TestDisplayReviewResults:
 
         output = strip_ansi(console.file.getvalue())
         # New format includes indicator: "INCLUDE(✓): 1"
-        assert "INCLUDE" in output
-        assert "1" in output
+        import re
+
+        assert re.search(
+            r"INCLUDE.*: 1", output
+        ), f"Expected 'INCLUDE.*: 1' in: {output}"
         assert "Test change" in output
 
     @pytest.mark.unit
@@ -172,9 +175,17 @@ class TestDisplayReviewResults:
 
         output = strip_ansi(console.file.getvalue())
         # New format includes indicators: "INCLUDE(✓): 1  EXCLUDE(✗): 1"
-        assert "INCLUDE" in output
-        assert "EXCLUDE" in output
-        assert "UNCERTAIN" in output
+        import re
+
+        assert re.search(
+            r"INCLUDE.*: 1", output
+        ), f"Expected 'INCLUDE.*: 1' in: {output}"
+        assert re.search(
+            r"EXCLUDE.*: 1", output
+        ), f"Expected 'EXCLUDE.*: 1' in: {output}"
+        assert re.search(
+            r"UNCERTAIN.*: 1", output
+        ), f"Expected 'UNCERTAIN.*: 1' in: {output}"
 
 
 class TestDisplayHistoryTable:

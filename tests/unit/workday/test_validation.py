@@ -41,7 +41,7 @@ class TestGetWorkdaysInRange:
 
         workdays = get_workdays_in_range(start, end)
 
-        # November 2024 has 21 workdays (30 days - 4 Saturdays - 5 Sundays)
+        # November 2024 has 21 workdays (30 days - 5 Saturdays - 4 Sundays)
         assert len(workdays) == 21
 
     def test_single_day(self) -> None:

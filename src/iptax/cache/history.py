@@ -196,11 +196,19 @@ class HistoryManager:
         month_key = parsed_month.strftime("%Y-%m")
         now = datetime.now()
 
-        # Create new entry (overwrites if exists)
-        self._history[month_key] = HistoryEntry(
-            last_cutoff_date=cutoff_date,
-            generated_at=now,
-        )
+        # Check if this is a regeneration
+        if month_key in self._history:
+            existing = self._history[month_key]
+            self._history[month_key] = HistoryEntry(
+                last_cutoff_date=cutoff_date,
+                generated_at=existing.generated_at,
+                regenerated_at=now,
+            )
+        else:
+            self._history[month_key] = HistoryEntry(
+                last_cutoff_date=cutoff_date,
+                generated_at=now,
+            )
 
 
 # Convenience functions

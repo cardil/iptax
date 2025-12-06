@@ -678,16 +678,24 @@ async def report_flow(
         cache.save(report)
 
     # Review if needed and not skipped
+    review_accepted = True  # Default to True when review is skipped
     if not options.skip_review and report.judgments:
         result = await review(console, report.judgments, report.changes)
 
         # Always save judgments (even partial reviews)
         report.judgments = result.judgments
         cache.save(report)
+        review_accepted = result.accepted
 
         # Save to AI cache if review was accepted
         if result.accepted:
             _save_judgments_to_ai_cache(console, result.judgments)
+
+    # Only finalize if review was accepted (or skipped)
+    if not review_accepted:
+        console.print("\n[yellow]⏳[/yellow] Review not completed - report not saved")
+        console.print("Run [cyan]iptax report[/cyan] again to resume")
+        return True  # Partial success - data is saved in cache
 
     # Display final summary
     if report.judgments:
