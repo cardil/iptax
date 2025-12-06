@@ -1085,8 +1085,8 @@ class TestInteractiveAdvancedAIOptions:
             mock_confirm_instance = Mock()
             mock_confirm_instance.unsafe_ask.side_effect = [
                 True,  # Enable AI
+                False,  # Use .env file for API key
                 False,  # Skip advanced AI options
-                False,  # Use .env file
                 False,  # Enable Workday
             ]
             mock_confirm.return_value = mock_confirm_instance
@@ -1161,8 +1161,8 @@ class TestInteractiveAdvancedAIOptions:
             mock_confirm_instance = Mock()
             mock_confirm_instance.unsafe_ask.side_effect = [
                 True,  # Enable AI
+                False,  # Use .env file for API key
                 False,  # Skip advanced AI options (keeps existing)
-                False,  # Use .env file
                 False,  # Enable Workday
             ]
             mock_confirm.return_value = mock_confirm_instance
