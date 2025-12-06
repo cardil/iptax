@@ -33,10 +33,10 @@ requirements**: employee payments must be made before the 10th of the following 
 
    - Reports for **CURRENT month**
    - Workday: Full current calendar month
-   - Did: (current_date - 1 month) to current_date
+   - Did: From last recorded cutoff (or 25th of previous month) to today
    - Example: Run on Nov 25 → Reports November
      - Workday: Nov 1-30
-     - Did: Oct 25 to Nov 25
+     - Did: Last cutoff from history, or Oct 25 fallback → Nov 25
 
 **Why this logic?**
 
@@ -130,11 +130,11 @@ The main `iptax report` command follows this workflow:
     - start_date = first day of specified month
     - end_date = last day of specified month
 
-2.2 Calculate Did date range (skewed):
+2.2 Calculate Did date range (from history or fallback):
     - If history has a previous report:
-      start_date = last_report_date from history
+      start_date = cutoff_date from the last report in history
     - If NO previous report (first run):
-      start_date = 25th of month before specified month
+      start_date = 25th of month before specified month (fallback)
     - end_date = today (when tool is executed)
 
 2.3 Validate date ranges:
@@ -401,25 +401,28 @@ iptax report --month 2024-10 --skip-ai --skip-workday
 **Usage:**
 
 ```bash
-iptax cache [OPTIONS]
+iptax cache [SUBCOMMAND]
 ```
 
-**Options:**
+**Subcommands:**
 
 ```text
---show                   Show current in-flight cache status
---clear                  Clear in-flight cache
+list                     List all in-flight cache entries
+clear [--month YYYY-MM]  Clear in-flight cache (all or specific month)
 --path                   Show path to cache directory
 ```
 
 **Examples:**
 
 ```bash
-# Show cache status
-iptax cache --show
+# List all cache entries
+iptax cache list
 
-# Clear in-flight cache
-iptax cache --clear
+# Clear all in-flight cache
+iptax cache clear
+
+# Clear cache for specific month only
+iptax cache clear --month 2024-11
 
 # Show cache directory path
 iptax cache --path
@@ -427,9 +430,10 @@ iptax cache --path
 
 **What it does:**
 
-- `--show`: Displays information about cached in-flight data (month, date ranges, data
+- `list`: Displays information about all cached in-flight data (month, date ranges, data
   collected, etc.)
-- `--clear`: Removes all in-flight cached data (prompts for confirmation)
+- `clear`: Removes in-flight cached data (prompts for confirmation)
+- `clear --month YYYY-MM`: Removes only the cache for the specified month
 - `--path`: Displays the path to the cache directory
 
 ### Config Command

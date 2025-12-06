@@ -167,7 +167,7 @@ Choice:
 ```bash
 Error: Cannot parse ~/.cache/iptax/history.json
 
-JSON syntax error on line 5: Expected '='
+JSON decode error: Expecting value: line 5 column 3
 
 Options:
   [B]ackup and create new history (safe)
