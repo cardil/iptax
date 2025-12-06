@@ -6,11 +6,15 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from did.plugins.github import Issue
+from did.plugins.gitlab import MergedRequest
+from pydantic import ValidationError
 
 from iptax.did import (
     DidIntegrationError,
     InvalidStatDataError,
     _clean_emoji,
+    _convert_github_pr,
     _convert_to_change,
     _determine_provider_type,
     _fetch_provider_changes,
@@ -132,16 +136,45 @@ class TestInvalidStatDataError:
             assert str(error.__cause__) == "Bad value"
 
 
+def _create_github_issue_mock(
+    owner: str | None = "owner",
+    project: str | None = "repo",
+    id_val: int | str | None = 1,
+    title: str | None = "Title",
+) -> Mock:
+    """Create a mock that acts like a GitHub Issue."""
+    mock = Mock(spec=Issue)
+    mock.owner = owner
+    mock.project = project
+    mock.id = id_val
+    mock.title = title
+    return mock
+
+
+def _create_gitlab_mr_mock(
+    path_with_namespace: str = "group/project",
+    iid: int | None = 1,
+    title: str | None = "Title",
+) -> Mock:
+    """Create a mock that acts like a GitLab MergedRequest."""
+    mock = Mock(spec=MergedRequest)
+    mock.project = {"path_with_namespace": path_with_namespace}
+    mock.data = {"title": title}
+    mock.iid = Mock(return_value=iid)
+    return mock
+
+
 class TestConvertToChange:
     """Test _convert_to_change function."""
 
     def test_convert_valid_github_stat(self) -> None:
         """Test converting valid GitHub stat to Change."""
-        stat = Mock()
-        stat.owner = "octocat"
-        stat.project = "hello-world"
-        stat.id = "123"
-        stat.title = "Add new feature"
+        stat = _create_github_issue_mock(
+            owner="octocat",
+            project="hello-world",
+            id_val=123,
+            title="Add new feature",
+        )
 
         change = _convert_to_change(stat, "github.com")
 
@@ -154,11 +187,11 @@ class TestConvertToChange:
 
     def test_convert_valid_gitlab_stat(self) -> None:
         """Test converting valid GitLab stat to Change."""
-        stat = Mock()
-        stat.owner = "gitlab-org"
-        stat.project = "gitlab"
-        stat.id = "456"
-        stat.title = "Fix bug"
+        stat = _create_gitlab_mr_mock(
+            path_with_namespace="gitlab-org/gitlab",
+            iid=456,
+            title="Fix bug",
+        )
 
         change = _convert_to_change(stat, "gitlab.com")
 
@@ -170,11 +203,12 @@ class TestConvertToChange:
 
     def test_convert_with_emoji_in_title(self) -> None:
         """Test converting stat with emoji in title."""
-        stat = Mock()
-        stat.owner = "user"
-        stat.project = "repo"
-        stat.id = "1"
-        stat.title = ":rocket: Add feature :sparkles:"
+        stat = _create_github_issue_mock(
+            owner="user",
+            project="repo",
+            id_val=1,
+            title=":rocket: Add feature :sparkles:",
+        )
 
         change = _convert_to_change(stat, "github.com")
 
@@ -182,90 +216,67 @@ class TestConvertToChange:
 
     def test_convert_missing_owner(self) -> None:
         """Test converting stat with missing owner raises error."""
-        stat = Mock()
-        stat.owner = None
-        stat.project = "repo"
-        stat.id = "1"
-        stat.title = "Title"
+        stat = _create_github_issue_mock(owner=None)
 
         with pytest.raises(InvalidStatDataError, match="Missing owner"):
-            _convert_to_change(stat, "github.com")
+            _convert_github_pr(stat, "github.com")
 
     def test_convert_missing_project(self) -> None:
         """Test converting stat with missing project raises error."""
-        stat = Mock()
-        stat.owner = "owner"
-        stat.project = None
-        stat.id = "1"
-        stat.title = "Title"
+        stat = _create_github_issue_mock(project=None)
 
         with pytest.raises(InvalidStatDataError, match="Missing project"):
-            _convert_to_change(stat, "github.com")
+            _convert_github_pr(stat, "github.com")
 
     def test_convert_missing_id(self) -> None:
         """Test converting stat with missing id raises error."""
-        stat = Mock()
-        stat.owner = "owner"
-        stat.project = "repo"
-        stat.id = None
-        stat.title = "Title"
+        stat = _create_github_issue_mock(id_val=None)
 
         with pytest.raises(InvalidStatDataError, match="Missing id"):
-            _convert_to_change(stat, "github.com")
+            _convert_github_pr(stat, "github.com")
 
     def test_convert_missing_title(self) -> None:
         """Test converting stat with missing title raises error."""
-        stat = Mock()
-        stat.owner = "owner"
-        stat.project = "repo"
-        stat.id = "1"
-        stat.title = None
+        stat = _create_github_issue_mock(title=None)
 
         with pytest.raises(InvalidStatDataError, match="Missing title"):
-            _convert_to_change(stat, "github.com")
+            _convert_github_pr(stat, "github.com")
 
     def test_convert_empty_title(self) -> None:
         """Test converting stat with empty title raises error."""
-        stat = Mock()
-        stat.owner = "owner"
-        stat.project = "repo"
-        stat.id = "1"
-        stat.title = ""
+        stat = _create_github_issue_mock(title="")
 
         with pytest.raises(InvalidStatDataError, match="Missing title"):
-            _convert_to_change(stat, "github.com")
+            _convert_github_pr(stat, "github.com")
 
     def test_convert_invalid_id_type(self) -> None:
-        """Test converting stat with non-numeric id raises error."""
-        stat = Mock()
-        stat.owner = "owner"
-        stat.project = "repo"
-        stat.id = "not-a-number"
-        stat.title = "Title"
+        """Test converting stat with non-numeric id raises Pydantic error."""
+        stat = _create_github_issue_mock(id_val="not-a-number")
 
-        with pytest.raises(InvalidStatDataError, match="Invalid id"):
-            _convert_to_change(stat, "github.com")
+        # Pydantic validates the Change model and raises ValidationError
+        with pytest.raises(ValidationError, match="int_parsing"):
+            _convert_github_pr(stat, "github.com")
 
     def test_convert_zero_id(self) -> None:
         """Test converting stat with zero id raises error."""
-        stat = Mock()
-        stat.owner = "owner"
-        stat.project = "repo"
-        stat.id = "0"
-        stat.title = "Title"
+        stat = _create_github_issue_mock(id_val=0)
 
-        with pytest.raises(InvalidStatDataError, match="Non-positive id"):
-            _convert_to_change(stat, "github.com")
+        with pytest.raises(InvalidStatDataError, match="Missing id"):
+            _convert_github_pr(stat, "github.com")
 
     def test_convert_negative_id(self) -> None:
-        """Test converting stat with negative id raises error."""
-        stat = Mock()
-        stat.owner = "owner"
-        stat.project = "repo"
-        stat.id = "-5"
-        stat.title = "Title"
+        """Test converting stat with negative id raises Pydantic error."""
+        stat = _create_github_issue_mock(id_val=-5)
 
-        with pytest.raises(InvalidStatDataError, match="Non-positive id"):
+        # Pydantic validates the Change model and raises ValidationError for negative
+        with pytest.raises(ValidationError, match="greater_than"):
+            _convert_github_pr(stat, "github.com")
+
+    def test_convert_unknown_type_raises_error(self) -> None:
+        """Test converting unknown stat type raises error."""
+        stat = Mock()  # Generic mock, not Issue or MergedRequest
+
+        with pytest.raises(InvalidStatDataError, match="Unknown stat type"):
             _convert_to_change(stat, "github.com")
 
 
@@ -275,17 +286,16 @@ class TestFetchProviderChanges:
     @patch("iptax.did.did.cli.main")
     def test_fetch_github_provider(self, mock_did_main: Mock) -> None:
         """Test fetching changes from GitHub provider."""
-        mock_stat = Mock()
-        mock_stat.owner = "owner"
-        mock_stat.project = "repo"
-        mock_stat.id = "1"
-        mock_stat.title = "PR title"
+        mock_stat = _create_github_issue_mock(
+            owner="owner", project="repo", id_val=1, title="PR title"
+        )
 
         mock_merged_stats = Mock()
         mock_merged_stats.__class__.__name__ = "PullRequestsMerged"
         mock_merged_stats.stats = [mock_stat]
 
         mock_provider_group = Mock()
+        mock_provider_group.__class__.__name__ = "GitHubStats"
         mock_provider_group.stats = [mock_merged_stats]
 
         mock_user = Mock()
@@ -306,17 +316,18 @@ class TestFetchProviderChanges:
     @patch("iptax.did.did.cli.main")
     def test_fetch_gitlab_provider(self, mock_did_main: Mock) -> None:
         """Test fetching changes from GitLab provider."""
-        mock_stat = Mock()
-        mock_stat.owner = "group"
-        mock_stat.project = "project"
-        mock_stat.id = "2"
-        mock_stat.title = "MR title"
+        mock_stat = _create_gitlab_mr_mock(
+            path_with_namespace="group/project",
+            iid=2,
+            title="MR title",
+        )
 
         mock_merged_stats = Mock()
         mock_merged_stats.__class__.__name__ = "MergeRequestsMerged"
         mock_merged_stats.stats = [mock_stat]
 
         mock_provider_group = Mock()
+        mock_provider_group.__class__.__name__ = "GitLabStats"
         mock_provider_group.stats = [mock_merged_stats]
 
         mock_user = Mock()
@@ -381,6 +392,7 @@ class TestFetchProviderChanges:
         mock_other_stats.__class__.__name__ = "IssuesCreated"
 
         mock_provider_group = Mock()
+        mock_provider_group.__class__.__name__ = "GitHubStats"
         mock_provider_group.stats = [mock_other_stats]
 
         mock_user = Mock()
@@ -398,23 +410,19 @@ class TestFetchProviderChanges:
     @patch("iptax.did.did.cli.main")
     def test_fetch_multiple_changes(self, mock_did_main: Mock) -> None:
         """Test fetching multiple changes."""
-        mock_stat1 = Mock()
-        mock_stat1.owner = "owner"
-        mock_stat1.project = "repo1"
-        mock_stat1.id = "1"
-        mock_stat1.title = "First PR"
-
-        mock_stat2 = Mock()
-        mock_stat2.owner = "owner"
-        mock_stat2.project = "repo2"
-        mock_stat2.id = "2"
-        mock_stat2.title = "Second PR"
+        mock_stat1 = _create_github_issue_mock(
+            owner="owner", project="repo1", id_val=1, title="First PR"
+        )
+        mock_stat2 = _create_github_issue_mock(
+            owner="owner", project="repo2", id_val=2, title="Second PR"
+        )
 
         mock_merged_stats = Mock()
         mock_merged_stats.__class__.__name__ = "PullRequestsMerged"
         mock_merged_stats.stats = [mock_stat1, mock_stat2]
 
         mock_provider_group = Mock()
+        mock_provider_group.__class__.__name__ = "GitHubStats"
         mock_provider_group.stats = [mock_merged_stats]
 
         mock_user = Mock()
@@ -435,23 +443,19 @@ class TestFetchProviderChanges:
     @patch("iptax.did.did.cli.main")
     def test_fetch_filters_invalid_stats(self, mock_did_main: Mock) -> None:
         """Test that invalid stats are filtered out with logging."""
-        mock_valid = Mock()
-        mock_valid.owner = "owner"
-        mock_valid.project = "repo"
-        mock_valid.id = "1"
-        mock_valid.title = "Valid PR"
-
+        # Valid GitHub Issue mock
+        mock_valid = _create_github_issue_mock(
+            owner="owner", project="repo", id_val=1, title="Valid PR"
+        )
+        # Invalid: generic mock (not Issue or MergedRequest type)
         mock_invalid = Mock()
-        mock_invalid.owner = None  # Missing owner
-        mock_invalid.project = "repo"
-        mock_invalid.id = "2"
-        mock_invalid.title = "Invalid PR"
 
         mock_merged_stats = Mock()
         mock_merged_stats.__class__.__name__ = "PullRequestsMerged"
         mock_merged_stats.stats = [mock_valid, mock_invalid]
 
         mock_provider_group = Mock()
+        mock_provider_group.__class__.__name__ = "GitHubStats"
         mock_provider_group.stats = [mock_merged_stats]
 
         mock_user = Mock()
@@ -496,9 +500,9 @@ class TestExtractMergedStats:
 
         with pytest.raises(
             DidIntegrationError,
-            match=r"User stats object \(type: .*\) missing 'stats' attribute",
+            match=r"Object \(type: .*\) missing 'stats' attribute",
         ):
-            _extract_merged_stats(result)
+            _extract_merged_stats(result, "github.com")
 
     def test_extract_user_stats_stats_not_list(self) -> None:
         """Test error when user stats.stats is not a list."""
@@ -508,51 +512,50 @@ class TestExtractMergedStats:
         mock_user.stats = "not a list"
         result = ([mock_user],)
 
-        with pytest.raises(
-            DidIntegrationError, match=r"User stats\.stats is not a list"
-        ):
-            _extract_merged_stats(result)
+        with pytest.raises(DidIntegrationError, match=r"stats is not a list"):
+            _extract_merged_stats(result, "github.com")
 
     def test_extract_provider_stats_missing_stats_attribute(self) -> None:
         """Test error when provider stats group missing stats attribute."""
         from iptax.did import _extract_merged_stats
 
         mock_provider_group = Mock(spec=[])  # No 'stats' attribute
+        mock_provider_group.__class__.__name__ = "GitHubStats"
         mock_user = Mock()
         mock_user.stats = [mock_provider_group]
         result = ([mock_user],)
 
         with pytest.raises(
-            DidIntegrationError, match="Provider stats group missing 'stats' attribute"
+            DidIntegrationError, match=r"Object \(type: .*\) missing 'stats' attribute"
         ):
-            _extract_merged_stats(result)
+            _extract_merged_stats(result, "github.com")
 
     def test_extract_provider_stats_stats_not_list(self) -> None:
         """Test error when provider stats.stats is not a list."""
         from iptax.did import _extract_merged_stats
 
         mock_provider_group = Mock()
+        mock_provider_group.__class__.__name__ = "GitHubStats"
         mock_provider_group.stats = "not a list"
         mock_user = Mock()
         mock_user.stats = [mock_provider_group]
         result = ([mock_user],)
 
-        with pytest.raises(
-            DidIntegrationError, match=r"Provider stats\.stats is not a list"
-        ):
-            _extract_merged_stats(result)
+        with pytest.raises(DidIntegrationError, match=r"stats is not a list"):
+            _extract_merged_stats(result, "github.com")
 
     def test_extract_provider_stats_empty_list(self) -> None:
         """Test empty provider stats returns empty list."""
         from iptax.did import _extract_merged_stats
 
         mock_provider_group = Mock()
+        mock_provider_group.__class__.__name__ = "GitHubStats"
         mock_provider_group.stats = []
         mock_user = Mock()
         mock_user.stats = [mock_provider_group]
         result = ([mock_user],)
 
-        assert _extract_merged_stats(result) == []
+        assert _extract_merged_stats(result, "github.com") == []
 
     def test_extract_merged_stat_missing_stats_attribute(self) -> None:
         """Test error when merged stat object missing stats attribute."""
@@ -562,6 +565,7 @@ class TestExtractMergedStats:
         mock_merged_stat.__class__.__name__ = "PullRequestsMerged"
 
         mock_provider_group = Mock()
+        mock_provider_group.__class__.__name__ = "GitHubStats"
         mock_provider_group.stats = [mock_merged_stat]
         mock_user = Mock()
         mock_user.stats = [mock_provider_group]
@@ -572,7 +576,7 @@ class TestExtractMergedStats:
             DidIntegrationError,
             match="Merged stats section not found in did result",
         ):
-            _extract_merged_stats(result)
+            _extract_merged_stats(result, "github.com")
 
 
 class TestValidateAndExtractUserStats:

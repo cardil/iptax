@@ -11,6 +11,7 @@ from iptax.ai.review import (
     ReviewResult,
     needs_review,
 )
+from iptax.cli.elements import count_decisions
 from iptax.models import Change, Repository
 
 
@@ -294,8 +295,8 @@ class TestReviewApp:
             changes_list = app.query_one("#changes-list")
             assert changes_list is not None
 
-            # === Decision counting ===
-            include, exclude, uncertain = app._count_decisions()
+            # === Decision counting (using standalone function) ===
+            include, exclude, uncertain = count_decisions(app.judgments)
             assert include == 1
             assert exclude == 0
             assert uncertain == 1

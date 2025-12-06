@@ -9,7 +9,6 @@ import pytest
 from pydantic import ValidationError
 
 from iptax.models import (
-    AIJudgment,
     Change,
     DidConfig,
     DisabledAIConfig,
@@ -17,6 +16,7 @@ from iptax.models import (
     Fields,
     GeminiProviderConfig,
     HistoryEntry,
+    Judgment,
     ProductConfig,
     ReportConfig,
     ReportData,
@@ -1053,12 +1053,12 @@ class TestHistoryEntry:
         assert entry.regenerated_at == regenerated
 
 
-class TestAIJudgment:
-    """Test AIJudgment model."""
+class TestJudgment:
+    """Test Judgment model."""
 
-    def test_ai_judgment_creation(self):
-        """Test creating an AIJudgment."""
-        judgment = AIJudgment(
+    def test_judgment_creation(self):
+        """Test creating a Judgment."""
+        judgment = Judgment(
             change_id="github.com/owner/repo#123",
             url="https://github.com/owner/repo/pull/123",
             description="Fix bug in handler",
@@ -1074,7 +1074,7 @@ class TestAIJudgment:
 
     def test_get_final_decision_without_override(self):
         """Test final decision when no user override exists."""
-        judgment = AIJudgment(
+        judgment = Judgment(
             change_id="test#1",
             url="https://test.com",
             description="Test",
@@ -1084,11 +1084,11 @@ class TestAIJudgment:
             ai_provider="test",
         )
 
-        assert judgment.get_final_decision() == "INCLUDE"
+        assert judgment.final_decision == "INCLUDE"
 
     def test_get_final_decision_with_override(self):
         """Test final decision when user override exists."""
-        judgment = AIJudgment(
+        judgment = Judgment(
             change_id="test#1",
             url="https://test.com",
             description="Test",
@@ -1099,11 +1099,11 @@ class TestAIJudgment:
             ai_provider="test",
         )
 
-        assert judgment.get_final_decision() == "EXCLUDE"
+        assert judgment.final_decision == "EXCLUDE"
 
     def test_was_overridden_returns_false_when_no_override(self):
         """Test was_overridden() when no user decision exists."""
-        judgment = AIJudgment(
+        judgment = Judgment(
             change_id="test#1",
             url="https://test.com",
             description="Test",
@@ -1117,7 +1117,7 @@ class TestAIJudgment:
 
     def test_was_overridden_returns_false_when_decisions_match(self):
         """Test was_overridden() when user decision matches AI."""
-        judgment = AIJudgment(
+        judgment = Judgment(
             change_id="test#1",
             url="https://test.com",
             description="Test",
@@ -1132,7 +1132,7 @@ class TestAIJudgment:
 
     def test_was_overridden_returns_true_when_decisions_differ(self):
         """Test was_overridden() when user decision differs from AI."""
-        judgment = AIJudgment(
+        judgment = Judgment(
             change_id="test#1",
             url="https://test.com",
             description="Test",
@@ -1147,7 +1147,7 @@ class TestAIJudgment:
 
     def test_was_overridden_returns_false_for_uncertain_ai_decision(self):
         """Test was_overridden() doesn't count UNCERTAIN as override."""
-        judgment = AIJudgment(
+        judgment = Judgment(
             change_id="test#1",
             url="https://test.com",
             description="Test",

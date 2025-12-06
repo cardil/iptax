@@ -14,6 +14,87 @@ This document describes the detailed workflows and CLI design for the iptax tool
 
 ______________________________________________________________________
 
+## Date Range Timing Logic
+
+### Automatic Date Range Calculation
+
+The tool automatically determines which month to report based on **Polish legal
+requirements**: employee payments must be made before the 10th of the following month.
+
+**Default behavior (no `--month` specified):**
+
+1. **If run on days 1-10 of any month:**
+
+   - Reports for **PREVIOUS month**
+   - Both Workday and Did use the same date range (previous month)
+   - Example: Run on Dec 5 → Reports November (Nov 1-30 for both WD and Did)
+
+1. **If run on days 11-31 of any month:**
+
+   - Reports for **CURRENT month**
+   - Workday: Full current calendar month
+   - Did: From last recorded cutoff (or 25th of previous month) to today
+   - Example: Run on Nov 25 → Reports November
+     - Workday: Nov 1-30
+     - Did: Last cutoff from history, or Oct 25 fallback → Nov 25
+
+**Why this logic?**
+
+Polish law requires employee payments before the 10th of the next month. This creates a
+natural reporting window:
+
+- Early in the month (1-10): Finalize the previous month's report
+- Rest of the month (11-31): Work on the current month's report
+
+The Did range captures work from the last ~30 days to avoid missing any changes, while
+Workday reports the full calendar month (users must fill hours ahead of time, which is
+unavoidable).
+
+### Manual Month Selection
+
+**Using `--month` parameter:**
+
+```bash
+--month YYYY-MM          # Specific month (e.g., 2024-11)
+--month current          # Force current month regardless of date
+--month last            # Force previous month regardless of date
+```
+
+When `--month` is specified, it overrides the automatic detection but still applies the
+appropriate date range logic for that month.
+
+### Fine-Tuning Date Ranges
+
+For companies with different policies, you can override the automatic calculations:
+
+```bash
+--workday-start YYYY-MM-DD    # Override Workday start date
+--workday-end YYYY-MM-DD      # Override Workday end date
+--did-start YYYY-MM-DD        # Override Did start date
+--did-end YYYY-MM-DD          # Override Did end date
+```
+
+**Examples:**
+
+```bash
+# Use automatic detection (most common)
+iptax report
+
+# Force report for November regardless of today's date
+iptax report --month 2024-11
+
+# Report for current month even if it's Dec 5
+iptax report --month current
+
+# Custom date ranges for special cases
+iptax report --month 2024-11 --did-start 2024-10-20 --did-end 2024-11-25
+
+# Override only Workday dates
+iptax report --workday-start 2024-11-01 --workday-end 2024-11-28
+```
+
+______________________________________________________________________
+
 ## Main Report Generation Workflow
 
 The main `iptax report` command follows this workflow:
@@ -29,7 +110,7 @@ The main `iptax report` command follows this workflow:
     - If missing → guide user to configure did first
     - Verify providers are configured
 
-1.3 Load history from ~/.cache/iptax/history.toml
+1.3 Load history from ~/.cache/iptax/history.json
     - If file doesn't exist → this is the first report
 
 1.4 Determine reporting month:
@@ -42,26 +123,29 @@ The main `iptax report` command follows this workflow:
     - If user accepts → proceed with regeneration
 ```
 
-### Step 2: Calculate Date Range
+### Step 2: Calculate Date Ranges
 
 ```text
-2.1 Determine START date:
-    - If history has previous month's report:
-      start_date = previous_report.last_cutoff_date + 1 day
+2.1 Calculate Workday date range:
+    - start_date = first day of specified month
+    - end_date = last day of specified month
 
+2.2 Calculate Did date range (from history or fallback):
+    - If history has a previous report:
+      start_date = cutoff_date from the last report in history
     - If NO previous report (first run):
-      Prompt user: "Enter cutoff date for previous month (YYYY-MM-DD):"
-      start_date = user_input + 1 day
+      start_date = 25th of month before specified month (fallback)
+    - end_date:
+      * Days 1-10 (finalization): last day of specified month
+      * Days 11-31 (active work): today (when tool is executed)
 
-2.2 Determine END date:
-    - end_date = current date (when tool is executed)
+2.3 Validate date ranges:
+    - Ensure start_date <= end_date for both ranges
+    - If Did range > 60 days → warn about multi-month span
 
-2.3 Validate date range:
-    - If range > 31 days → warn about multi-month span
-    - Ensure start_date <= end_date
-
-2.4 Display date range to user:
-    "Generating report for: [start_date] to [end_date] ([X] days)"
+2.4 Display date ranges to user:
+    "Workday: [start] to [end] (full month)"
+    "Changes: [start] to [end] ([X] days since last report)"
 ```
 
 ### Step 3: Fetch Changes from did SDK
@@ -77,20 +161,50 @@ The main `iptax report` command follows this workflow:
 3.5 Display summary: "✓ Found [N] changes across [M] repositories"
 ```
 
-### Step 4: Get Work Hours
+### Step 4: Get Work Hours and Validate
+
+**⚠️ CRITICAL: Workday data MUST be validated before use. Failing to report correct work
+hours is a misdemeanor under Polish law.**
 
 ```text
 4.1 Check if Workday is enabled in config
 4.2 If enabled: Try automated retrieval
     - Launch headless browser
     - Authenticate via SAML
-    - Extract hours
+    - Extract calendar entries for date range
     - On failure: fall back to manual input
-4.3 If disabled or failed: Manual hours input
-4.4 Calculate creative work hours:
+
+4.3 VALIDATE Workday data (MANDATORY):
+    - Check ALL workdays in month have entries (work hours OR PTO)
+    - List any missing days explicitly
+    - If gaps found:
+      * Display missing days to user
+      * Prompt: "Continue with incomplete data?" or "Enter hours manually?"
+      * User MUST explicitly acknowledge gaps or provide manual entry
+    - If validation fails and user declines to continue:
+      * Abort and instruct user to fill Workday first
+
+4.4 If disabled or validation failed: Manual hours input
+    - Prompt for total hours
+    - Prompt for absence/PTO days
+
+4.5 Calculate creative work hours:
     creative_hours = total_hours × (creative_work_percentage / 100)
-4.5 Display summary
+
+4.6 Display summary with validation status:
+    "✓ Workday data validated: complete coverage for [month]"
+    or
+    "⚠ Manual hours used (Workday incomplete or disabled)"
 ```
+
+**Why validation is critical:**
+
+Polish law requires accurate reporting of work hours for tax purposes. Submitting
+incorrect hours is a legal violation (misdemeanor). The validation step ensures:
+
+1. All workdays in the reporting period are accounted for
+1. User explicitly confirms any gaps or provides correct data
+1. Compliance with legal requirements for accurate reporting
 
 ### Step 5: AI-Assisted Filtering (TUI Review)
 
@@ -123,7 +237,7 @@ The main `iptax report` command follows this workflow:
 
 ```text
 7.1 Create history entry for this month
-7.2 Write to ~/.cache/iptax/history.toml
+7.2 Write to ~/.cache/iptax/history.json
 7.3 Display completion message
 7.4 Final summary with next steps
 ```
@@ -141,11 +255,85 @@ iptax [COMMAND] [OPTIONS]
 **Available Commands:**
 
 - `(no command)` - Default, equivalent to `iptax report` for current month
-- `report` - Generate IP tax report
+- `collect` - Collect data (Did PRs and Workday) without AI/review
+- `review` - Review in-flight data interactively
+- `report` - Complete flow: collect → AI filter → review → display
+- `cache` - Manage in-flight cache (show status, clear, etc.)
 - `config` - Configure settings interactively
 - `history` - Show report history
 - `--help` - Show help message
 - `--version` - Show version and exit
+
+### Collect Command
+
+**Usage:**
+
+```bash
+iptax collect [OPTIONS]
+```
+
+**Options:**
+
+```text
+--month YYYY-MM|current|last    Month to collect data for (default: auto-detect)
+--workday-start YYYY-MM-DD      Override Workday start date
+--workday-end YYYY-MM-DD        Override Workday end date
+--did-start YYYY-MM-DD          Override Did start date
+--did-end YYYY-MM-DD            Override Did end date
+--skip-workday                  Skip Workday integration
+--skip-did                      Skip Did integration (PRs/MRs)
+--force                         Force re-collection even if data exists
+```
+
+**Examples:**
+
+```bash
+# Collect data for auto-detected month
+iptax collect
+
+# Collect for specific month
+iptax collect --month 2024-11
+
+# Collect for last month (override auto-detection)
+iptax collect --month last
+
+# Collect only Did data (skip Workday)
+iptax collect --skip-workday
+
+# Collect only Workday data (skip Did)
+iptax collect --skip-did
+
+# Custom Did date range
+iptax collect --did-start 2024-10-20 --did-end 2024-11-25
+
+# Force re-collection
+iptax collect --force
+```
+
+**What it does:**
+
+1. Auto-detects which month to report (or uses --month)
+1. Calculates date ranges (with Polish legal logic or custom overrides)
+1. Checks for existing in-flight data
+1. Fetches Did PRs/MRs (unless --skip-did)
+1. Fetches Workday hours (unless --skip-workday)
+1. Saves to in-flight cache
+1. Displays summary and next steps
+
+### Review Command
+
+**Usage:**
+
+```bash
+iptax review
+```
+
+**What it does:**
+
+1. Loads in-flight data
+1. Runs AI filtering if not already done
+1. Launches interactive TUI for review
+1. Saves results back to cache
 
 ### Report Command
 
@@ -153,52 +341,102 @@ iptax [COMMAND] [OPTIONS]
 
 ```bash
 iptax report [OPTIONS]
-iptax [OPTIONS]  # same as above
+iptax [OPTIONS]  # same as above (default command)
 ```
 
 **Options:**
 
 ```text
---month YYYY-MM          Generate report for specific month (default: current)
---skip-ai                Skip AI filtering, manually review all changes
---skip-workday           Skip Workday integration, use manual hours input
---dry-run                Show what would be generated without creating files
---force                  Overwrite existing report without confirmation
---output-dir PATH        Custom output directory (overrides config)
---verbose, -v            Verbose output (show API calls, debug info)
---quiet, -q              Minimal output (errors only)
+--month YYYY-MM|current|last    Generate report for specific month
+                                (default: auto-detect)
+--workday-start YYYY-MM-DD      Override Workday start date
+--workday-end YYYY-MM-DD        Override Workday end date
+--did-start YYYY-MM-DD          Override Did start date
+--did-end YYYY-MM-DD            Override Did end date
+--skip-ai                       Skip AI filtering, manually review all changes
+--skip-workday                  Skip Workday integration
+--skip-review                   Skip interactive review (auto-accept AI decisions)
+--force-new                     Force new collection, discard in-flight data
 ```
 
 **Examples:**
 
 ```bash
-# Generate report for current month (most common use case)
+# Complete flow for auto-detected month (most common use case)
 iptax
+iptax report
 
-# Generate report for specific month
+# Report for specific month
 iptax report --month 2024-10
 
-# Generate without AI filtering
+# Force report for last month
+iptax report --month last
+
+# Skip AI filtering (manual review only)
 iptax report --skip-ai
 
-# Generate with manual hours input
+# Skip Workday integration
 iptax report --skip-workday
 
-# Preview without creating files
-iptax report --dry-run
+# Skip interactive review (auto-accept)
+iptax report --skip-review
 
-# Force regenerate existing report
-iptax report --month 2024-10 --force
+# Force new collection
+iptax report --force-new
 
-# Custom output directory
-iptax report --output-dir ~/my-reports/
-
-# Verbose mode for debugging
-iptax report --verbose
+# Custom date ranges
+iptax report --month 2024-11 --did-start 2024-10-20 --did-end 2024-11-25
 
 # Combination of options
-iptax report --month 2024-10 --skip-ai --skip-workday --force
+iptax report --month 2024-10 --skip-ai --skip-workday
 ```
+
+**Workflow:**
+
+1. Collect data (or load from in-flight cache)
+1. Run AI filtering (unless --skip-ai)
+1. Interactive review (unless --skip-review)
+1. Display final results
+
+### Cache Command
+
+**Usage:**
+
+```bash
+iptax cache [SUBCOMMAND]
+```
+
+**Subcommands:**
+
+```text
+list                     List all in-flight cache entries
+clear [--month YYYY-MM]  Clear in-flight cache (all or specific month)
+--path                   Show path to cache directory
+```
+
+**Examples:**
+
+```bash
+# List all cache entries
+iptax cache list
+
+# Clear all in-flight cache
+iptax cache clear
+
+# Clear cache for specific month only
+iptax cache clear --month 2024-11
+
+# Show cache directory path
+iptax cache --path
+```
+
+**What it does:**
+
+- `list`: Displays information about all cached in-flight data (month, date ranges, data
+  collected, etc.)
+- `clear`: Removes in-flight cached data (prompts for confirmation)
+- `clear --month YYYY-MM`: Removes only the cache for the specified month
+- `--path`: Displays the path to the cache directory
 
 ### Config Command
 

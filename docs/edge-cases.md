@@ -160,14 +160,14 @@ Choice:
 
 ### Corrupted History File
 
-**Scenario:** history.toml has invalid TOML syntax
+**Scenario:** history.json has invalid JSON syntax
 
 **Behavior:**
 
 ```bash
-Error: Cannot parse ~/.cache/iptax/history.toml
+Error: Cannot parse ~/.cache/iptax/history.json
 
-TOML syntax error on line 5: Expected '='
+JSON decode error: Expecting value: line 5 column 3
 
 Options:
   [B]ackup and create new history (safe)

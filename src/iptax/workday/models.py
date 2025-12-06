@@ -8,6 +8,8 @@ import re
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
+from iptax.models import WorkdayCalendarEntry
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,20 +32,10 @@ class NavigationError(WorkdayError):
 
 
 @dataclass
-class CalendarEntry:
-    """A single calendar entry from Workday API."""
-
-    entry_date: date
-    title: str
-    entry_type: str  # "Time Tracking", "Time Off", "Holiday Calendar Entry Type"
-    hours: float
-
-
-@dataclass
 class CalendarEntriesCollector:
     """Collects calendar entries from intercepted API responses."""
 
-    entries: list[CalendarEntry] = field(default_factory=list)
+    entries: list[WorkdayCalendarEntry] = field(default_factory=list)
     _seen_keys: set[str] = field(default_factory=set)
 
     def add_entries_from_response(self, response_data: dict) -> int:
@@ -118,15 +110,33 @@ class CalendarEntriesCollector:
 
         return working_hours, time_off_hours, working_hours + time_off_hours
 
+    def get_entries_for_range(
+        self, start_date: date, end_date: date
+    ) -> list[WorkdayCalendarEntry]:
+        """Get all entries within a date range.
 
-def _parse_calendar_entry(entry: dict) -> CalendarEntry | None:
+        Args:
+            start_date: Start of range (inclusive)
+            end_date: End of range (inclusive)
+
+        Returns:
+            List of calendar entries in the specified range
+        """
+        return [
+            entry
+            for entry in self.entries
+            if start_date <= entry.entry_date <= end_date
+        ]
+
+
+def _parse_calendar_entry(entry: dict) -> WorkdayCalendarEntry | None:
     """Parse a single calendar entry from API response.
 
     Args:
         entry: Entry dict from API response
 
     Returns:
-        CalendarEntry or None if parsing fails
+        WorkdayCalendarEntry or None if parsing fails
     """
     try:
         # Parse date from "date.value.V" format: "2025-11-10-08:00"
@@ -179,7 +189,7 @@ def _parse_calendar_entry(entry: dict) -> CalendarEntry | None:
                 with contextlib.suppress(ValueError, IndexError):
                     hours = float(subtitle2.split()[0])
 
-        return CalendarEntry(
+        return WorkdayCalendarEntry(
             entry_date=entry_date,
             title=title,
             entry_type=entry_type,

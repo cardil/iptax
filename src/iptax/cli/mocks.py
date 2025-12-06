@@ -3,8 +3,7 @@
 TODO(ksuszyns): DELETE this file when AI review is integrated into report command.
 """
 
-from iptax.ai.models import Decision, Judgment
-from iptax.models import Change, Repository
+from iptax.models import Change, Decision, Judgment, Repository
 
 
 def generate_mock_changes(count: int = 15) -> list[Change]:
@@ -87,6 +86,9 @@ def generate_mock_judgments(
                 decision=decision,
                 reasoning=reasoning,
                 product=product,
+                url=change.get_url(),
+                description=change.title,
+                ai_provider="mock/test",
             )
         )
 

@@ -283,7 +283,7 @@ async def extract_work_hours(
         progress_callback: Optional callback to report progress
 
     Returns:
-        WorkHours with aggregated data
+        WorkHours with aggregated data and individual calendar entries
     """
     # Navigate to previous week first, so when we set up the response handler
     # and navigate back to the first week, we capture its API response
@@ -381,10 +381,14 @@ async def extract_work_hours(
             total,
         )
 
+        # Get entries in the requested range
+        range_entries = collector.get_entries_for_range(start_date, end_date)
+
         return WorkHours(
             working_days=working_days,
             absence_days=absence_days,
             total_hours=total,
+            calendar_entries=range_entries,
         )
 
     finally:

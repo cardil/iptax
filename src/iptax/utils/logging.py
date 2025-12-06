@@ -64,9 +64,10 @@ def setup_logging(
     """
     formatter = RelativePathFormatter(LOG_FORMAT, LOG_DATE_FORMAT)
 
-    handlers: list[logging.Handler] = [
-        logging.FileHandler(log_file, mode="w"),
-    ]
+    file_handler = logging.FileHandler(log_file, mode="w")
+    file_handler.setFormatter(formatter)
+
+    handlers: list[logging.Handler] = [file_handler]
     if extra_handlers:
         handlers.extend(extra_handlers)
 
@@ -79,3 +80,15 @@ def setup_logging(
     root_logger.setLevel(level)
     for handler in handlers:
         root_logger.addHandler(handler)
+
+    # Configure third-party loggers that add their own handlers
+    # LiteLLM and related libs add StreamHandlers; redirect to our file handler
+    for logger_name in ("LiteLLM", "litellm", "httpx", "httpcore"):
+        lib_logger = logging.getLogger(logger_name)
+        # Remove any existing handlers (e.g., StreamHandlers to console)
+        lib_logger.handlers.clear()
+        # Add our file handler
+        lib_logger.addHandler(file_handler)
+        # Don't propagate to root logger (avoids duplicates)
+        lib_logger.propagate = False
+        lib_logger.setLevel(level)

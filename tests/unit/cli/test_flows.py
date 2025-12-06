@@ -2,14 +2,28 @@
 
 from datetime import date
 from io import StringIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from rich.console import Console
 
-from iptax.ai.models import Decision, Judgment
+from iptax.ai.review import ReviewResult
 from iptax.cli import flows
-from iptax.models import Change, Repository
+from iptax.cli.flows import (
+    FlowOptions,
+    _display_collection_summary,
+    _display_inflight_summary,
+    _resolve_review_month,
+    _save_judgments_to_ai_cache,
+)
+from iptax.models import (
+    Change,
+    Decision,
+    InFlightReport,
+    Judgment,
+    Repository,
+    WorkHours,
+)
 
 from .conftest import strip_ansi
 
@@ -100,7 +114,8 @@ class TestReview:
     """Tests for review flow."""
 
     @pytest.mark.unit
-    def test_shows_summary_and_calls_tui(self):
+    @pytest.mark.asyncio
+    async def test_shows_summary_and_calls_tui(self):
         """Test that review shows summary and calls TUI."""
         console = Console(file=StringIO(), force_terminal=True)
         changes = [
@@ -129,15 +144,17 @@ class TestReview:
             patch.object(flows, "run_review_tui", return_value=mock_result),
             patch.object(flows, "display_review_results"),
         ):
-            result = flows.review(console, judgments, changes)
+            result = await flows.review(console, judgments, changes)
 
         assert result == mock_result
         output = strip_ansi(console.file.getvalue())
-        assert "AI Analysis Summary" in output
-        assert "INCLUDE: 1" in output
+        # New format: "AI analysis: INCLUDE(✓): 1"
+        assert "AI analysis" in output
+        assert "INCLUDE" in output
 
     @pytest.mark.unit
-    def test_shows_all_decision_counts(self):
+    @pytest.mark.asyncio
+    async def test_shows_all_decision_counts(self):
         """Test that review shows counts for all decision types."""
         console = Console(file=StringIO(), force_terminal=True)
         changes = [
@@ -179,15 +196,17 @@ class TestReview:
             patch.object(flows, "run_review_tui", return_value=mock_result),
             patch.object(flows, "display_review_results"),
         ):
-            flows.review(console, judgments, changes)
+            await flows.review(console, judgments, changes)
 
         output = strip_ansi(console.file.getvalue())
-        assert "INCLUDE: 1" in output
-        assert "EXCLUDE: 1" in output
-        assert "UNCERTAIN: 1" in output
+        # New format includes indicators: "INCLUDE(✓): 1  EXCLUDE(✗): 1"
+        assert "INCLUDE" in output
+        assert "EXCLUDE" in output
+        assert "UNCERTAIN" in output
 
     @pytest.mark.unit
-    def test_calls_display_results_after_tui(self):
+    @pytest.mark.asyncio
+    async def test_calls_display_results_after_tui(self):
         """Test that review calls display_review_results after TUI."""
         console = Console(file=StringIO(), force_terminal=True)
         changes = [
@@ -216,8 +235,841 @@ class TestReview:
             patch.object(flows, "run_review_tui", return_value=mock_result),
             patch.object(flows, "display_review_results") as mock_display,
         ):
-            flows.review(console, judgments, changes)
+            await flows.review(console, judgments, changes)
 
         mock_display.assert_called_once_with(
             console, judgments, changes, accepted=False
         )
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_returns_early_for_empty_judgments(self):
+        """Test that review returns early for empty judgments list."""
+        console = Console(file=StringIO(), force_terminal=True)
+        changes = []
+        judgments: list[Judgment] = []
+
+        result = await flows.review(console, judgments, changes)
+
+        assert result.judgments == []
+        assert result.accepted is False
+        output = strip_ansi(console.file.getvalue())
+        assert "No AI judgments to review" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_sets_user_decision_when_accepted(self):
+        """Test that accepted review sets user_decision on judgments."""
+        console = Console(file=StringIO(), force_terminal=True)
+        changes = [
+            Change(
+                title="Test change",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+            )
+        ]
+        judgments = [
+            Judgment(
+                change_id=changes[0].get_change_id(),
+                decision=Decision.INCLUDE,
+                reasoning="Test",
+                product="Product",
+                user_decision=None,  # Not yet reviewed
+            )
+        ]
+
+        # Create a copy for the result
+        result_judgments = [
+            Judgment(
+                change_id=changes[0].get_change_id(),
+                decision=Decision.INCLUDE,
+                reasoning="Test",
+                product="Product",
+                user_decision=None,
+            )
+        ]
+
+        mock_result = ReviewResult(judgments=result_judgments, accepted=True)
+
+        with (
+            patch.object(flows, "run_review_tui", return_value=mock_result),
+            patch.object(flows, "display_review_results"),
+        ):
+            result = await flows.review(console, judgments, changes)
+
+        # User decision should be set to AI decision when accepted
+        assert result.judgments[0].user_decision == Decision.INCLUDE
+
+
+class TestDisplayInflightSummary:
+    """Tests for _display_inflight_summary function."""
+
+    @pytest.mark.unit
+    def test_displays_basic_summary(self):
+        """Test that basic in-flight summary is displayed."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+        )
+
+        _display_inflight_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "In-Flight Report Summary" in output
+        assert "2024-11" in output
+        assert "2024-11-01" in output
+        assert "2024-11-30" in output
+        assert "Changes Collected" in output
+
+    @pytest.mark.unit
+    def test_displays_workday_hours(self):
+        """Test that Workday hours are displayed when present."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            total_hours=160.0,
+            working_days=20,
+            workday_validated=True,
+        )
+
+        _display_inflight_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "160" in output
+        assert "20 days" in output
+        assert "Complete" in output
+
+    @pytest.mark.unit
+    def test_displays_incomplete_workday(self):
+        """Test that incomplete Workday validation is shown."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            total_hours=120.0,
+            working_days=15,
+            workday_validated=False,
+        )
+
+        _display_inflight_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "INCOMPLETE" in output
+
+    @pytest.mark.unit
+    def test_displays_judgments_count(self):
+        """Test that judgments count is displayed when present."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            judgments=[
+                Judgment(
+                    change_id="test-id",
+                    decision=Decision.INCLUDE,
+                    reasoning="Test",
+                    product="Product",
+                )
+            ],
+        )
+
+        _display_inflight_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "AI Judgments" in output
+        assert "1" in output
+
+
+class TestDisplayCollectionSummary:
+    """Tests for _display_collection_summary function."""
+
+    @pytest.mark.unit
+    def test_displays_changes_count(self):
+        """Test that changes count is displayed."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=[
+                Change(
+                    title="Test",
+                    repository=Repository(
+                        host="github.com", path="org/repo", provider_type="github"
+                    ),
+                    number=100,
+                )
+            ],
+        )
+
+        _display_collection_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "Data Collection" in output
+        assert "Did changes: 1" in output
+
+    @pytest.mark.unit
+    def test_displays_workday_data(self):
+        """Test that Workday data is displayed when present."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            total_hours=160.0,
+            working_days=20,
+            workday_validated=True,
+        )
+
+        _display_collection_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "Workday hours: 160" in output
+        assert "Working days: 20" in output
+
+    @pytest.mark.unit
+    def test_displays_validation_warning(self):
+        """Test that validation warning is displayed when incomplete."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            total_hours=120.0,
+            working_days=15,
+            workday_validated=False,
+        )
+
+        _display_collection_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "INCOMPLETE" in output
+
+
+class TestResolveReviewMonth:
+    """Tests for _resolve_review_month function."""
+
+    @pytest.mark.unit
+    def test_returns_none_for_empty_reports(self):
+        """Test that None is returned when no reports available."""
+        result = _resolve_review_month(None, [])
+        assert result is None
+
+    @pytest.mark.unit
+    def test_returns_latest_for_none(self):
+        """Test that latest report is returned for None spec."""
+        reports = ["2024-09", "2024-10", "2024-11"]
+        result = _resolve_review_month(None, reports)
+        assert result == "2024-11"
+
+    @pytest.mark.unit
+    def test_returns_latest_for_current_alias(self):
+        """Test that latest report is returned for 'current' alias."""
+        reports = ["2024-09", "2024-10", "2024-11"]
+        result = _resolve_review_month("current", reports)
+        assert result == "2024-11"
+
+    @pytest.mark.unit
+    def test_returns_latest_for_latest_alias(self):
+        """Test that latest report is returned for 'latest' alias."""
+        reports = ["2024-09", "2024-10", "2024-11"]
+        result = _resolve_review_month("latest", reports)
+        assert result == "2024-11"
+
+    @pytest.mark.unit
+    def test_returns_previous_for_last_alias(self):
+        """Test that second most recent is returned for 'last' alias."""
+        reports = ["2024-09", "2024-10", "2024-11"]
+        result = _resolve_review_month("last", reports)
+        assert result == "2024-10"
+
+    @pytest.mark.unit
+    def test_returns_previous_for_previous_alias(self):
+        """Test that second most recent is returned for 'previous' alias."""
+        reports = ["2024-09", "2024-10", "2024-11"]
+        result = _resolve_review_month("previous", reports)
+        assert result == "2024-10"
+
+    @pytest.mark.unit
+    def test_returns_previous_for_prev_alias(self):
+        """Test that second most recent is returned for 'prev' alias."""
+        reports = ["2024-09", "2024-10", "2024-11"]
+        result = _resolve_review_month("prev", reports)
+        assert result == "2024-10"
+
+    @pytest.mark.unit
+    def test_returns_latest_when_only_one_report_for_last(self):
+        """Test that latest is returned when only one report for 'last'."""
+        reports = ["2024-11"]
+        result = _resolve_review_month("last", reports)
+        assert result == "2024-11"
+
+    @pytest.mark.unit
+    def test_returns_explicit_month_when_found(self):
+        """Test that explicit YYYY-MM is returned when found."""
+        reports = ["2024-09", "2024-10", "2024-11"]
+        result = _resolve_review_month("2024-10", reports)
+        assert result == "2024-10"
+
+    @pytest.mark.unit
+    def test_returns_none_for_unknown_month(self):
+        """Test that None is returned for unknown month."""
+        reports = ["2024-09", "2024-10", "2024-11"]
+        result = _resolve_review_month("2024-12", reports)
+        assert result is None
+
+
+class TestSaveJudgmentsToAiCache:
+    """Tests for _save_judgments_to_ai_cache function."""
+
+    @pytest.mark.unit
+    def test_saves_all_judgments(self):
+        """Test that all judgments are saved to AI cache."""
+        console = Console(file=StringIO(), force_terminal=True)
+        judgments = [
+            Judgment(
+                change_id="test-1",
+                decision=Decision.INCLUDE,
+                reasoning="Test 1",
+                product="Product",
+            ),
+            Judgment(
+                change_id="test-2",
+                decision=Decision.EXCLUDE,
+                reasoning="Test 2",
+                product="Product",
+            ),
+        ]
+
+        with patch.object(flows, "JudgmentCacheManager") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache_cls.return_value = mock_cache
+
+            _save_judgments_to_ai_cache(console, judgments)
+
+        assert mock_cache.add_judgment.call_count == 2
+        output = strip_ansi(console.file.getvalue())
+        assert "Saved 2 judgments" in output
+
+
+class TestCollectFlow:
+    """Tests for collect_flow function."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_successful_collection(self, tmp_path):
+        """Test successful data collection flow."""
+        console = Console(file=StringIO(), force_terminal=True)
+        cache_file = tmp_path / "test.json"
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False  # Skip workday for simplicity
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "did_fetch_changes", return_value=[]),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.exists.return_value = False
+            mock_cache.save.return_value = str(cache_file)
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.collect_flow(console, month="2024-11")
+
+        assert result is True
+        mock_cache.save.assert_called_once()
+        output = strip_ansi(console.file.getvalue())
+        assert "Saved to" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_existing_report_without_force_fails(self):
+        """Test that existing report without force returns False."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_settings = MagicMock()
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.exists.return_value = True
+            mock_cache.load.return_value = InFlightReport(
+                month="2024-11",
+                workday_start=date(2024, 11, 1),
+                workday_end=date(2024, 11, 30),
+                changes_since=date(2024, 10, 25),
+                changes_until=date(2024, 11, 25),
+            )
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.collect_flow(
+                console, month="2024-11", options=FlowOptions(force=False)
+            )
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "already exists" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_force_deletes_existing(self, tmp_path):
+        """Test that force option deletes existing report."""
+        console = Console(file=StringIO(), force_terminal=True)
+        cache_file = tmp_path / "test.json"
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "did_fetch_changes", return_value=[]),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.exists.return_value = True
+            mock_cache.save.return_value = str(cache_file)
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.collect_flow(
+                console, month="2024-11", options=FlowOptions(force=True)
+            )
+
+        assert result is True
+        mock_cache.delete.assert_called_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_skip_did_option(self, tmp_path):
+        """Test that skip_did option skips Did collection."""
+        console = Console(file=StringIO(), force_terminal=True)
+        cache_file = tmp_path / "test.json"
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "did_fetch_changes") as mock_fetch,
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.exists.return_value = False
+            mock_cache.save.return_value = str(cache_file)
+            mock_cache_cls.return_value = mock_cache
+
+            await flows.collect_flow(
+                console, month="2024-11", options=FlowOptions(skip_did=True)
+            )
+
+        mock_fetch.assert_not_called()
+        output = strip_ansi(console.file.getvalue())
+        assert "Skipping Did" in output
+
+
+class TestReviewFlow:
+    """Tests for review_flow function."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_no_reports_fails(self):
+        """Test that review fails when no reports available."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        with patch.object(flows, "InFlightCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.list_all.return_value = []
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.review_flow(console)
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "No in-flight reports found" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_no_changes_fails(self):
+        """Test that review fails when report has no changes."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=[],  # No changes
+        )
+
+        with patch.object(flows, "InFlightCache") as mock_cache_cls:
+            mock_cache = MagicMock()
+            mock_cache.list_all.return_value = ["2024-11"]
+            mock_cache.load.return_value = report
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.review_flow(console)
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "No changes to review" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_already_reviewed_without_force_shows_summary(self):
+        """Test that already reviewed report shows summary without re-review."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        changes = [
+            Change(
+                title="Test",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+            )
+        ]
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=changes,
+            judgments=[
+                Judgment(
+                    change_id=changes[0].get_change_id(),
+                    decision=Decision.INCLUDE,
+                    reasoning="Test",
+                    product="Product",
+                    user_decision=Decision.INCLUDE,  # Already reviewed
+                )
+            ],
+        )
+
+        with (
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+            patch.object(flows, "display_review_results"),
+        ):
+            mock_cache = MagicMock()
+            mock_cache.list_all.return_value = ["2024-11"]
+            mock_cache.load.return_value = report
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.review_flow(console)
+
+        assert result is True
+        output = strip_ansi(console.file.getvalue())
+        assert "already been reviewed" in output
+
+
+class TestReportFlow:
+    """Tests for report_flow function."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_successful_report_generation(self):
+        """Test successful report generation flow."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+        mock_settings.product.name = "TestProduct"
+        mock_settings.ai.provider = "test"
+        mock_settings.ai.model = "test-model"
+
+        changes = [
+            Change(
+                title="Test",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+            )
+        ]
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=changes,
+            judgments=[
+                Judgment(
+                    change_id=changes[0].get_change_id(),
+                    decision=Decision.INCLUDE,
+                    reasoning="Test",
+                    product="Product",
+                    user_decision=Decision.INCLUDE,
+                )
+            ],
+        )
+
+        mock_review_result = ReviewResult(judgments=report.judgments, accepted=True)
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+            patch.object(flows, "run_review_tui", return_value=mock_review_result),
+            patch.object(flows, "display_review_results"),
+            patch.object(flows, "JudgmentCacheManager"),
+        ):
+            mock_cache = MagicMock()
+            mock_cache.exists.return_value = True
+            mock_cache.load.return_value = report
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.report_flow(
+                console, month="2024-11", options=FlowOptions(skip_ai=True)
+            )
+
+        assert result is True
+        output = strip_ansi(console.file.getvalue())
+        assert "Report ready" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_runs_collect_when_no_inflight(self, tmp_path):
+        """Test that collect is run when no in-flight exists."""
+        console = Console(file=StringIO(), force_terminal=True)
+        cache_file = tmp_path / "test.json"
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+
+        # report_flow checks: (1) force delete, (2) need collect? -> both False
+        # collect_flow checks: (1) existing? -> False
+        # Then after save, subsequent checks return True (report exists)
+        exists_calls = [False, False, False, True]
+
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=[],
+        )
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "did_fetch_changes", return_value=[]),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.exists.side_effect = exists_calls + [True] * 10
+            mock_cache.load.return_value = report
+            mock_cache.save.return_value = str(cache_file)
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.report_flow(
+                console,
+                month="2024-11",
+                options=FlowOptions(skip_ai=True, skip_review=True),
+            )
+
+        assert result is True
+        output = strip_ansi(console.file.getvalue())
+        assert "Saved to" in output  # From collect flow
+
+
+class TestFetchWorkdayData:
+    """Tests for _fetch_workday_data function."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_fetches_and_validates(self):
+        """Test that Workday data is fetched and validated."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+        )
+        mock_settings = MagicMock()
+
+        mock_work_hours = WorkHours(
+            working_days=20,
+            absence_days=0,
+            total_hours=160.0,
+            calendar_entries=[],
+        )
+
+        with (
+            patch.object(flows, "WorkdayClient") as mock_client_cls,
+            patch.object(flows, "validate_workday_coverage", return_value=[]),
+        ):
+            mock_client = MagicMock()
+            mock_client.fetch_work_hours = AsyncMock(return_value=mock_work_hours)
+            mock_client_cls.return_value = mock_client
+
+            await flows._fetch_workday_data(
+                console, report, mock_settings, date(2024, 11, 1), date(2024, 11, 30)
+            )
+
+        assert report.workday_validated is True
+        assert report.total_hours == 160.0
+        assert report.working_days == 20
+        output = strip_ansi(console.file.getvalue())
+        assert "All workdays have entries" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_shows_warning_for_missing_days(self):
+        """Test that warning is shown for missing Workday days."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+        )
+        mock_settings = MagicMock()
+
+        mock_work_hours = WorkHours(
+            working_days=18,
+            absence_days=0,
+            total_hours=144.0,
+            calendar_entries=[],
+        )
+
+        missing_days = [date(2024, 11, 4), date(2024, 11, 5)]
+
+        with (
+            patch.object(flows, "WorkdayClient") as mock_client_cls,
+            patch.object(flows, "validate_workday_coverage", return_value=missing_days),
+        ):
+            mock_client = MagicMock()
+            mock_client.fetch_work_hours = AsyncMock(return_value=mock_work_hours)
+            mock_client_cls.return_value = mock_client
+
+            await flows._fetch_workday_data(
+                console, report, mock_settings, date(2024, 11, 1), date(2024, 11, 30)
+            )
+
+        assert report.workday_validated is False
+        output = strip_ansi(console.file.getvalue())
+        assert "WARNING" in output
+        assert "Missing Workday entries" in output
+        assert "legal compliance" in output
+
+
+class TestRunAiFiltering:
+    """Tests for _run_ai_filtering function."""
+
+    @pytest.mark.unit
+    def test_runs_ai_filtering(self):
+        """Test that AI filtering is run on changes."""
+        console = Console(file=StringIO(), force_terminal=True)
+        mock_settings = MagicMock()
+        mock_settings.product.name = "TestProduct"
+        mock_settings.ai.provider = "test"
+        mock_settings.ai.model = "test-model"
+
+        changes = [
+            Change(
+                title="Test change",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+            )
+        ]
+
+        mock_response = MagicMock()
+        mock_response.judgments = [
+            MagicMock(
+                change_id=changes[0].get_change_id(),
+                decision=Decision.INCLUDE,
+                reasoning="Test reasoning",
+            )
+        ]
+
+        with (
+            patch.object(flows, "JudgmentCacheManager") as mock_cache_cls,
+            patch.object(flows, "build_judgment_prompt", return_value="prompt"),
+            patch.object(flows, "AIProvider") as mock_provider_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.get_history_for_prompt.return_value = []
+            mock_cache_cls.return_value = mock_cache
+
+            mock_provider = MagicMock()
+            mock_provider.judge_changes.return_value = mock_response
+            mock_provider_cls.return_value = mock_provider
+
+            result = flows._run_ai_filtering(console, changes, mock_settings)
+
+        assert len(result) == 1
+        assert result[0].decision == Decision.INCLUDE
+
+    @pytest.mark.unit
+    def test_uses_cached_history(self):
+        """Test that cached history is used for AI prompt."""
+        console = Console(file=StringIO(), force_terminal=True)
+        mock_settings = MagicMock()
+        mock_settings.product.name = "TestProduct"
+        mock_settings.ai.provider = "test"
+        mock_settings.ai.model = "test-model"
+
+        cached_judgments = [
+            Judgment(
+                change_id="old-1",
+                decision=Decision.INCLUDE,
+                reasoning="Old",
+                product="TestProduct",
+            )
+        ]
+
+        mock_response = MagicMock()
+        mock_response.judgments = []
+
+        with (
+            patch.object(flows, "JudgmentCacheManager") as mock_cache_cls,
+            patch.object(flows, "build_judgment_prompt") as mock_build,
+            patch.object(flows, "AIProvider") as mock_provider_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.get_history_for_prompt.return_value = cached_judgments
+            mock_cache_cls.return_value = mock_cache
+
+            mock_provider = MagicMock()
+            mock_provider.judge_changes.return_value = mock_response
+            mock_provider_cls.return_value = mock_provider
+
+            mock_build.return_value = "prompt"
+
+            flows._run_ai_filtering(console, [], mock_settings)
+
+        mock_build.assert_called_once()
+        call_kwargs = mock_build.call_args
+        assert call_kwargs[1]["history"] == cached_judgments
+        output = strip_ansi(console.file.getvalue())
+        assert "Using 1 cached judgments" in output

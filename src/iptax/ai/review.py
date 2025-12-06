@@ -9,9 +9,8 @@ from textual.events import Key
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
-from iptax.models import Change
-
-from .models import Decision, Judgment
+from iptax.cli.elements import count_decisions, format_decision_summary
+from iptax.models import Change, Decision, Judgment
 
 # Decision icons
 ICONS = {
@@ -37,26 +36,29 @@ class ListScroll(VerticalScroll):
     # Override to remove all navigation bindings - we handle them in the app
     BINDINGS: ClassVar[list] = []
 
+    # Textual widget method override - intentionally untyped to match parent
     def scroll_visible(  # type: ignore[no-untyped-def]
         self,
-        *args,  # noqa: ANN002
-        **kwargs,  # noqa: ANN003
+        *args,  # noqa: ANN002 - Textual widget signature
+        **kwargs,  # noqa: ANN003 - Textual widget signature
     ) -> None:
         """Override to prevent automatic scroll-to-visible behavior."""
         pass
 
+    # Textual widget method override - intentionally untyped to match parent
     def scroll_to_widget(  # type: ignore[no-untyped-def,override]
         self,
-        *args,  # noqa: ANN002
-        **kwargs,  # noqa: ANN003
+        *args,  # noqa: ANN002 - Textual widget signature
+        **kwargs,  # noqa: ANN003 - Textual widget signature
     ) -> None:
         """Override to prevent scroll-to-widget behavior."""
         pass
 
+    # Textual widget method override - intentionally untyped to match parent
     def scroll_to_center(  # type: ignore[no-untyped-def]
         self,
-        *args,  # noqa: ANN002
-        **kwargs,  # noqa: ANN003
+        *args,  # noqa: ANN002 - Textual widget signature
+        **kwargs,  # noqa: ANN003 - Textual widget signature
     ) -> None:
         """Override to prevent scroll-to-center behavior."""
         pass
@@ -99,6 +101,11 @@ def needs_review(judgments: list[Judgment]) -> bool:
 class ReasonModal(ModalScreen[str | None]):
     """Modal for entering reason for decision change."""
 
+    # Use explicit key bindings for consistent behavior
+    BINDINGS: ClassVar[list] = [
+        ("escape", "cancel", "Cancel"),
+    ]
+
     CSS = """
     ReasonModal {
         align: center middle;
@@ -132,11 +139,20 @@ class ReasonModal(ModalScreen[str | None]):
         margin: 0 1;
         min-width: 10;
     }
+
+    #reason-buttons Button:focus {
+        text-style: bold reverse;
+    }
     """
 
     def __init__(self, current_reason: str = "") -> None:
         super().__init__()
         self.current_reason = current_reason
+
+    def on_mount(self) -> None:
+        """Focus the input field when modal opens."""
+        reason_input = self.query_one("#reason-input", Input)
+        reason_input.focus()
 
     def compose(self) -> ComposeResult:
         """Create modal content."""
@@ -163,11 +179,9 @@ class ReasonModal(ModalScreen[str | None]):
         else:
             self.dismiss(None)
 
-    def on_key(self, event: Key) -> None:
-        """Handle escape key."""
-        if event.key == "escape":
-            self.dismiss(None)
-            event.stop()  # Prevent bubbling to app-level key handlers
+    def action_cancel(self) -> None:
+        """Cancel the modal (Escape key binding)."""
+        self.dismiss(None)
 
 
 class ReviewApp(App):
@@ -274,19 +288,6 @@ class ReviewApp(App):
         self._refresh_list()
         self._refresh_footer()
 
-    def _count_decisions(self) -> tuple[int, int, int]:
-        """Count decisions by type."""
-        include_count = sum(
-            1 for j in self.judgments if j.final_decision == Decision.INCLUDE
-        )
-        exclude_count = sum(
-            1 for j in self.judgments if j.final_decision == Decision.EXCLUDE
-        )
-        uncertain_count = sum(
-            1 for j in self.judgments if j.final_decision == Decision.UNCERTAIN
-        )
-        return include_count, exclude_count, uncertain_count
-
     def _refresh_list(self) -> None:
         """Refresh the changes list."""
         changes_list = self.query_one("#changes-list", ListScroll)
@@ -355,16 +356,15 @@ class ReviewApp(App):
     def _refresh_footer(self) -> None:
         """Refresh the footer bar based on current view."""
         footer = self.query_one("#footer-bar", Static)
-        include_count, exclude_count, uncertain_count = self._count_decisions()
+        include_count, exclude_count, uncertain_count = count_decisions(self.judgments)
         total = len(self.judgments)
         current = self.selected_index + 1 if total else 0
 
-        status = (
-            f"[{current}/{total}] "
-            f"[green]✓INCLUDE: {include_count}[/]  "
-            f"[red]✗EXCLUDE: {exclude_count}[/]  "
-            f"[orange]?UNCERTAIN: {uncertain_count}[/]"
+        # Build summary with orange for TUI (not yellow)
+        summary = format_decision_summary(
+            include_count, exclude_count, uncertain_count, uncertain_color="orange"
         )
+        status = f"[{current}/{total}]  {summary}"
 
         if self.in_detail_view:
             judgment = self.judgments[self.selected_index]
@@ -508,8 +508,17 @@ class ReviewApp(App):
         except LookupError:
             return 10  # Fallback when widget is missing
 
+    def _has_modal_open(self) -> bool:
+        """Check if a modal screen is currently open."""
+        # screen_stack has at least the main screen; more than 1 means modal is open
+        return len(self.screen_stack) > 1
+
     def _handle_detail_key(self, key: str) -> None:
         """Handle key events in detail view."""
+        # Don't process keys if a modal is open (modal handles its own escape)
+        if self._has_modal_open():
+            return
+
         if key == "escape":
             self._show_list_view()
         elif key == "f":
@@ -553,7 +562,7 @@ class ReviewApp(App):
         elif key == "enter" and self.judgments:
             self._show_detail_view()
         elif key == "d":
-            _, _, uncertain_count = self._count_decisions()
+            _, _, uncertain_count = count_decisions(self.judgments)
             if uncertain_count == 0:
                 self.accepted = True
                 self.exit()
@@ -568,7 +577,7 @@ class ReviewApp(App):
             self._handle_list_key(event.key)
 
 
-def review_judgments(
+async def review_judgments(
     judgments: list[Judgment],
     changes: list[Change],
 ) -> ReviewResult:
@@ -582,6 +591,6 @@ def review_judgments(
         ReviewResult with potentially modified judgments
     """
     app = ReviewApp(judgments, changes)
-    app.run()
+    await app.run_async()
 
     return ReviewResult(judgments=judgments, accepted=app.accepted)

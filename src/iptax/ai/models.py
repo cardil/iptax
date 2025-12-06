@@ -1,48 +1,12 @@
 """Pydantic data models for AI-powered filtering and decisions.
 
-This module defines all data models used for AI-based filtering of merged
-PRs/MRs, including decisions, judgments, and cache structures.
+This module defines AI-specific cache and response structures.
+Core types like Decision and Judgment are in iptax.models.
 """
-
-from datetime import UTC, datetime
-from enum import Enum
 
 from pydantic import BaseModel, Field
 
-
-class Decision(str, Enum):
-    """Decision for a change (from AI or user)."""
-
-    INCLUDE = "INCLUDE"  # Change directly contributes to the product
-    EXCLUDE = "EXCLUDE"  # Change is unrelated to the product
-    UNCERTAIN = "UNCERTAIN"  # Cannot determine with confidence
-
-
-class Judgment(BaseModel):
-    """AI judgment for a single change."""
-
-    change_id: str = Field(..., description="Unique identifier: owner/repo#number")
-    decision: Decision
-    reasoning: str = Field(..., description="AI's reasoning for the decision")
-    user_decision: Decision | None = Field(None, description="User override decision")
-    user_reasoning: str | None = Field(
-        None, description="User's reasoning for override"
-    )
-    product: str = Field(..., description="Product name this judgment is for")
-    timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(UTC),
-        description="When this judgment was made (UTC)",
-    )
-
-    @property
-    def was_corrected(self) -> bool:
-        """Return True if user overrode the AI's decision."""
-        return self.final_decision != self.decision
-
-    @property
-    def final_decision(self) -> Decision:
-        """Return user decision if set, otherwise AI decision."""
-        return self.user_decision if self.user_decision is not None else self.decision
+from iptax.models import Decision, Judgment
 
 
 class JudgmentCache(BaseModel):

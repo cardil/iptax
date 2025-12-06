@@ -28,7 +28,6 @@ class TestParseMonthKey:
         result = utils.parse_month_key(None)
         assert len(result) == 7
         assert result[4] == "-"
-        # Verify it's a valid parseable date
         year, month = result.split("-")
         assert 2000 <= int(year) <= 2100
         assert 1 <= int(month) <= 12
