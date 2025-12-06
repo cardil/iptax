@@ -36,7 +36,7 @@ ______________________________________________________________________
 
 1. Project structure setup (src/, tests/, docs/)
 1. Configuration management (settings.yaml loading, validation)
-1. History tracking (history.toml operations)
+1. History tracking (history.json operations)
 1. Basic CLI framework (Click commands, help system)
 1. Unit tests for config and history
 

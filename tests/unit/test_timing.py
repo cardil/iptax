@@ -1,6 +1,7 @@
 """Tests for timing module."""
 
 from datetime import date
+from unittest.mock import patch
 
 import pytest
 
@@ -164,7 +165,9 @@ class TestGetDidRange:
     def test_days_11_to_31_uses_rolling_window(self, monkeypatch):
         """Days 11-31: Did uses rolling window ending at today."""
         monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-11-25")
-        start, end = timing.get_did_range("2024-11")
+        # No history means default to 25th of previous month
+        with patch("iptax.timing.get_last_report_date", return_value=None):
+            start, end = timing.get_did_range("2024-11")
         assert start == date(2024, 10, 25)
         assert end == date(2024, 11, 25)
 
@@ -172,9 +175,23 @@ class TestGetDidRange:
     def test_january_previous_month_is_december(self, monkeypatch):
         """January: Previous month default should be December."""
         monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-01-15")
-        start, end = timing.get_did_range("2024-01")
+        # No history means default to 25th of previous month (December)
+        with patch("iptax.timing.get_last_report_date", return_value=None):
+            start, end = timing.get_did_range("2024-01")
         assert start == date(2023, 12, 25)
         assert end == date(2024, 1, 15)
+
+    @pytest.mark.unit
+    def test_with_history_uses_last_report_date(self, monkeypatch):
+        """With history, Did starts from last report date + 1."""
+        monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-11-25")
+        # History exists with last report on Oct 20
+        with patch(
+            "iptax.timing.get_last_report_date", return_value=date(2024, 10, 20)
+        ):
+            start, end = timing.get_did_range("2024-11")
+        assert start == date(2024, 10, 21)  # Last report + 1 day
+        assert end == date(2024, 11, 25)
 
 
 class TestIsFinalizationWindow:

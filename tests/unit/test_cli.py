@@ -37,7 +37,7 @@ def test_history_command_path_flag(runner: CliRunner) -> None:
     """Test that history command with --path flag shows history path."""
     result = runner.invoke(cli, ["history", "--path"])
     assert result.exit_code == 0
-    assert "history.toml" in result.output
+    assert "history.json" in result.output
 
 
 @pytest.mark.unit
@@ -63,7 +63,7 @@ def test_history_command_with_valid_month_format(
     # Set XDG_CACHE_HOME to temp directory
     cache_dir = tmp_path / "cache" / "iptax"
     cache_dir.mkdir(parents=True)
-    history_file = cache_dir / "history.toml"
+    history_file = cache_dir / "history.json"
 
     # Create history with normalized month key
     manager = HistoryManager(history_path=history_file)
@@ -96,7 +96,7 @@ def test_history_command_with_missing_month(
     # Set XDG_CACHE_HOME to temp directory
     cache_dir = tmp_path / "cache" / "iptax"
     cache_dir.mkdir(parents=True)
-    history_file = cache_dir / "history.toml"
+    history_file = cache_dir / "history.json"
 
     # Create history with a different month
     manager = HistoryManager(history_path=history_file)
@@ -362,7 +362,7 @@ class TestHistoryCommand:
 
         cache_dir = tmp_path / "cache" / "iptax"
         cache_dir.mkdir(parents=True)
-        history_file = cache_dir / "history.toml"
+        history_file = cache_dir / "history.json"
 
         manager = HistoryManager(history_path=history_file)
         manager._history = {
@@ -389,7 +389,7 @@ class TestHistoryCommand:
 
         cache_dir = tmp_path / "cache" / "iptax"
         cache_dir.mkdir(parents=True)
-        history_file = cache_dir / "history.toml"
+        history_file = cache_dir / "history.json"
 
         manager = HistoryManager(history_path=history_file)
         manager._history = {

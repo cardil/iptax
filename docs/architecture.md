@@ -148,7 +148,7 @@ iptax-reporter/
 
 ### History Tracking
 
-**Location:** `~/.cache/iptax/history.toml`
+**Location:** `~/.cache/iptax/history.json`
 
 **Purpose:**
 
@@ -158,10 +158,13 @@ iptax-reporter/
 
 **Schema:**
 
-```toml
-["2024-10"]
-last_cutoff_date = "2024-10-26"
-generated_at = "2024-10-26T14:30:00Z"
+```json
+{
+  "2024-10": {
+    "last_cutoff_date": "2024-10-26",
+    "generated_at": "2024-10-26T14:30:00"
+  }
+}
 ```
 
 ### AI Judgment Cache

@@ -110,7 +110,7 @@ The main `iptax report` command follows this workflow:
     - If missing → guide user to configure did first
     - Verify providers are configured
 
-1.3 Load history from ~/.cache/iptax/history.toml
+1.3 Load history from ~/.cache/iptax/history.json
     - If file doesn't exist → this is the first report
 
 1.4 Determine reporting month:
@@ -235,7 +235,7 @@ incorrect hours is a legal violation (misdemeanor). The validation step ensures:
 
 ```text
 7.1 Create history entry for this month
-7.2 Write to ~/.cache/iptax/history.toml
+7.2 Write to ~/.cache/iptax/history.json
 7.3 Display completion message
 7.4 Final summary with next steps
 ```

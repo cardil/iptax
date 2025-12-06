@@ -311,21 +311,24 @@ ______________________________________________________________________
 
 ### History File
 
-**File:** `~/.cache/iptax/history.toml`
+**File:** `~/.cache/iptax/history.json`
 
-```toml
-["2024-10"]
-last_cutoff_date = "2024-10-26"
-generated_at = "2024-10-26T14:30:00Z"
-
-["2024-11"]
-last_cutoff_date = "2024-11-25"
-generated_at = "2024-11-26T09:30:00Z"
-regenerated_at = "2024-11-30T11:00:00Z"
-
-["2024-12"]
-last_cutoff_date = "2024-12-26"
-generated_at = "2024-12-27T10:15:00Z"
+```json
+{
+  "2024-10": {
+    "last_cutoff_date": "2024-10-26",
+    "generated_at": "2024-10-26T14:30:00"
+  },
+  "2024-11": {
+    "last_cutoff_date": "2024-11-25",
+    "generated_at": "2024-11-26T09:30:00",
+    "regenerated_at": "2024-11-30T11:00:00"
+  },
+  "2024-12": {
+    "last_cutoff_date": "2024-12-26",
+    "generated_at": "2024-12-27T10:15:00"
+  }
+}
 ```
 
 ### AI Judgment Cache
@@ -544,7 +547,7 @@ ______________________________________________________________________
 └── settings.yaml
 
 ~/.cache/iptax/
-├── history.toml
+├── history.json
 └── ai_cache.json
 
 ~/.did/
@@ -680,7 +683,7 @@ ______________________________________________________________________
 | File                            | Purpose            |
 | ------------------------------- | ------------------ |
 | `~/.config/iptax/settings.yaml` | Main configuration |
-| `~/.cache/iptax/history.toml`   | Report history     |
+| `~/.cache/iptax/history.json`   | Report history     |
 | `~/.cache/iptax/ai_cache.json`  | AI judgment cache  |
 | `~/.did/config`                 | did configuration  |
 | `~/Documents/iptax/{year}/`     | Generated reports  |

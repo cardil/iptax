@@ -301,7 +301,7 @@ ______________________________________________________________________
 tests/fixtures/
 ├── sample_did_output.py       # Mock did SDK responses
 ├── sample_config.yaml          # Valid configuration
-├── sample_history.toml         # History with multiple months
+├── sample_history.json         # History with multiple months
 └── sample_ai_cache.json        # Pre-filled AI judgment cache
 ```
 

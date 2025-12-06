@@ -10,7 +10,7 @@ from iptax.ai.prompts import build_judgment_prompt
 from iptax.ai.provider import AIProvider
 from iptax.ai.review import ReviewResult
 from iptax.ai.review import review_judgments as run_review_tui
-from iptax.cache.history import HistoryManager
+from iptax.cache.history import HistoryManager, save_report_date
 from iptax.cache.inflight import InFlightCache
 from iptax.config import load_settings as config_load_settings
 from iptax.did import fetch_changes as did_fetch_changes
@@ -696,6 +696,15 @@ async def report_flow(
         )
         console.print("\n[bold]Final Report:[/bold]")
         console.print(f"  • Approved changes: {include_count}")
+
+    # Save report to history so next report knows where to start
+    save_report_date(report.changes_until, month_key)
+    console.print(
+        f"[green]✓[/green] Report saved to history (cutoff: {report.changes_until})"
+    )
+
+    # Clean up in-flight cache
+    cache.delete(month_key)
 
     console.print(f"\n[green]✓[/green] Report ready for {month_key}")
     console.print("[dim]Note: Full report generation coming in next phase[/dim]")

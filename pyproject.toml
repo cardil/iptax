@@ -29,7 +29,6 @@ dependencies = [
 
     # Configuration management
     "pyyaml>=6.0.1",
-    "tomli-w>=1.0.0",  # TOML writing (reading via stdlib tomllib)
 
     # AI provider integration
     "litellm>=1.44.0",
@@ -193,7 +192,6 @@ module = [
     "weasyprint.*",
     "litellm.*",
     "did.*",
-    "tomli_w",
 ]
 ignore_missing_imports = true
 
