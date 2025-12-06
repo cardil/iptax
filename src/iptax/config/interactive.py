@@ -15,6 +15,7 @@ from questionary.prompts.common import Choice
 from iptax.models import (
     MAX_PERCENTAGE,
     AIProviderConfig,
+    AIProviderConfigBase,
     DidConfig,
     DisabledAIConfig,
     EmployeeInfo,
@@ -189,9 +190,9 @@ def _configure_ai_provider(
 def _get_hints_list(default_config: AIProviderConfig | None) -> list[str]:
     """Get hints one at a time until empty input."""
     default_hints: list[str] = []
-    if isinstance(default_config, (GeminiProviderConfig, VertexAIProviderConfig)):
+    if isinstance(default_config, AIProviderConfigBase):
         default_hints = list(default_config.hints)
-    
+
     hints: list[str] = []
 
     questionary.print("Enter AI evaluation hints (empty to finish):", style="italic")
@@ -199,7 +200,9 @@ def _get_hints_list(default_config: AIProviderConfig | None) -> list[str]:
     hint_num = 1
     while True:
         # Pre-fill from defaults if available
-        default_value = default_hints[hint_num - 1] if hint_num <= len(default_hints) else ""
+        default_value = (
+            default_hints[hint_num - 1] if hint_num <= len(default_hints) else ""
+        )
 
         hint = questionary.text(
             f"  Hint {hint_num}:",
@@ -230,14 +233,14 @@ def _get_ai_advanced_options(
         Tuple of (hints, max_learnings, correction_ratio)
     """
     # Get default values from model
-    default_max_learnings = Fields(GeminiProviderConfig).max_learnings.default
-    default_correction_ratio = Fields(GeminiProviderConfig).correction_ratio.default
-    
+    default_max_learnings = Fields(AIProviderConfigBase).max_learnings.default
+    default_correction_ratio = Fields(AIProviderConfigBase).correction_ratio.default
+
     questionary.print("\nAdvanced AI Options:", style="bold")
 
     # Default to True if any advanced options are already configured
     has_advanced_options = False
-    if isinstance(default_config, (GeminiProviderConfig, VertexAIProviderConfig)):
+    if isinstance(default_config, AIProviderConfigBase):
         has_hints = bool(default_config.hints)
         has_custom_learnings = default_config.max_learnings != default_max_learnings
         has_custom_ratio = default_config.correction_ratio != default_correction_ratio
@@ -250,7 +253,7 @@ def _get_ai_advanced_options(
 
     if not configure_advanced:
         # Return current values or defaults
-        if isinstance(default_config, (GeminiProviderConfig, VertexAIProviderConfig)):
+        if isinstance(default_config, AIProviderConfigBase):
             return (
                 default_config.hints,
                 default_config.max_learnings,
@@ -264,29 +267,31 @@ def _get_ai_advanced_options(
     # Max learnings
     current_max = (
         default_config.max_learnings
-        if isinstance(default_config, (GeminiProviderConfig, VertexAIProviderConfig))
+        if isinstance(default_config, AIProviderConfigBase)
         else default_max_learnings
     )
     max_learnings_input = questionary.text(
-        f"Max learning entries for AI context (0-100) [{current_max}]:",
+        f"Max learning entries for AI context (0-{MAX_PERCENTAGE}) [{current_max}]:",
         default=str(current_max),
-        validate=lambda x: (x.isdigit() and 0 <= int(x) <= 100) or "Must be 0-100",
+        validate=lambda x: (x.isdigit() and 0 <= int(x) <= MAX_PERCENTAGE)
+        or f"Must be 0-{MAX_PERCENTAGE}",
     ).unsafe_ask()
     max_learnings = int(max_learnings_input)
 
     # Correction ratio (as percentage for user-friendliness)
     current_ratio = (
         default_config.correction_ratio
-        if isinstance(default_config, (GeminiProviderConfig, VertexAIProviderConfig))
+        if isinstance(default_config, AIProviderConfigBase)
         else default_correction_ratio
     )
-    current_percent = int(current_ratio * 100)
+    current_percent = int(current_ratio * MAX_PERCENTAGE)
     ratio_input = questionary.text(
-        f"Correction ratio % (0-100, higher = more corrections shown) [{current_percent}]:",
+        f"Correction ratio % (0-{MAX_PERCENTAGE}) [{current_percent}]:",
         default=str(current_percent),
-        validate=lambda x: (x.isdigit() and 0 <= int(x) <= 100) or "Must be 0-100",
+        validate=lambda x: (x.isdigit() and 0 <= int(x) <= MAX_PERCENTAGE)
+        or f"Must be 0-{MAX_PERCENTAGE}",
     ).unsafe_ask()
-    correction_ratio = int(ratio_input) / 100.0
+    correction_ratio = int(ratio_input) / float(MAX_PERCENTAGE)
 
     return hints, max_learnings, correction_ratio
 

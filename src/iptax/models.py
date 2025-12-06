@@ -583,9 +583,11 @@ class Settings(BaseModel):
 
         # Convert to dict, excluding defaults but preserving discriminator fields
         data = self.model_dump(mode="python", exclude_none=True, exclude_defaults=True)
-        
+
         # Ensure AI provider discriminator is preserved
-        if "ai" in data and isinstance(self.ai, (GeminiProviderConfig, VertexAIProviderConfig)):
+        if "ai" in data and isinstance(
+            self.ai, (GeminiProviderConfig, VertexAIProviderConfig)
+        ):
             data["ai"]["provider"] = self.ai.provider
 
         # Convert to dict and write to file

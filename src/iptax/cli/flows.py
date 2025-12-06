@@ -14,7 +14,15 @@ from iptax.cache.history import HistoryManager, save_report_date
 from iptax.cache.inflight import InFlightCache
 from iptax.config import load_settings as config_load_settings
 from iptax.did import fetch_changes as did_fetch_changes
-from iptax.models import Change, Decision, InFlightReport, Judgment, Settings
+from iptax.models import (
+    AIProviderConfigBase,
+    Change,
+    Decision,
+    Fields,
+    InFlightReport,
+    Judgment,
+    Settings,
+)
 from iptax.timing import resolve_date_ranges
 from iptax.workday.client import WorkdayClient
 from iptax.workday.validation import validate_workday_coverage
@@ -318,12 +326,23 @@ def _run_ai_filtering(
     Returns:
         List of AI judgments
     """
+    # Get AI-specific settings with type narrowing
+    ai_config = settings.ai
+    max_learnings = Fields(AIProviderConfigBase).max_learnings.default
+    correction_ratio = Fields(AIProviderConfigBase).correction_ratio.default
+    hints: list[str] | None = None
+
+    if isinstance(ai_config, AIProviderConfigBase):
+        max_learnings = ai_config.max_learnings
+        correction_ratio = ai_config.correction_ratio
+        hints = ai_config.hints if ai_config.hints else None
+
     # Load history from AI cache for learning context
     ai_cache = JudgmentCacheManager()
     history = ai_cache.get_history_for_prompt(
         settings.product.name,
-        max_entries=settings.ai.max_learnings,
-        correction_ratio=settings.ai.correction_ratio,
+        max_entries=max_learnings,
+        correction_ratio=correction_ratio,
     )
     if history:
         console.print(
@@ -335,7 +354,7 @@ def _run_ai_filtering(
         settings.product.name,
         changes,
         history=history,
-        hints=settings.ai.hints if settings.ai.hints else None,
+        hints=hints,
     )
 
     # Call AI provider with spinner
