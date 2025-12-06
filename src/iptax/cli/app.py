@@ -5,6 +5,7 @@ import sys
 from collections.abc import Callable
 from datetime import date
 from functools import wraps
+from pathlib import Path
 from typing import Any, TypeVar
 
 import click
@@ -19,7 +20,7 @@ from iptax.cache.history import (
 )
 from iptax.cache.inflight import InFlightCache
 from iptax.cli import elements, flows
-from iptax.cli.flows import DateRangeOverrides, FlowOptions
+from iptax.cli.flows import DateRangeOverrides, FlowOptions, OutputOptions
 from iptax.config import (
     ConfigError,
     create_default_config,
@@ -77,6 +78,24 @@ def skip_workday_option(f: F) -> F:
 def skip_did_option(f: F) -> F:
     """Shared --skip-did option decorator."""
     return click.option("--skip-did", is_flag=True, help="Skip Did collection")(f)
+
+
+def output_dir_option(f: F) -> F:
+    """Shared --output-dir option decorator."""
+    return click.option(
+        "--output-dir", type=click.Path(), help="Override output directory"
+    )(f)
+
+
+def output_format_option(f: F) -> F:
+    """Shared --format option decorator."""
+    return click.option(
+        "--format",
+        "output_format",
+        type=click.Choice(["all", "md", "pdf"], case_sensitive=False),
+        default="all",
+        help="Output format (default: all)",
+    )(f)
 
 
 def date_override_options(f: F) -> F:
@@ -184,6 +203,8 @@ def cli(  # noqa: PLR0913  # CLI group needs many options for flexibility
 @skip_review_option
 @skip_workday_option
 @force_option
+@output_dir_option
+@output_format_option
 @date_override_options
 @async_command
 async def report(  # noqa: PLR0913  # CLI commands need many options for flexibility
@@ -194,6 +215,9 @@ async def report(  # noqa: PLR0913  # CLI commands need many options for flexibi
     skip_review: bool,
     skip_workday: bool,
     force: bool,
+    # Output options
+    output_dir: str | None,
+    output_format: str,
     # Date range overrides (optional advanced usage)
     workday_start: str | None,
     workday_end: str | None,
@@ -223,9 +247,19 @@ async def report(  # noqa: PLR0913  # CLI commands need many options for flexibi
             force=force,
         )
 
+        # Create output options
+        output_options = OutputOptions(
+            output_dir=Path(output_dir) if output_dir else None,
+            output_format=output_format,
+        )
+
         # Run report flow
         success = await flows.report_flow(
-            console, month=month, options=options, overrides=overrides
+            console,
+            month=month,
+            options=options,
+            overrides=overrides,
+            output_options=output_options,
         )
         if not success:
             sys.exit(1)
@@ -333,6 +367,49 @@ async def review(month: str | None, force: bool) -> None:
         sys.exit(1)
     except KeyboardInterrupt:
         console.print("\n\n[yellow]Review cancelled[/yellow]")
+        sys.exit(1)
+
+
+@cli.command()
+@month_option
+@output_dir_option
+@output_format_option
+@force_option
+@async_command
+async def dist(
+    month: str | None,
+    output_dir: str | None,
+    output_format: str,
+    force: bool,
+) -> None:
+    """Generate output files from in-flight report.
+
+    Creates markdown and PDF files from a previously collected and reviewed report.
+    """
+    console = Console()
+
+    try:
+        # Create output options
+        output_options = OutputOptions(
+            output_dir=Path(output_dir) if output_dir else None,
+            output_format=output_format,
+        )
+
+        success = await flows.dist_flow(
+            console,
+            month=month,
+            output_options=output_options,
+            force=force,
+        )
+        if not success:
+            sys.exit(1)
+
+    except ConfigError as e:
+        click.secho(f"Configuration error: {e}", fg="red", err=True)
+        click.echo("\nRun 'iptax config' to configure the application.")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        console.print("\n\n[yellow]Generation cancelled[/yellow]")
         sys.exit(1)
 
 

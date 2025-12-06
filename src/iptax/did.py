@@ -10,6 +10,7 @@ import re
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import date
 from typing import Literal, cast
+from urllib.parse import urlparse
 
 import did.base
 import did.cli
@@ -146,7 +147,7 @@ def _fetch_provider_changes(
         )
 
         # Convert did stats to Change objects
-        return _convert_stats_to_changes(merged_stats, provider_name)
+        return _convert_stats_to_changes(merged_stats)
 
     except DidIntegrationError:
         # Re-raise our own exceptions
@@ -371,12 +372,11 @@ def _is_merged_stat(stat: object) -> bool:
     )
 
 
-def _convert_stats_to_changes(stats: list[Issue], provider_name: str) -> list[Change]:
+def _convert_stats_to_changes(stats: list[Issue]) -> list[Change]:
     """Convert did stats to Change objects.
 
     Args:
         stats: List of Issue objects from did SDK (used for both PRs and MRs)
-        provider_name: Provider name for changes
 
     Returns:
         List of successfully converted Change objects
@@ -384,7 +384,7 @@ def _convert_stats_to_changes(stats: list[Issue], provider_name: str) -> list[Ch
     changes: list[Change] = []
     for stat in stats:
         try:
-            change = _convert_to_change(stat, provider_name)
+            change = _convert_to_change(stat)
             changes.append(change)
         except InvalidStatDataError as e:
             # Log expected data validation issues as warnings
@@ -392,8 +392,7 @@ def _convert_stats_to_changes(stats: list[Issue], provider_name: str) -> list[Ch
             # Log all available attributes for debugging
             attrs = [a for a in dir(stat) if not a.startswith("_")]
             logger.warning(
-                "Skipping invalid stat from %s: %s (stat type: %s, attrs: %s)",
-                provider_name,
+                "Skipping invalid stat: %s (stat type: %s, attrs: %s)",
                 e,
                 stat_type,
                 attrs,
@@ -430,12 +429,11 @@ def _check_did_stderr(stderr_content: str, provider_name: str) -> None:
         )
 
 
-def _convert_to_change(stat: object, provider_name: str) -> Change:
+def _convert_to_change(stat: object) -> Change:
     """Convert a did stat object into a Change object.
 
     Args:
         stat: A did stat object (Issue or MergeRequestMerged from did plugins)
-        provider_name: Provider name for host determination
 
     Returns:
         Change object
@@ -445,21 +443,23 @@ def _convert_to_change(stat: object, provider_name: str) -> Change:
     """
     # Handle GitLab MergedRequest objects (different structure)
     if isinstance(stat, MergedRequest):
-        return _convert_gitlab_mr(stat, provider_name)
+        return _convert_gitlab_mr(stat)
 
     # Handle GitHub Issue objects (used for PRs)
     if isinstance(stat, Issue):
-        return _convert_github_pr(stat, provider_name)
+        return _convert_github_pr(stat)
 
     # Unknown type - try to handle generically with logging
     stat_type = type(stat).__name__
     raise InvalidStatDataError(f"Unknown stat type: {stat_type}")
 
 
-def _convert_github_pr(stat: Issue, provider_name: str) -> Change:
+def _convert_github_pr(stat: Issue) -> Change:
     """Convert a GitHub Issue (PR) to a Change object.
 
-    GitHub Issue objects have: owner, project, id, title as attributes.
+    GitHub Issue objects have:
+    - owner, project, id, title as attributes
+    - data dictionary with html_url
     """
     owner = stat.owner
     project = stat.project
@@ -478,6 +478,18 @@ def _convert_github_pr(stat: Issue, provider_name: str) -> Change:
             f"Missing title field for {owner}/{project}#{number}"
         )
 
+    # Get URL from data dict
+    if not hasattr(stat, "data") or not isinstance(stat.data, dict):
+        raise InvalidStatDataError(f"Missing data dict for {owner}/{project}#{number}")
+    url = stat.data.get("html_url")
+    if not url:
+        raise InvalidStatDataError(
+            f"Missing html_url in data dict for {owner}/{project}#{number}"
+        )
+
+    # Extract host from URL
+    host = _extract_host_from_url(url)
+
     # Clean emoji from title
     title = _clean_emoji(title)
 
@@ -486,7 +498,7 @@ def _convert_github_pr(stat: Issue, provider_name: str) -> Change:
 
     # Create Repository object
     repository = Repository(
-        host=provider_name,
+        host=host,
         path=repo_path,
         provider_type="github",
     )
@@ -499,13 +511,14 @@ def _convert_github_pr(stat: Issue, provider_name: str) -> Change:
     )
 
 
-def _convert_gitlab_mr(stat: MergedRequest, provider_name: str) -> Change:
+def _convert_gitlab_mr(stat: MergedRequest) -> Change:
     """Convert a GitLab MergeRequestMerged to a Change object.
 
-    GitLab MergeRequestMerged objects have:
+    GitLab MergedRequest objects have:
     - iid() as a method returning the MR number
     - project as a dict with 'path_with_namespace'
-    - title in data dict
+    - data dict with 'title'
+    - gitlabapi.url for the GitLab instance URL
     """
     # Get MR number via iid() method
     try:
@@ -533,16 +546,28 @@ def _convert_gitlab_mr(stat: MergedRequest, provider_name: str) -> Change:
         raise InvalidStatDataError(
             f"Expected data dict, got {type(stat_data).__name__}"
         )
-    title = stat_data.get("title", "")
-    if not title:
+    if "title" not in stat_data:
         raise InvalidStatDataError(f"Missing title for {repo_path}!{number}")
+    title = stat_data["title"]
+    if not title:
+        raise InvalidStatDataError(f"Empty title for {repo_path}!{number}")
+
+    # Get GitLab instance URL from gitlabapi
+    if not hasattr(stat, "gitlabapi") or not hasattr(stat.gitlabapi, "url"):
+        raise InvalidStatDataError(f"Missing gitlabapi.url for {repo_path}!{number}")
+    gitlab_url = stat.gitlabapi.url
+    if not gitlab_url:
+        raise InvalidStatDataError(f"Empty gitlabapi.url for {repo_path}!{number}")
+
+    # Extract host from GitLab URL
+    host = _extract_host_from_url(gitlab_url)
 
     # Clean emoji from title
     title = _clean_emoji(title)
 
     # Create Repository object
     repository = Repository(
-        host=provider_name,
+        host=host,
         path=repo_path,
         provider_type="gitlab",
     )
@@ -553,6 +578,27 @@ def _convert_gitlab_mr(stat: MergedRequest, provider_name: str) -> Change:
         number=number,
         merged_at=None,
     )
+
+
+def _extract_host_from_url(url: str) -> str:
+    """Extract host from a URL using urllib.parse.
+
+    Args:
+        url: Full URL (e.g., https://github.com/owner/repo/pull/123)
+
+    Returns:
+        Extracted host (e.g., 'github.com')
+
+    Raises:
+        InvalidStatDataError: If URL parsing fails or host is empty
+    """
+    parsed = urlparse(url)
+    host = parsed.netloc
+
+    if not host:
+        raise InvalidStatDataError(f"No host found in URL: {url}")
+
+    return host
 
 
 def _clean_emoji(title: str) -> str:
