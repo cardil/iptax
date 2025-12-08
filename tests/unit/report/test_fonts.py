@@ -1,7 +1,7 @@
 """Unit tests for iptax.report.fonts module."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -80,7 +80,7 @@ class TestEnsureFontsAvailable:
 
         download_calls = []
 
-        def mock_download(url, dest):
+        def mock_download(url: str, dest: Path) -> None:
             download_calls.append((url, dest))
             dest.write_bytes(b"font data")
 
@@ -105,7 +105,7 @@ class TestEnsureFontsAvailable:
 
         download_calls = []
 
-        def mock_download(url, dest):
+        def mock_download(url: str, dest: Path) -> None:
             download_calls.append((url, dest))
 
         with patch("iptax.report.fonts._download_font", side_effect=mock_download):

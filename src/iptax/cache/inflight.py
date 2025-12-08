@@ -81,7 +81,7 @@ class ReportState:
             reviewed = STATE_PENDING
 
         # Derive overall status
-        status = cls._derive_status(did, workday, ai, reviewed, workday_enabled)
+        status = cls._derive_status(did, workday, ai, reviewed)
 
         return cls(
             did=did,
@@ -92,9 +92,7 @@ class ReportState:
         )
 
     @staticmethod
-    def _derive_status(
-        did: str, workday: str, ai: str, reviewed: str, workday_enabled: bool
-    ) -> str:
+    def _derive_status(did: str, workday: str, ai: str, reviewed: str) -> str:
         """Derive human-readable status from individual states.
 
         Args:
@@ -102,7 +100,6 @@ class ReportState:
             workday: Workday collection state
             ai: AI filtering state
             reviewed: Review completion state
-            workday_enabled: Whether Workday integration is enabled
 
         Returns:
             Human-readable status message
