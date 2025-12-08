@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from iptax.ai.cache import DEFAULT_CACHE_PATH, JudgmentCacheManager
+from iptax.ai.cache import JudgmentCacheManager, get_ai_cache_path
 from iptax.ai.models import Decision, Judgment, JudgmentCache
 
 
@@ -49,10 +49,13 @@ class TestJudgmentModel:
 class TestJudgmentCacheManager:
     """Test JudgmentCacheManager functionality."""
 
-    def test_init_with_default_path(self):
+    def test_init_with_default_path(self, tmp_path: Path, monkeypatch):
         """Test initialization with default cache path."""
+        # Set XDG_CACHE_HOME to temp path to avoid touching production cache
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
         manager = JudgmentCacheManager()
-        assert manager.cache_path == DEFAULT_CACHE_PATH
+        assert manager.cache_path == get_ai_cache_path()
         assert isinstance(manager.cache, JudgmentCache)
 
     def test_init_with_custom_path(self, tmp_path: Path):

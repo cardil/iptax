@@ -6,11 +6,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from rich.console import Console
+from rich.prompt import Confirm
 
 from iptax.ai.review import ReviewResult
 from iptax.cli import flows
 from iptax.cli.flows import (
     FlowOptions,
+    OutputOptions,
     _display_collection_summary,
     _display_inflight_summary,
     _resolve_review_month,
@@ -837,6 +839,7 @@ class TestReportFlow:
             patch.object(flows, "run_review_tui", return_value=mock_review_result),
             patch.object(flows, "display_review_results"),
             patch.object(flows, "JudgmentCacheManager"),
+            patch.object(flows, "dist_flow", return_value=True) as mock_dist,
         ):
             mock_cache = MagicMock()
             mock_cache.exists.return_value = True
@@ -847,9 +850,12 @@ class TestReportFlow:
                 console, month="2024-11", options=FlowOptions(skip_ai=True)
             )
 
+            # Verify dist_flow was called
+            mock_dist.assert_called_once()
+
         assert result is True
         output = strip_ansi(console.file.getvalue())
-        assert "Report ready" in output
+        assert "Report complete for 2024-11" in output
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -879,6 +885,7 @@ class TestReportFlow:
             patch.object(flows, "config_load_settings", return_value=mock_settings),
             patch.object(flows, "did_fetch_changes", return_value=[]),
             patch.object(flows, "InFlightCache") as mock_cache_cls,
+            patch.object(flows, "dist_flow", return_value=True),
         ):
             mock_cache = MagicMock()
             mock_cache.exists.side_effect = exists_calls + [True] * 10
@@ -941,9 +948,91 @@ class TestFetchWorkdayData:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_shows_warning_for_missing_days(self):
-        """Test that warning is shown for missing Workday days."""
+    async def test_shows_warning_for_missing_days_user_continues(self):
+        """Test that warning is shown for missing Workday days and user continues."""
         console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+        )
+        mock_settings = MagicMock()
+
+        mock_work_hours = WorkHours(
+            working_days=18,
+            absence_days=0,
+            total_hours=144.0,
+            calendar_entries=[],
+        )
+
+        missing_days = [date(2024, 11, 4), date(2024, 11, 5)]
+
+        with (
+            patch.object(flows, "WorkdayClient") as mock_client_cls,
+            patch.object(flows, "validate_workday_coverage", return_value=missing_days),
+            patch.object(Confirm, "ask", return_value=True),  # User continues anyway
+        ):
+            mock_client = MagicMock()
+            mock_client.fetch_work_hours = AsyncMock(return_value=mock_work_hours)
+            mock_client_cls.return_value = mock_client
+
+            result = await flows._fetch_workday_data(
+                console, report, mock_settings, date(2024, 11, 1), date(2024, 11, 30)
+            )
+
+        assert result is True  # User chose to continue
+        assert report.workday_validated is False
+        output = strip_ansi(console.file.getvalue())
+        assert "WARNING" in output
+        assert "Missing Workday entries" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_missing_days_user_declines(self):
+        """Test that user can decline to continue with missing Workday days."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+        )
+        mock_settings = MagicMock()
+
+        mock_work_hours = WorkHours(
+            working_days=18,
+            absence_days=0,
+            total_hours=144.0,
+            calendar_entries=[],
+        )
+
+        missing_days = [date(2024, 11, 4), date(2024, 11, 5)]
+
+        with (
+            patch.object(flows, "WorkdayClient") as mock_client_cls,
+            patch.object(flows, "validate_workday_coverage", return_value=missing_days),
+            patch.object(Confirm, "ask", return_value=False),  # User declines
+        ):
+            mock_client = MagicMock()
+            mock_client.fetch_work_hours = AsyncMock(return_value=mock_work_hours)
+            mock_client_cls.return_value = mock_client
+
+            result = await flows._fetch_workday_data(
+                console, report, mock_settings, date(2024, 11, 1), date(2024, 11, 30)
+            )
+
+        assert result is False  # User declined
+        output = strip_ansi(console.file.getvalue())
+        assert "Aborted by user" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_missing_days_non_interactive_fails(self):
+        """Test that missing Workday days fails in non-interactive mode."""
+        console = Console(file=StringIO(), force_terminal=False)  # Non-interactive
         report = InFlightReport(
             month="2024-11",
             workday_start=date(2024, 11, 1),
@@ -970,15 +1059,14 @@ class TestFetchWorkdayData:
             mock_client.fetch_work_hours = AsyncMock(return_value=mock_work_hours)
             mock_client_cls.return_value = mock_client
 
-            await flows._fetch_workday_data(
+            result = await flows._fetch_workday_data(
                 console, report, mock_settings, date(2024, 11, 1), date(2024, 11, 30)
             )
 
-        assert report.workday_validated is False
+        assert result is False  # Non-interactive mode fails immediately
         output = strip_ansi(console.file.getvalue())
-        assert "WARNING" in output
-        assert "Missing Workday entries" in output
-        assert "legal compliance" in output
+        assert "Cannot proceed with incomplete Workday coverage" in output
+        assert "non-interactive mode" in output
 
 
 class TestRunAiFiltering:
@@ -1181,3 +1269,339 @@ class TestRunAiFiltering:
         mock_build.assert_called_once()
         build_kwargs = mock_build.call_args
         assert build_kwargs[1]["hints"] is None
+
+
+class TestDistFlow:
+    """Tests for dist_flow function."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_successful_dist_ai_enabled(self, tmp_path):
+        """Test successful dist with AI enabled and all judgments reviewed."""
+        console = Console(file=StringIO(), force_terminal=True)
+        output_dir = tmp_path / "output"
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+        mock_settings.ai.provider = "test"
+
+        changes = [
+            Change(
+                title="Test change",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+                url="https://github.com/org/repo/pull/100",
+            )
+        ]
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=changes,
+            judgments=[
+                Judgment(
+                    change_id=changes[0].get_change_id(),
+                    decision=Decision.INCLUDE,
+                    reasoning="Test",
+                    product="Product",
+                    user_decision=Decision.INCLUDE,
+                )
+            ],
+        )
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+            patch.object(flows, "compile_report") as mock_compile,
+            patch.object(flows, "generate_all") as mock_generate,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.list_all.return_value = ["2024-11"]
+            mock_cache.load.return_value = report
+            mock_cache_cls.return_value = mock_cache
+
+            mock_report_data = MagicMock()
+            mock_compile.return_value = mock_report_data
+
+            mock_generate.return_value = [tmp_path / "report.md"]
+
+            output_options = OutputOptions(output_dir=output_dir, output_format="md")
+            result = await flows.dist_flow(
+                console,
+                month="2024-11",
+                output_options=output_options,
+                force=False,
+            )
+
+        assert result is True
+        mock_compile.assert_called_once()
+        mock_generate.assert_called_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_ai_disabled_without_force_fails(self):
+        """Test that AI disabled without force flag fails."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+        mock_settings.ai.provider = None  # AI disabled
+
+        changes = [
+            Change(
+                title="Test change",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+            )
+        ]
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=changes,
+            judgments=[],  # No AI judgments
+        )
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.list_all.return_value = ["2024-11"]
+            mock_cache.load.return_value = report
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.dist_flow(console, month="2024-11", force=False)
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "Changes require manual review" in output
+        assert "--force" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_ai_disabled_with_force_succeeds(self, tmp_path):
+        """Test that AI disabled with force flag succeeds."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+        mock_settings.ai.provider = None  # AI disabled
+
+        changes = [
+            Change(
+                title="Test change",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+                url="https://github.com/org/repo/pull/100",
+            )
+        ]
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=changes,
+            judgments=[],  # No AI judgments
+        )
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+            patch.object(flows, "compile_report") as mock_compile,
+            patch.object(flows, "generate_all") as mock_generate,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.list_all.return_value = ["2024-11"]
+            mock_cache.load.return_value = report
+            mock_cache_cls.return_value = mock_cache
+
+            mock_report_data = MagicMock()
+            mock_compile.return_value = mock_report_data
+
+            mock_generate.return_value = [tmp_path / "report.md"]
+
+            result = await flows.dist_flow(
+                console,
+                month="2024-11",
+                output_options=flows.OutputOptions(),
+                force=True,
+            )
+
+            assert result is True
+        mock_compile.assert_called_once()
+        mock_generate.assert_called_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_no_changes_fails(self):
+        """Test that dist fails when no changes to report."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_settings = MagicMock()
+
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=[],  # No changes
+        )
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.list_all.return_value = ["2024-11"]
+            mock_cache.load.return_value = report
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.dist_flow(
+                console, month="2024-11", output_options=OutputOptions()
+            )
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "No changes" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_report_not_found_fails(self):
+        """Test that dist fails when report not found."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_settings = MagicMock()
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.exists.return_value = False
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.dist_flow(
+                console, month="2024-11", output_options=OutputOptions()
+            )
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "No in-flight report found" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_unreviewed_judgments_fail(self):
+        """Test that dist fails when judgments not all reviewed."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+        mock_settings.ai.provider = "test"
+
+        changes = [
+            Change(
+                title="Test",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+            )
+        ]
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=changes,
+            judgments=[
+                Judgment(
+                    change_id=changes[0].get_change_id(),
+                    decision=Decision.INCLUDE,
+                    reasoning="Test",
+                    product="Product",
+                    user_decision=None,  # Not reviewed
+                )
+            ],
+        )
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.list_all.return_value = ["2024-11"]
+            mock_cache.load.return_value = report
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.dist_flow(console, month="2024-11")
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "judgment(s) not reviewed" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_missing_hours_when_workday_enabled_fails(self):
+        """Test that dist fails when Workday enabled but hours missing."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = True
+        mock_settings.ai.provider = "test"
+
+        changes = [
+            Change(
+                title="Test",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+            )
+        ]
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=changes,
+            judgments=[
+                Judgment(
+                    change_id=changes[0].get_change_id(),
+                    decision=Decision.INCLUDE,
+                    reasoning="Test",
+                    product="Product",
+                    user_decision=Decision.INCLUDE,
+                )
+            ],
+            total_hours=None,  # Missing hours
+        )
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
+            mock_cache = MagicMock()
+            mock_cache.list_all.return_value = ["2024-11"]
+            mock_cache.load.return_value = report
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.dist_flow(console, month="2024-11")
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "Missing work hours data" in output

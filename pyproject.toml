@@ -74,6 +74,7 @@ dev = [
     "pytest-timeout>=2.2.0",  # For test timeouts
     "pytest-xdist>=3.5.0",  # For parallel test execution
     "pytest-unused-fixtures>=0.1.1",  # Detect unused test fixtures
+    "pdfplumber>=0.10.0",  # PDF text extraction for testing
     "flask>=3.0.0",  # For e2e mock servers
     "werkzeug>=3.0.0",  # Flask dependency for e2e mock servers
 

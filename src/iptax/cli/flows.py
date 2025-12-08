@@ -2,8 +2,10 @@
 
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 
 from rich.console import Console
+from rich.prompt import Confirm
 
 from iptax.ai.cache import JudgmentCacheManager
 from iptax.ai.prompts import build_judgment_prompt
@@ -18,11 +20,14 @@ from iptax.models import (
     AIProviderConfigBase,
     Change,
     Decision,
+    DisabledAIConfig,
     Fields,
     InFlightReport,
     Judgment,
     Settings,
 )
+from iptax.report.compiler import compile_report
+from iptax.report.generator import generate_all
 from iptax.timing import resolve_date_ranges
 from iptax.workday.client import WorkdayClient
 from iptax.workday.validation import validate_workday_coverage
@@ -57,6 +62,14 @@ class FlowOptions:
     skip_ai: bool = False
     skip_review: bool = False
     force: bool = False
+
+
+@dataclass
+class OutputOptions:
+    """Options for output generation."""
+
+    output_dir: Path | None = None
+    output_format: str = "all"
 
 
 def fetch_changes(
@@ -156,13 +169,17 @@ async def review(
     return result
 
 
+# Minimum hours required for a valid report (before rounding)
+MIN_WORK_HOURS = 0.5
+
+
 async def _fetch_workday_data(
     console: Console,
     report: InFlightReport,
     settings: Settings,
     start_date: date,
     end_date: date,
-) -> None:
+) -> bool:
     """Fetch and validate Workday data, updating report in place.
 
     Args:
@@ -171,11 +188,32 @@ async def _fetch_workday_data(
         settings: Application settings
         start_date: Start date for Workday range
         end_date: End date for Workday range
+
+    Returns:
+        True if data was successfully fetched and validated (or user confirmed),
+        False if hours are insufficient or coverage is incomplete and user declined.
     """
     console.print(f"\n[cyan]📅[/cyan] Fetching Workday: {start_date} to {end_date}")
 
     client = WorkdayClient(settings.workday, console=console)
     work_hours = await client.fetch_work_hours(start_date, end_date, headless=True)
+
+    # Validate minimum hours early (before saving)
+    if work_hours.total_hours < MIN_WORK_HOURS:
+        console.print(
+            f"\n[red]✗[/red] Insufficient work hours: {work_hours.total_hours:.1f}h"
+        )
+        console.print(
+            "  At least 1 hour is required after rounding for report generation."
+        )
+        console.print("  Cannot create a report with 0 hours.")
+        return False
+
+    # Store Workday data (validated for minimum hours)
+    report.workday_entries = work_hours.calendar_entries
+    report.total_hours = work_hours.total_hours
+    report.working_days = work_hours.working_days
+    report.absence_days = work_hours.absence_days
 
     # Validate coverage
     missing = validate_workday_coverage(
@@ -186,29 +224,41 @@ async def _fetch_workday_data(
         console.print(
             f"\n[red]⚠ WARNING:[/red] Missing Workday entries for {len(missing)} days!"
         )
-        console.print(
-            "[yellow]This is a legal compliance issue "
-            "(misdemeanor under Polish law)[/yellow]"
-        )
         for day in missing[:MAX_MISSING_DAYS_TO_SHOW]:
             console.print(f"  - {day.strftime('%Y-%m-%d (%A)')}")
         if len(missing) > MAX_MISSING_DAYS_TO_SHOW:
             console.print(f"  ... and {len(missing) - MAX_MISSING_DAYS_TO_SHOW} more")
         report.workday_validated = False
+
+        # Ask user if they want to continue (TTY) or fail (non-TTY/piped)
+        if console.is_terminal:
+            continue_anyway = Confirm.ask(
+                "\n[bold]Continue with incomplete Workday coverage?[/bold]",
+                default=False,
+            )
+            if not continue_anyway:
+                console.print("[yellow]⏹[/yellow] Aborted by user")
+                return False
+            console.print(
+                "[yellow]⚠[/yellow] Continuing with incomplete coverage "
+                "(user confirmed)"
+            )
+        else:
+            # Non-interactive mode: fail immediately
+            console.print(
+                "\n[red]✗[/red] Cannot proceed with incomplete Workday coverage "
+                "in non-interactive mode"
+            )
+            return False
     else:
         console.print("[green]✓[/green] All workdays have entries")
         report.workday_validated = True
-
-    # Store Workday data
-    report.workday_entries = work_hours.calendar_entries
-    report.total_hours = work_hours.total_hours
-    report.working_days = work_hours.working_days
-    report.absence_days = work_hours.absence_days
 
     console.print(
         f"[green]✓[/green] Workday: {work_hours.working_days} days, "
         f"{work_hours.total_hours} hours"
     )
+    return True
 
 
 async def collect_flow(
@@ -287,15 +337,19 @@ async def collect_flow(
 
     # Fetch Workday data
     if not options.skip_workday and settings.workday.enabled:
-        await _fetch_workday_data(
+        workday_success = await _fetch_workday_data(
             console, report, settings, ranges.workday_start, ranges.workday_end
         )
+        if not workday_success:
+            # User declined or non-interactive mode with incomplete coverage
+            # Don't save invalid report
+            return False
     elif options.skip_workday:
         console.print("[yellow]⏭[/yellow] Skipping Workday collection")
     else:
         console.print("[yellow]⏭[/yellow] Workday disabled in settings")
 
-    # Save to cache
+    # Save to cache (only if we reach here - workday validated or skipped)
     saved_path = cache.save(report)
     console.print(f"\n[green]✓[/green] Saved to: {saved_path}")
 
@@ -632,19 +686,62 @@ def _save_judgments_to_ai_cache(console: Console, judgments: list[Judgment]) -> 
     console.print(f"[green]✓[/green] Saved {saved_count} judgments to AI cache")
 
 
+async def _process_ai_and_review(
+    console: Console,
+    cache: InFlightCache,
+    report: InFlightReport,
+    flow_options: FlowOptions,
+) -> bool:
+    """Process AI filtering and review if needed.
+
+    Args:
+        console: Rich console for output
+        cache: In-flight cache manager
+        report: Report to process
+        flow_options: Flow execution options
+
+    Returns:
+        True if review accepted or skipped, False if cancelled
+    """
+    # Run AI if needed and not skipped
+    if not flow_options.skip_ai and report.changes and not report.judgments:
+        settings = load_settings(console)
+        report.judgments = _run_ai_filtering(console, report.changes, settings)
+        cache.save(report)
+
+    # Review if needed and not skipped
+    if not flow_options.skip_review and report.judgments:
+        result = await review(console, report.judgments, report.changes)
+
+        # Always save judgments (even partial reviews)
+        report.judgments = result.judgments
+        cache.save(report)
+
+        # Save to AI cache if review was accepted
+        if result.accepted:
+            _save_judgments_to_ai_cache(console, result.judgments)
+            return True
+
+        return False  # Review not accepted
+
+    return True  # Skipped review or no judgments
+
+
 async def report_flow(
     console: Console,
     month: str | None = None,
     options: FlowOptions | None = None,
     overrides: DateRangeOverrides | None = None,
+    output_options: OutputOptions | None = None,
 ) -> bool:
-    """Complete report flow: collect → AI → review → display.
+    """Complete report flow: collect → AI → review → generate.
 
     Args:
         console: Rich console for output
         month: Month specification
         options: Flow execution options
         overrides: Optional date range overrides
+        output_options: Output generation options
 
     Returns:
         True if successful, False on failure
@@ -653,6 +750,8 @@ async def report_flow(
         options = FlowOptions()
     if overrides is None:
         overrides = DateRangeOverrides()
+    if output_options is None:
+        output_options = OutputOptions()
 
     # Resolve month
     ranges = resolve_date_ranges(
@@ -699,25 +798,8 @@ async def report_flow(
     # Display collected data
     _display_collection_summary(console, report)
 
-    # Run AI if needed and not skipped
-    if not options.skip_ai and report.changes and not report.judgments:
-        settings = load_settings(console)
-        report.judgments = _run_ai_filtering(console, report.changes, settings)
-        cache.save(report)
-
-    # Review if needed and not skipped
-    review_accepted = True  # Default to True when review is skipped
-    if not options.skip_review and report.judgments:
-        result = await review(console, report.judgments, report.changes)
-
-        # Always save judgments (even partial reviews)
-        report.judgments = result.judgments
-        cache.save(report)
-        review_accepted = result.accepted
-
-        # Save to AI cache if review was accepted
-        if result.accepted:
-            _save_judgments_to_ai_cache(console, result.judgments)
+    # Process AI and review
+    review_accepted = await _process_ai_and_review(console, cache, report, options)
 
     # Only finalize if review was accepted (or skipped)
     if not review_accepted:
@@ -733,16 +815,167 @@ async def report_flow(
         console.print("\n[bold]Final Report:[/bold]")
         console.print(f"  • Approved changes: {include_count}")
 
+    # Generate output files
+    success = await dist_flow(
+        console,
+        month=month_key,
+        output_options=output_options,
+        force=options.force,
+    )
+
+    if not success:
+        return False
+
     # Save report to history so next report knows where to start
     save_report_date(report.changes_until, month_key)
     console.print(
         f"[green]✓[/green] Report saved to history (cutoff: {report.changes_until})"
     )
 
-    # Clean up in-flight cache
-    cache.delete(month_key)
+    # Note: We keep in-flight cache so dist can be run again if needed
+    # Users can manually clear with: iptax cache clear --month YYYY-MM
 
-    console.print(f"\n[green]✓[/green] Report ready for {month_key}")
-    console.print("[dim]Note: Full report generation coming in next phase[/dim]")
+    console.print(f"\n[green]✓[/green] Report complete for {month_key}")
 
+    return True
+
+
+def _validate_dist_readiness(
+    report: InFlightReport,
+    settings: Settings,
+    force: bool,
+) -> str | None:
+    """Validate that report is ready for distribution.
+
+    Args:
+        report: In-flight report to validate
+        settings: Application settings
+        force: Force flag (confirms manual review when AI disabled)
+
+    Returns:
+        Error message if validation fails, None if successful
+    """
+    if not report.changes:
+        return "No changes in report"
+
+    # Check review status - AI is disabled if it's DisabledAIConfig OR provider is None
+    ai_enabled = (
+        not isinstance(settings.ai, DisabledAIConfig)
+        and getattr(settings.ai, "provider", None) is not None
+    )
+
+    if ai_enabled:
+        # AI enabled: require judgments and all must be reviewed
+        if not report.judgments:
+            return (
+                "AI is enabled but no judgments found. "
+                "Run [cyan]iptax review[/cyan] first."
+            )
+
+        # Check if all judgments are reviewed
+        unreviewed = [j for j in report.judgments if j.user_decision is None]
+        if unreviewed:
+            return (
+                f"{len(unreviewed)} judgment(s) not reviewed. "
+                "Run [cyan]iptax review[/cyan] first."
+            )
+    elif not report.judgments and not force:
+        # AI disabled: require manual review confirmation
+        return (
+            "AI is disabled. Changes require manual review before generation.\n"
+            "Review your changes manually, then use --force to confirm and generate."
+        )
+
+    # Check for required hours data (only if Workday is enabled)
+    if report.total_hours is None and settings.workday.enabled:
+        return (
+            "Missing work hours data. "
+            "Run [cyan]iptax collect[/cyan] to gather Workday data."
+        )
+
+    return None
+
+
+async def dist_flow(
+    console: Console,
+    month: str | None = None,
+    output_options: OutputOptions | None = None,
+    force: bool = False,
+) -> bool:
+    """Generate output files from in-flight report.
+
+    Args:
+        console: Rich console for output
+        month: Month specification (None|latest|last|YYYY-MM)
+        output_options: Output generation options
+        force: Overwrite existing files (also confirms manual review when AI disabled)
+
+    Returns:
+        True if successful, False on failure
+    """
+    if output_options is None:
+        output_options = OutputOptions()
+    # Load settings
+    settings = load_settings(console)
+
+    # Load in-flight report
+    cache = InFlightCache()
+    report, month_key = _load_report_for_review(console, cache, month)
+
+    if report is None:
+        return False
+
+    console.print(f"\n[cyan]📊[/cyan] Generating output for {month_key}")
+    _display_inflight_summary(console, report)
+
+    # Validate report is ready for dist
+    error = _validate_dist_readiness(report, settings, force)
+    if error:
+        console.print(f"\n[red]✗[/red] {error}")
+        return False
+
+    # Compile report
+    console.print("\n[cyan]📝[/cyan] Compiling report data...")
+    try:
+        report_data = compile_report(report, settings)
+    except ValueError as e:
+        console.print(f"\n[red]✗[/red] Compilation failed: {e}")
+        return False
+
+    console.print(
+        f"[green]✓[/green] Compiled {len(report_data.changes)} approved changes "
+        f"from {len(report_data.repositories)} repositories"
+    )
+
+    # Determine output directory
+    if output_options.output_dir:
+        target_dir = output_options.output_dir
+        console.print("[cyan]📁[/cyan] Using custom output directory:")
+        console.print(f"  {target_dir}")
+    else:
+        year = int(report_data.month.split("-")[0])
+        target_dir = settings.report.get_output_path(year)
+        console.print("[cyan]📁[/cyan] Using configured output directory:")
+        console.print(f"  {target_dir}")
+
+    # Generate output files
+    fmt = output_options.output_format
+    console.print(f"\n[cyan]✍[/cyan] Generating {fmt} files...")
+
+    try:
+        generated_files = generate_all(
+            report_data, target_dir, force=force, format_type=fmt
+        )
+        console.print(f"\n[green]✓[/green] Generated {len(generated_files)} file(s):")
+        for file_path in generated_files:
+            console.print(f"  • {file_path}")
+    except FileExistsError as e:
+        console.print(f"\n[red]✗[/red] {e}")
+        console.print("Use --force to overwrite existing files")
+        return False
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Generation failed: {e}")
+        return False
+
+    console.print(f"\n[green]✓[/green] Output generated for {month_key}")
     return True

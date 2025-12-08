@@ -181,10 +181,15 @@ class ReportConfig(BaseModel):
     @field_validator("creative_work_percentage")
     @classmethod
     def validate_percentage(cls, v: int) -> int:
-        """Validate percentage is in valid range."""
-        if not 0 <= v <= MAX_PERCENTAGE:
+        """Validate percentage is in valid range (1-100).
+
+        Note: 0% is not allowed because IP tax reports require creative work.
+        A report with 0% creative work defeats the purpose of IP tax deductions.
+        """
+        if not 1 <= v <= MAX_PERCENTAGE:
             raise ValueError(
-                f"Creative work percentage must be between 0 and {MAX_PERCENTAGE}"
+                f"Creative work percentage must be between 1 and {MAX_PERCENTAGE}. "
+                "IP tax reports require at least some creative work."
             )
         return v
 
@@ -747,9 +752,11 @@ class Change(BaseModel):
         """Get a short display reference for the change.
 
         Returns:
-            String in format "repo#number" (e.g., "owner/repo#123")
+            String in format "repo#number" for GitHub (e.g., "owner/repo#123")
+            or "repo!number" for GitLab (e.g., "group/repo!456")
         """
-        return f"{self.repository.path}#{self.number}"
+        symbol = "!" if self.repository.provider_type == "gitlab" else "#"
+        return f"{self.repository.path}{symbol}{self.number}"
 
 
 class Decision(str, Enum):
@@ -906,15 +913,19 @@ class ReportData(BaseModel):
         default_factory=list,
         description="List of unique repositories",
     )
-    total_hours: float = Field(
+    total_hours: int = Field(
         ...,
-        description="Total working hours in period",
+        description="Total working hours in period (rounded to whole hours)",
         gt=0,
     )
-    creative_hours: float = Field(
+    creative_hours: int = Field(
         ...,
         description="Creative work hours (calculated from total and percentage)",
         gt=0,
+    )
+    creative_percentage: int = Field(
+        ...,
+        description="Percentage of work considered creative",
     )
     employee_name: str = Field(
         ...,
@@ -951,3 +962,40 @@ class ReportData(BaseModel):
         year, month = self.month.split("-")
         en, pl = MONTH_NAMES_BILINGUAL.get(month, ("Unknown", "Nieznany"))
         return f"{en} {year}", f"{pl} {year}"
+
+
+# Cache statistics models
+
+
+@dataclass
+class AICacheStats:
+    """AI judgment cache statistics for display."""
+
+    total_judgments: int
+    corrected_count: int
+    correct_count: int
+    correction_rate: float
+    products: list[str]
+    oldest_judgment: str | None
+    newest_judgment: str | None
+    cache_path: Path
+    cache_size_bytes: int
+
+
+@dataclass
+class HistoryCacheStats:
+    """Report history statistics for display."""
+
+    total_reports: int
+    entries: dict[str, HistoryEntry]
+    history_path: Path
+    history_size_bytes: int
+
+
+@dataclass
+class InflightCacheStats:
+    """In-flight cache statistics for display."""
+
+    active_reports: int
+    months: list[str]
+    cache_dir: Path

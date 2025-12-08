@@ -191,11 +191,14 @@ class TestReportConfig:
         assert report.creative_work_percentage == 75
 
     def test_percentage_validation_minimum(self):
-        """Test that percentage cannot be less than 0."""
-        with pytest.raises(ValidationError) as exc_info:
-            ReportConfig(creative_work_percentage=-1)
+        """Test that percentage cannot be less than 1.
 
-        assert "Creative work percentage must be between 0 and 100" in str(
+        0% is not allowed because IP tax reports require creative work.
+        """
+        with pytest.raises(ValidationError) as exc_info:
+            ReportConfig(creative_work_percentage=0)
+
+        assert "Creative work percentage must be between 1 and 100" in str(
             exc_info.value
         )
 
@@ -204,14 +207,14 @@ class TestReportConfig:
         with pytest.raises(ValidationError) as exc_info:
             ReportConfig(creative_work_percentage=101)
 
-        assert "Creative work percentage must be between 0 and 100" in str(
+        assert "Creative work percentage must be between 1 and 100" in str(
             exc_info.value
         )
 
     def test_percentage_validation_boundary_values(self):
-        """Test that boundary values 0 and 100 are valid."""
-        report_min = ReportConfig(creative_work_percentage=0)
-        assert report_min.creative_work_percentage == 0
+        """Test that boundary values 1 and 100 are valid."""
+        report_min = ReportConfig(creative_work_percentage=1)
+        assert report_min.creative_work_percentage == 1
 
         report_max = ReportConfig(creative_work_percentage=100)
         assert report_max.creative_work_percentage == 100
@@ -1322,6 +1325,7 @@ class TestReportData:
             repositories=[repo],
             total_hours=160.0,
             creative_hours=128.0,
+            creative_percentage=80,
             employee_name="John Doe",
             supervisor_name="Jane Smith",
             product_name="Test Product",
@@ -1339,6 +1343,7 @@ class TestReportData:
             end_date=date(2024, 11, 30),
             total_hours=160.0,
             creative_hours=128.0,
+            creative_percentage=80,
             employee_name="John Doe",
             supervisor_name="Jane Smith",
             product_name="Test Product",
@@ -1356,6 +1361,7 @@ class TestReportData:
             end_date=date(2024, 11, 30),
             total_hours=160.0,
             creative_hours=128.0,
+            creative_percentage=80,
             employee_name="John Doe",
             supervisor_name="Jane Smith",
             product_name="Test Product",
@@ -1375,6 +1381,7 @@ class TestReportData:
                 end_date=date(2024, 11, 30),
                 total_hours=0,
                 creative_hours=0,
+                creative_percentage=80,
                 employee_name="John Doe",
                 supervisor_name="Jane Smith",
                 product_name="Test Product",

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Work Card {{ report.get_work_card_number() }}</title>
+  <style>
+    {{ styles | safe }}
+  </style>
+</head>
+<body>
+  <!-- Main Table with integrated header -->
+  <table class="description-table avoid-break">
+    <tr>
+      <th class="bilingual" style="width: 25%;">
+        Nr Karty Utworu
+        <span class="english"> / Work Card Number</span>
+      </th>
+      <td style="width: 20%;">{{ report.get_work_card_number() }}</td>
+      <th class="bilingual" style="width: 25%;">
+        Data przygotowania
+        <span class="english"> / Preparation on</span>
+      </th>
+      <td style="width: 30%;">{{ preparation_date }}</td>
+    </tr>
+    <tr>
+      <th class="bilingual">
+        Imię i Nazwisko Autora
+        <span class="english"> / Author's Surname, Name</span>
+      </th>
+      <td colspan="3">{{ report.employee_name }}</td>
+    </tr>
+    <tr>
+      <th class="bilingual">
+        Imiona i Nazwiska Współautorów
+        <span class="english"> / Contributor's Surname, Name</span>
+      </th>
+      <td colspan="3">
+        <div class="bilingual" style="margin-bottom: 5px; font-size: 8pt;">
+          Lista współautorów jest dostępna pod adresami
+          <span class="english"> / List of co-authors is available at:</span>
+        </div>
+        <ul class="repo-list">
+          {% for repo in report.repositories %}
+          <li><a href="{{ repo.get_url() }}">{{ repo.get_display_name() }}</a></li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <th class="bilingual">
+        Tytuł
+        <span class="english"> / Title</span>
+      </th>
+      <td colspan="3">
+        {{ report.product_name }} changes for {{ report.month | replace("-", "") }}
+      </td>
+    </tr>
+    <tr>
+      <th class="bilingual">
+        Opis Utworu (informacja dotycząca zakresu utworu, obejmująca krótkie
+        streszczenie) ze wskazaniem elementów oryginalności i indywidualności
+        <span class="english">
+          / Description of Work (information about the scope of the work,
+          including a brief synopsis) with an indication of elements of
+          originality and individuality
+        </span>
+      </th>
+      <td colspan="3">
+        <ul class="changes-list">
+          {% for change in report.changes %}
+          <li>
+            <a href="{{ change.get_url() }}">
+              {{ change.title }} ({{ change.get_display_reference() }})
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Signature Section -->
+  <div class="signature-section-centered">
+    <div class="signature-line-centered">
+      <span class="bilingual">
+        Podpis Pracownika, Data
+        <span class="english"> / Employee Signature, Date</span>
+      </span>
+    </div>
+  </div>
+</body>
+</html>

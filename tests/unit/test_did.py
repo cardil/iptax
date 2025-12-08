@@ -141,6 +141,7 @@ def _create_github_issue_mock(
     project: str | None = "repo",
     id_val: int | str | None = 1,
     title: str | None = "Title",
+    url: str | None = None,
 ) -> Mock:
     """Create a mock that acts like a GitHub Issue."""
     mock = Mock(spec=Issue)
@@ -148,6 +149,12 @@ def _create_github_issue_mock(
     mock.project = project
     mock.id = id_val
     mock.title = title
+    # Create data dict with html_url (like real did SDK)
+    if url is None and owner and project:
+        html_url = f"https://github.com/{owner}/{project}/pull/{id_val}"
+    else:
+        html_url = url
+    mock.data = {"html_url": html_url, "title": title}
     return mock
 
 
@@ -155,12 +162,23 @@ def _create_gitlab_mr_mock(
     path_with_namespace: str = "group/project",
     iid: int | None = 1,
     title: str | None = "Title",
+    url: str | None = None,
 ) -> Mock:
     """Create a mock that acts like a GitLab MergedRequest."""
     mock = Mock(spec=MergedRequest)
     mock.project = {"path_with_namespace": path_with_namespace}
     mock.data = {"title": title}
     mock.iid = Mock(return_value=iid)
+    # Create gitlabapi mock with URL
+    gitlabapi_mock = Mock()
+    if url is None:
+        # Default to gitlab.com with standard MR path
+        gitlabapi_mock.url = (
+            f"https://gitlab.com/{path_with_namespace}/-/merge_requests/{iid}"
+        )
+    else:
+        gitlabapi_mock.url = url
+    mock.gitlabapi = gitlabapi_mock
     return mock
 
 
@@ -176,7 +194,7 @@ class TestConvertToChange:
             title="Add new feature",
         )
 
-        change = _convert_to_change(stat, "github.com")
+        change = _convert_to_change(stat)
 
         assert change.title == "Add new feature"
         assert change.repository.host == "github.com"
@@ -193,7 +211,7 @@ class TestConvertToChange:
             title="Fix bug",
         )
 
-        change = _convert_to_change(stat, "gitlab.com")
+        change = _convert_to_change(stat)
 
         assert change.title == "Fix bug"
         assert change.repository.host == "gitlab.com"
@@ -210,7 +228,7 @@ class TestConvertToChange:
             title=":rocket: Add feature :sparkles:",
         )
 
-        change = _convert_to_change(stat, "github.com")
+        change = _convert_to_change(stat)
 
         assert change.title == "Add feature"
 
@@ -219,35 +237,35 @@ class TestConvertToChange:
         stat = _create_github_issue_mock(owner=None)
 
         with pytest.raises(InvalidStatDataError, match="Missing owner"):
-            _convert_github_pr(stat, "github.com")
+            _convert_github_pr(stat)
 
     def test_convert_missing_project(self) -> None:
         """Test converting stat with missing project raises error."""
         stat = _create_github_issue_mock(project=None)
 
         with pytest.raises(InvalidStatDataError, match="Missing project"):
-            _convert_github_pr(stat, "github.com")
+            _convert_github_pr(stat)
 
     def test_convert_missing_id(self) -> None:
         """Test converting stat with missing id raises error."""
         stat = _create_github_issue_mock(id_val=None)
 
         with pytest.raises(InvalidStatDataError, match="Missing id"):
-            _convert_github_pr(stat, "github.com")
+            _convert_github_pr(stat)
 
     def test_convert_missing_title(self) -> None:
         """Test converting stat with missing title raises error."""
         stat = _create_github_issue_mock(title=None)
 
         with pytest.raises(InvalidStatDataError, match="Missing title"):
-            _convert_github_pr(stat, "github.com")
+            _convert_github_pr(stat)
 
     def test_convert_empty_title(self) -> None:
         """Test converting stat with empty title raises error."""
         stat = _create_github_issue_mock(title="")
 
         with pytest.raises(InvalidStatDataError, match="Missing title"):
-            _convert_github_pr(stat, "github.com")
+            _convert_github_pr(stat)
 
     def test_convert_invalid_id_type(self) -> None:
         """Test converting stat with non-numeric id raises Pydantic error."""
@@ -255,14 +273,14 @@ class TestConvertToChange:
 
         # Pydantic validates the Change model and raises ValidationError
         with pytest.raises(ValidationError, match="int_parsing"):
-            _convert_github_pr(stat, "github.com")
+            _convert_github_pr(stat)
 
     def test_convert_zero_id(self) -> None:
         """Test converting stat with zero id raises error."""
         stat = _create_github_issue_mock(id_val=0)
 
         with pytest.raises(InvalidStatDataError, match="Missing id"):
-            _convert_github_pr(stat, "github.com")
+            _convert_github_pr(stat)
 
     def test_convert_negative_id(self) -> None:
         """Test converting stat with negative id raises Pydantic error."""
@@ -270,14 +288,14 @@ class TestConvertToChange:
 
         # Pydantic validates the Change model and raises ValidationError for negative
         with pytest.raises(ValidationError, match="greater_than"):
-            _convert_github_pr(stat, "github.com")
+            _convert_github_pr(stat)
 
     def test_convert_unknown_type_raises_error(self) -> None:
         """Test converting unknown stat type raises error."""
         stat = Mock()  # Generic mock, not Issue or MergedRequest
 
         with pytest.raises(InvalidStatDataError, match="Unknown stat type"):
-            _convert_to_change(stat, "github.com")
+            _convert_to_change(stat)
 
 
 class TestFetchProviderChanges:
