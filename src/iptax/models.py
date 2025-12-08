@@ -181,10 +181,15 @@ class ReportConfig(BaseModel):
     @field_validator("creative_work_percentage")
     @classmethod
     def validate_percentage(cls, v: int) -> int:
-        """Validate percentage is in valid range."""
-        if not 0 <= v <= MAX_PERCENTAGE:
+        """Validate percentage is in valid range (1-100).
+
+        Note: 0% is not allowed because IP tax reports require creative work.
+        A report with 0% creative work defeats the purpose of IP tax deductions.
+        """
+        if not 1 <= v <= MAX_PERCENTAGE:
             raise ValueError(
-                f"Creative work percentage must be between 0 and {MAX_PERCENTAGE}"
+                f"Creative work percentage must be between 1 and {MAX_PERCENTAGE}. "
+                "IP tax reports require at least some creative work."
             )
         return v
 

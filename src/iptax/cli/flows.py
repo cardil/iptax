@@ -169,6 +169,10 @@ async def review(
     return result
 
 
+# Minimum hours required for a valid report (before rounding)
+MIN_WORK_HOURS = 0.5
+
+
 async def _fetch_workday_data(
     console: Console,
     report: InFlightReport,
@@ -187,14 +191,25 @@ async def _fetch_workday_data(
 
     Returns:
         True if data was successfully fetched and validated (or user confirmed),
-        False if coverage is incomplete and user declined to continue.
+        False if hours are insufficient or coverage is incomplete and user declined.
     """
     console.print(f"\n[cyan]📅[/cyan] Fetching Workday: {start_date} to {end_date}")
 
     client = WorkdayClient(settings.workday, console=console)
     work_hours = await client.fetch_work_hours(start_date, end_date, headless=True)
 
-    # Store Workday data first (always store, validation happens after)
+    # Validate minimum hours early (before saving)
+    if work_hours.total_hours < MIN_WORK_HOURS:
+        console.print(
+            f"\n[red]✗[/red] Insufficient work hours: {work_hours.total_hours:.1f}h"
+        )
+        console.print(
+            "  At least 1 hour is required after rounding for report generation."
+        )
+        console.print("  Cannot create a report with 0 hours.")
+        return False
+
+    # Store Workday data (validated for minimum hours)
     report.workday_entries = work_hours.calendar_entries
     report.total_hours = work_hours.total_hours
     report.working_days = work_hours.working_days
