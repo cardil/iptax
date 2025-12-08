@@ -302,3 +302,27 @@ class TestGenerateAll:
         basic_report.month = "2025-01"
         files = generate_all(basic_report, output_dir, force=True)
         assert files[0].name == "2025-01 IP TAX Report.md"
+
+    def test_invalid_format_type_raises_value_error(self, basic_report, tmp_path):
+        """Test that invalid format_type raises ValueError."""
+        output_dir = tmp_path / "reports"
+
+        with pytest.raises(ValueError, match="Invalid format_type 'invalid'"):
+            generate_all(basic_report, output_dir, format_type="invalid")
+
+    def test_checks_all_files_before_writing(self, basic_report, tmp_path):
+        """Test that all files are checked before any writes (fail-fast)."""
+        output_dir = tmp_path / "reports"
+        output_dir.mkdir(parents=True)
+
+        # Create only the PDF file (not the markdown)
+        tax_report = output_dir / "2024-11 IP TAX Raport.pdf"
+        tax_report.write_text("existing", encoding="utf-8")
+
+        # Should fail before writing markdown because PDF exists
+        with pytest.raises(FileExistsError, match="Tax Report PDF already exists"):
+            generate_all(basic_report, output_dir)
+
+        # Verify markdown was NOT written (fail-fast behavior)
+        md_file = output_dir / "2024-11 IP TAX Report.md"
+        assert not md_file.exists()

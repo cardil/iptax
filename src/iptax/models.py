@@ -908,12 +908,12 @@ class ReportData(BaseModel):
         default_factory=list,
         description="List of unique repositories",
     )
-    total_hours: float = Field(
+    total_hours: int = Field(
         ...,
-        description="Total working hours in period",
+        description="Total working hours in period (rounded to whole hours)",
         gt=0,
     )
-    creative_hours: float = Field(
+    creative_hours: int = Field(
         ...,
         description="Creative work hours (calculated from total and percentage)",
         gt=0,

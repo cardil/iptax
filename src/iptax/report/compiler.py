@@ -90,9 +90,10 @@ def compile_report(inflight: InFlightReport, settings: Settings) -> ReportData:
         key=lambda r: (r.host, r.path),
     )
 
-    # Calculate creative hours
+    # Calculate hours with rounding
     creative_percentage = settings.report.creative_work_percentage
-    creative_hours = inflight.total_hours * (creative_percentage / 100.0)
+    total_hours_rounded = round(inflight.total_hours)
+    creative_hours_rounded = round(inflight.total_hours * (creative_percentage / 100.0))
 
     # Build ReportData
     return ReportData(
@@ -101,8 +102,8 @@ def compile_report(inflight: InFlightReport, settings: Settings) -> ReportData:
         end_date=inflight.workday_end,
         changes=included_changes,
         repositories=repositories,
-        total_hours=inflight.total_hours,
-        creative_hours=creative_hours,
+        total_hours=total_hours_rounded,
+        creative_hours=creative_hours_rounded,
         creative_percentage=creative_percentage,
         employee_name=settings.employee.name,
         supervisor_name=settings.employee.supervisor,

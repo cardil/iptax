@@ -210,6 +210,10 @@ def generate_tax_report_pdf(
     _html_to_pdf(html_content, output_path)
 
 
+# Valid format types for output generation
+VALID_FORMAT_TYPES = ("all", "md", "pdf")
+
+
 def generate_all(
     report: ReportData,
     output_dir: Path,
@@ -233,54 +237,58 @@ def generate_all(
         List of paths to generated files
 
     Raises:
+        ValueError: If format_type is not valid
         FileExistsError: If files exist and force=False
     """
+    # Validate format_type
+    if format_type not in VALID_FORMAT_TYPES:
+        raise ValueError(
+            f"Invalid format_type '{format_type}'. "
+            f"Must be one of: {', '.join(VALID_FORMAT_TYPES)}"
+        )
+
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate filenames based on report month
     month_part = report.month  # Format: YYYY-MM
+
+    # Collect all file paths that will be generated
+    files_to_generate: list[tuple[Path, str]] = []
+
+    if format_type in ("all", "md"):
+        md_path = output_dir / f"{month_part} IP TAX Report.md"
+        files_to_generate.append((md_path, "Markdown report"))
+
+    if format_type in ("all", "pdf"):
+        work_card_path = output_dir / f"{month_part} IP TAX Work Card.pdf"
+        tax_report_path = output_dir / f"{month_part} IP TAX Raport.pdf"
+        files_to_generate.append((work_card_path, "Work Card PDF"))
+        files_to_generate.append((tax_report_path, "Tax Report PDF"))
+
+    # Check all files BEFORE writing any (fail-fast for partial output prevention)
+    if not force:
+        for path, description in files_to_generate:
+            if path.exists():
+                raise FileExistsError(
+                    f"{description} already exists: {path}. Use --force to overwrite."
+                )
+
+    # Now generate all files
     generated_files: list[Path] = []
 
-    # Generate markdown if requested
     if format_type in ("all", "md"):
-        md_filename = f"{month_part} IP TAX Report.md"
-        md_path = output_dir / md_filename
-
-        if md_path.exists() and not force:
-            raise FileExistsError(
-                f"Markdown report already exists: {md_path}. Use --force to overwrite."
-            )
-
+        md_path = output_dir / f"{month_part} IP TAX Report.md"
         md_content = generate_markdown(report)
         md_path.write_text(md_content, encoding="utf-8")
         generated_files.append(md_path)
 
-    # Generate PDFs if requested
     if format_type in ("all", "pdf"):
-        # Work Card PDF
-        work_card_filename = f"{month_part} IP TAX Work Card.pdf"
-        work_card_path = output_dir / work_card_filename
-
-        if work_card_path.exists() and not force:
-            raise FileExistsError(
-                f"Work Card PDF already exists: {work_card_path}. "
-                "Use --force to overwrite."
-            )
-
+        work_card_path = output_dir / f"{month_part} IP TAX Work Card.pdf"
         generate_work_card_pdf(report, work_card_path)
         generated_files.append(work_card_path)
 
-        # Tax Report PDF
-        tax_report_filename = f"{month_part} IP TAX Raport.pdf"
-        tax_report_path = output_dir / tax_report_filename
-
-        if tax_report_path.exists() and not force:
-            raise FileExistsError(
-                f"Tax Report PDF already exists: {tax_report_path}. "
-                "Use --force to overwrite."
-            )
-
+        tax_report_path = output_dir / f"{month_part} IP TAX Raport.pdf"
         generate_tax_report_pdf(report, tax_report_path)
         generated_files.append(tax_report_path)
 

@@ -550,7 +550,7 @@ def cache_clear(
 ) -> None:
     """Clear caches (in-flight, AI, or by month).
 
-    By default, clears in-flight cache. Use --ai to clear AI cache.
+    By default, clears both AI cache and in-flight reports with confirmation prompts.
     """
     cache_mgr = InFlightCache()
 
