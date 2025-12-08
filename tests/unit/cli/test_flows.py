@@ -1483,7 +1483,12 @@ class TestDistFlow:
         """Test that dist fails when report not found."""
         console = Console(file=StringIO(), force_terminal=True)
 
-        with patch.object(flows, "InFlightCache") as mock_cache_cls:
+        mock_settings = MagicMock()
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+        ):
             mock_cache = MagicMock()
             mock_cache.exists.return_value = False
             mock_cache_cls.return_value = mock_cache
