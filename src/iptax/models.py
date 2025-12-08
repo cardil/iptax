@@ -747,9 +747,11 @@ class Change(BaseModel):
         """Get a short display reference for the change.
 
         Returns:
-            String in format "repo#number" (e.g., "owner/repo#123")
+            String in format "repo#number" for GitHub (e.g., "owner/repo#123")
+            or "repo!number" for GitLab (e.g., "group/repo!456")
         """
-        return f"{self.repository.path}#{self.number}"
+        symbol = "!" if self.repository.provider_type == "gitlab" else "#"
+        return f"{self.repository.path}{symbol}{self.number}"
 
 
 class Decision(str, Enum):

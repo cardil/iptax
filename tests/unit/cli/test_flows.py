@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from rich.console import Console
+from rich.prompt import Confirm
 
 from iptax.ai.review import ReviewResult
 from iptax.cli import flows
@@ -947,9 +948,91 @@ class TestFetchWorkdayData:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_shows_warning_for_missing_days(self):
-        """Test that warning is shown for missing Workday days."""
+    async def test_shows_warning_for_missing_days_user_continues(self):
+        """Test that warning is shown for missing Workday days and user continues."""
         console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+        )
+        mock_settings = MagicMock()
+
+        mock_work_hours = WorkHours(
+            working_days=18,
+            absence_days=0,
+            total_hours=144.0,
+            calendar_entries=[],
+        )
+
+        missing_days = [date(2024, 11, 4), date(2024, 11, 5)]
+
+        with (
+            patch.object(flows, "WorkdayClient") as mock_client_cls,
+            patch.object(flows, "validate_workday_coverage", return_value=missing_days),
+            patch.object(Confirm, "ask", return_value=True),  # User continues anyway
+        ):
+            mock_client = MagicMock()
+            mock_client.fetch_work_hours = AsyncMock(return_value=mock_work_hours)
+            mock_client_cls.return_value = mock_client
+
+            result = await flows._fetch_workday_data(
+                console, report, mock_settings, date(2024, 11, 1), date(2024, 11, 30)
+            )
+
+        assert result is True  # User chose to continue
+        assert report.workday_validated is False
+        output = strip_ansi(console.file.getvalue())
+        assert "WARNING" in output
+        assert "Missing Workday entries" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_missing_days_user_declines(self):
+        """Test that user can decline to continue with missing Workday days."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+        )
+        mock_settings = MagicMock()
+
+        mock_work_hours = WorkHours(
+            working_days=18,
+            absence_days=0,
+            total_hours=144.0,
+            calendar_entries=[],
+        )
+
+        missing_days = [date(2024, 11, 4), date(2024, 11, 5)]
+
+        with (
+            patch.object(flows, "WorkdayClient") as mock_client_cls,
+            patch.object(flows, "validate_workday_coverage", return_value=missing_days),
+            patch.object(Confirm, "ask", return_value=False),  # User declines
+        ):
+            mock_client = MagicMock()
+            mock_client.fetch_work_hours = AsyncMock(return_value=mock_work_hours)
+            mock_client_cls.return_value = mock_client
+
+            result = await flows._fetch_workday_data(
+                console, report, mock_settings, date(2024, 11, 1), date(2024, 11, 30)
+            )
+
+        assert result is False  # User declined
+        output = strip_ansi(console.file.getvalue())
+        assert "Aborted by user" in output
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_missing_days_non_interactive_fails(self):
+        """Test that missing Workday days fails in non-interactive mode."""
+        console = Console(file=StringIO(), force_terminal=False)  # Non-interactive
         report = InFlightReport(
             month="2024-11",
             workday_start=date(2024, 11, 1),
@@ -976,15 +1059,14 @@ class TestFetchWorkdayData:
             mock_client.fetch_work_hours = AsyncMock(return_value=mock_work_hours)
             mock_client_cls.return_value = mock_client
 
-            await flows._fetch_workday_data(
+            result = await flows._fetch_workday_data(
                 console, report, mock_settings, date(2024, 11, 1), date(2024, 11, 30)
             )
 
-        assert report.workday_validated is False
+        assert result is False  # Non-interactive mode fails immediately
         output = strip_ansi(console.file.getvalue())
-        assert "WARNING" in output
-        assert "Missing Workday entries" in output
-        assert "legal compliance" in output
+        assert "Cannot proceed with incomplete Workday coverage" in output
+        assert "non-interactive mode" in output
 
 
 class TestRunAiFiltering:

@@ -173,23 +173,47 @@ class TestGenerateMarkdown:
 class TestGenerateWorkCardPdf:
     """Test generate_work_card_pdf function."""
 
-    def test_not_yet_implemented(self, basic_report, tmp_path):
-        """Test that Work Card PDF generation raises NotImplementedError."""
+    def test_generates_pdf_file(self, basic_report, tmp_path):
+        """Test that Work Card PDF is generated."""
         output_path = tmp_path / "work_card.pdf"
 
-        with pytest.raises(NotImplementedError, match="not yet implemented"):
-            generate_work_card_pdf(basic_report, output_path)
+        generate_work_card_pdf(basic_report, output_path)
+
+        assert output_path.exists()
+        assert output_path.stat().st_size > 0
+
+    def test_pdf_is_valid_pdf(self, basic_report, tmp_path):
+        """Test that generated file is a valid PDF."""
+        output_path = tmp_path / "work_card.pdf"
+
+        generate_work_card_pdf(basic_report, output_path)
+
+        # PDF files start with %PDF
+        content = output_path.read_bytes()
+        assert content.startswith(b"%PDF")
 
 
 class TestGenerateTaxReportPdf:
     """Test generate_tax_report_pdf function."""
 
-    def test_not_yet_implemented(self, basic_report, tmp_path):
-        """Test that Tax Report PDF generation raises NotImplementedError."""
+    def test_generates_pdf_file(self, basic_report, tmp_path):
+        """Test that Tax Report PDF is generated."""
         output_path = tmp_path / "tax_report.pdf"
 
-        with pytest.raises(NotImplementedError, match="not yet implemented"):
-            generate_tax_report_pdf(basic_report, output_path)
+        generate_tax_report_pdf(basic_report, output_path)
+
+        assert output_path.exists()
+        assert output_path.stat().st_size > 0
+
+    def test_pdf_is_valid_pdf(self, basic_report, tmp_path):
+        """Test that generated file is a valid PDF."""
+        output_path = tmp_path / "tax_report.pdf"
+
+        generate_tax_report_pdf(basic_report, output_path)
+
+        # PDF files start with %PDF
+        content = output_path.read_bytes()
+        assert content.startswith(b"%PDF")
 
 
 class TestGenerateAll:
@@ -205,16 +229,19 @@ class TestGenerateAll:
         assert output_dir.exists()
         assert output_dir.is_dir()
 
-    def test_generates_markdown_file(self, basic_report, tmp_path):
-        """Test that markdown file is generated."""
+    def test_generates_all_files(self, basic_report, tmp_path):
+        """Test that all report files are generated."""
         output_dir = tmp_path / "reports"
 
         files = generate_all(basic_report, output_dir)
 
-        # Should return list with markdown file
-        assert len(files) == 1
-        assert files[0].name == "2024-11 IP TAX Report.md"
-        assert files[0].exists()
+        # Should return list with all three files
+        assert len(files) == 3
+        filenames = [f.name for f in files]
+        assert "2024-11 IP TAX Report.md" in filenames
+        assert "2024-11 IP TAX Work Card.pdf" in filenames
+        assert "2024-11 IP TAX Raport.pdf" in filenames
+        assert all(f.exists() for f in files)
 
     def test_markdown_file_has_correct_content(self, basic_report, tmp_path):
         """Test that generated markdown file has correct content."""

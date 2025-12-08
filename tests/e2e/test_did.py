@@ -215,8 +215,13 @@ class TestDidIntegration:
             assert url.endswith(str(change.number))
 
             # Verify change_id and display reference
-            assert "#" in change.get_change_id()
-            assert f"#{change.number}" in change.get_display_reference()
+            assert "#" in change.get_change_id()  # change_id always uses #
+            display_ref = change.get_display_reference()
+            # GitHub uses #, GitLab uses !
+            if change.repository.provider_type == "github":
+                assert f"#{change.number}" in display_ref
+            else:  # gitlab
+                assert f"!{change.number}" in display_ref
 
     def test_emoji_cleaning(
         self,
@@ -249,10 +254,20 @@ class TestDidIntegration:
         if not fetched_changes:
             pytest.skip("No changes found in test date range")
 
-        configured_providers = set(real_settings.did.providers)
+        configured_providers = real_settings.did.providers
 
         for change in fetched_changes:
-            assert change.repository.host in configured_providers
+            # Host should match one of the configured providers (prefix matching)
+            # e.g., host "gitlab.cee.redhat.com" matches provider "gitlab.cee"
+            host_matches = any(
+                change.repository.host == provider
+                or change.repository.host.startswith(f"{provider}.")
+                for provider in configured_providers
+            )
+            assert host_matches, (
+                f"Host {change.repository.host!r} not matched by "
+                f"any provider: {configured_providers}"
+            )
 
     def test_config_validation_error(self) -> None:
         """Test that validation error is raised for invalid config.

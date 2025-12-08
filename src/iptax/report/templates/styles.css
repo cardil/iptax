@@ -1,0 +1,344 @@
+@page {
+  size: A4;
+  margin: 1.5cm;
+}
+
+body {
+  font-family: "Red Hat Text", "DejaVu Sans", sans-serif;
+  font-size: 11pt;
+  line-height: 1.4;
+  color: #000;
+  margin: 0;
+  padding: 0;
+}
+
+/* Header styling */
+.header {
+  margin-bottom: 20px;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.header-label {
+  color: #666;
+  font-size: 9pt;
+}
+
+.header-value {
+  font-weight: bold;
+}
+
+/* Compact header for tax report (single line bilingual) */
+.header-compact {
+  margin-bottom: 15px;
+}
+
+.header-compact p {
+  margin: 4px 0;
+  font-size: 10pt;
+}
+
+/* Main title */
+h1 {
+  font-size: 14pt;
+  font-weight: bold;
+  text-align: center;
+  margin: 20px 0;
+  border-bottom: 2px solid #000;
+  padding-bottom: 10px;
+}
+
+/* Section headers */
+h2 {
+  font-size: 11pt;
+  font-weight: bold;
+  margin: 15px 0 10px 0;
+  color: #333;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 15px 0;
+}
+
+table th,
+table td {
+  border: 1px solid #000;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+table th {
+  background-color: #d0d0d0;
+  font-weight: bold;
+}
+
+/* Bilingual label styling */
+.bilingual {
+  font-size: 10pt;
+}
+
+.bilingual .polish {
+  display: block;
+  color: #444;
+  font-style: italic;
+}
+
+.bilingual .english {
+  display: inline;
+  font-weight: normal;
+}
+
+/* English text in table headers should not be bold */
+th .english {
+  font-weight: normal;
+}
+
+/* Repository list */
+.repo-list {
+  list-style: disc;
+  margin: 5px 0;
+  padding-left: 20px;
+  font-size: 9pt;
+}
+
+.repo-list li {
+  margin-bottom: 2px;
+}
+
+.repo-list a {
+  color: #0066cc;
+  text-decoration: none;
+}
+
+/* Changes list */
+.changes-list {
+  list-style: disc;
+  margin: 5px 0;
+  padding-left: 20px;
+  font-size: 9pt;
+}
+
+.changes-list li {
+  margin-bottom: 2px;
+}
+
+.changes-list a {
+  color: #0066cc;
+  text-decoration: none;
+}
+
+/* Declaration section */
+.declaration {
+  margin-top: 20px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  background-color: #f9f9f9;
+}
+
+.declaration h3 {
+  font-size: 10pt;
+  font-weight: bold;
+  margin: 0 0 8px 0;
+}
+
+.declaration p {
+  font-size: 8pt;
+  text-align: justify;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+/* Checkbox styling */
+.checkbox-row {
+  margin-top: 15px;
+  display: flex;
+  gap: 40px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #000;
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 6px;
+  position: relative;
+  bottom: 2px;
+}
+
+/* Signature section */
+.signature-section {
+  margin-top: 40px;
+  padding-top: 20px;
+}
+
+.signature-line {
+  margin-top: 50px;
+  border-top: 1px dashed #000;
+  width: 50%;
+  text-align: center;
+  padding-top: 5px;
+  font-size: 9pt;
+  color: #666;
+}
+
+/* Centered signature section for work card */
+.signature-section-centered {
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+}
+
+.signature-line-centered {
+  border-top: 1px dashed #000;
+  width: 50%;
+  text-align: center;
+  padding-top: 5px;
+  font-size: 9pt;
+  color: #666;
+}
+
+/* Footnote */
+.footnote {
+  margin-top: 10px;
+  font-size: 7pt;
+  color: #666;
+  border-top: 1px solid #ccc;
+  padding-top: 5px;
+}
+
+.footnote p {
+  margin: 2px 0;
+}
+
+/* Inline footnote (compact, single line) */
+.footnote-inline {
+  font-size: 7pt;
+  color: #666;
+  margin: 5px 0;
+  font-style: italic;
+}
+
+/* Simple declaration without background */
+.declaration-simple {
+  margin-top: 15px;
+}
+
+.declaration-simple p {
+  font-size: 8pt;
+  text-align: justify;
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+
+/* Acceptance table */
+.acceptance-table {
+  margin-top: 15px;
+}
+
+.acceptance-table th {
+  font-size: 9pt;
+  padding: 5px 10px;
+}
+
+.acceptance-table td {
+  font-size: 9pt;
+  padding: 8px 10px;
+  vertical-align: middle;
+}
+
+.acceptance-table .acceptance-left {
+  width: 50%;
+  border-right: none;
+}
+
+.acceptance-table .acceptance-right {
+  width: 50%;
+  text-align: right;
+  border-left: none;
+}
+
+/* Work Card specific styles */
+.work-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.work-card-number {
+  font-size: 24pt;
+  font-weight: bold;
+  color: #333;
+}
+
+.work-card-meta {
+  text-align: right;
+}
+
+.work-card-meta .label {
+  font-size: 9pt;
+  color: #666;
+}
+
+.work-card-meta .value {
+  font-size: 11pt;
+  font-weight: bold;
+}
+
+/* Description table for work card */
+.description-table th {
+  width: 35%;
+}
+
+.description-table td {
+  width: 65%;
+}
+
+/* Hours breakdown */
+.hours-breakdown {
+  font-size: 10pt;
+}
+
+.hours-breakdown .total {
+  font-weight: normal;
+}
+
+.hours-breakdown .creative {
+  margin-top: 5px;
+}
+
+/* Opinion section */
+.opinion-section {
+  margin-top: 20px;
+  padding: 10px;
+  border: 1px solid #000;
+}
+
+.opinion-section h4 {
+  font-size: 10pt;
+  margin: 0 0 10px 0;
+}
+
+/* Page break control */
+.page-break {
+  page-break-before: always;
+}
+
+.avoid-break {
+  page-break-inside: avoid;
+}

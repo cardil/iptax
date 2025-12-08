@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from rich.console import Console
+from rich.prompt import Confirm
 
 from iptax.ai.cache import JudgmentCacheManager
 from iptax.ai.prompts import build_judgment_prompt
@@ -174,7 +175,7 @@ async def _fetch_workday_data(
     settings: Settings,
     start_date: date,
     end_date: date,
-) -> None:
+) -> bool:
     """Fetch and validate Workday data, updating report in place.
 
     Args:
@@ -183,11 +184,21 @@ async def _fetch_workday_data(
         settings: Application settings
         start_date: Start date for Workday range
         end_date: End date for Workday range
+
+    Returns:
+        True if data was successfully fetched and validated (or user confirmed),
+        False if coverage is incomplete and user declined to continue.
     """
     console.print(f"\n[cyan]📅[/cyan] Fetching Workday: {start_date} to {end_date}")
 
     client = WorkdayClient(settings.workday, console=console)
     work_hours = await client.fetch_work_hours(start_date, end_date, headless=True)
+
+    # Store Workday data first (always store, validation happens after)
+    report.workday_entries = work_hours.calendar_entries
+    report.total_hours = work_hours.total_hours
+    report.working_days = work_hours.working_days
+    report.absence_days = work_hours.absence_days
 
     # Validate coverage
     missing = validate_workday_coverage(
@@ -198,29 +209,41 @@ async def _fetch_workday_data(
         console.print(
             f"\n[red]⚠ WARNING:[/red] Missing Workday entries for {len(missing)} days!"
         )
-        console.print(
-            "[yellow]This is a legal compliance issue "
-            "(misdemeanor under Polish law)[/yellow]"
-        )
         for day in missing[:MAX_MISSING_DAYS_TO_SHOW]:
             console.print(f"  - {day.strftime('%Y-%m-%d (%A)')}")
         if len(missing) > MAX_MISSING_DAYS_TO_SHOW:
             console.print(f"  ... and {len(missing) - MAX_MISSING_DAYS_TO_SHOW} more")
         report.workday_validated = False
+
+        # Ask user if they want to continue (TTY) or fail (non-TTY/piped)
+        if console.is_terminal:
+            continue_anyway = Confirm.ask(
+                "\n[bold]Continue with incomplete Workday coverage?[/bold]",
+                default=False,
+            )
+            if not continue_anyway:
+                console.print("[yellow]⏹[/yellow] Aborted by user")
+                return False
+            console.print(
+                "[yellow]⚠[/yellow] Continuing with incomplete coverage "
+                "(user confirmed)"
+            )
+        else:
+            # Non-interactive mode: fail immediately
+            console.print(
+                "\n[red]✗[/red] Cannot proceed with incomplete Workday coverage "
+                "in non-interactive mode"
+            )
+            return False
     else:
         console.print("[green]✓[/green] All workdays have entries")
         report.workday_validated = True
-
-    # Store Workday data
-    report.workday_entries = work_hours.calendar_entries
-    report.total_hours = work_hours.total_hours
-    report.working_days = work_hours.working_days
-    report.absence_days = work_hours.absence_days
 
     console.print(
         f"[green]✓[/green] Workday: {work_hours.working_days} days, "
         f"{work_hours.total_hours} hours"
     )
+    return True
 
 
 async def collect_flow(
@@ -299,15 +322,19 @@ async def collect_flow(
 
     # Fetch Workday data
     if not options.skip_workday and settings.workday.enabled:
-        await _fetch_workday_data(
+        workday_success = await _fetch_workday_data(
             console, report, settings, ranges.workday_start, ranges.workday_end
         )
+        if not workday_success:
+            # User declined or non-interactive mode with incomplete coverage
+            # Don't save invalid report
+            return False
     elif options.skip_workday:
         console.print("[yellow]⏭[/yellow] Skipping Workday collection")
     else:
         console.print("[yellow]⏭[/yellow] Workday disabled in settings")
 
-    # Save to cache
+    # Save to cache (only if we reach here - workday validated or skipped)
     saved_path = cache.save(report)
     console.print(f"\n[green]✓[/green] Saved to: {saved_path}")
 

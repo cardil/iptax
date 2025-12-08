@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>IP TAX Raport {{ report.month }}</title>
+  <style>
+    {{ styles | safe }}
+  </style>
+</head>
+<body>
+  <!-- Header - compact format matching original -->
+  <div class="header-compact">
+    <p>Raport za miesiąc / Report for the month:
+      <strong>{{ month_name_pl }} / {{ month_name_en }}</strong></p>
+    <p>Imię i Nazwisko Pracownika / Employee's Surname, Name:
+      <strong>{{ report.employee_name }}</strong></p>
+    <p>Imię i nazwisko Przełożonego / Supervisor's Surname, Name:
+      <strong>{{ report.supervisor_name }}</strong></p>
+  </div>
+
+  <!-- Main Table -->
+  <table class="avoid-break">
+    <tr>
+      <th class="bilingual" style="width: 16%;">
+        Numer karty utworu
+        <span class="english"> / Work Card Number</span>
+      </th>
+      <th class="bilingual" style="width: 28%;">
+        Liczba godzin poświęcona na Utwór
+        <span class="english"> / Number of hours devoted to the Work</span>
+      </th>
+      <th class="bilingual" style="width: 56%;">
+        Współautor<sup>*</sup>
+        <span class="english"> / Co-author<sup>*</sup></span>
+      </th>
+    </tr>
+    <tr>
+      <td style="text-align: center;">{{ report.get_work_card_number() }}</td>
+      <td>
+        <div class="hours-breakdown">
+          <div class="total">
+            {{ working_days }} days / {{ report.total_hours | int }} working hours.
+          </div>
+          <div class="creative">
+            In that, 80% of creative work (development and bug fixing):
+            <strong>{{ report.creative_hours | int }} hours</strong>
+          </div>
+        </div>
+      </td>
+      <td>
+        <div class="bilingual" style="margin-bottom: 5px;">
+          Lista współautorów jest dostępna pod adresami /
+          <span class="english">List of co-authors is available at:</span>
+        </div>
+        <ul class="repo-list">
+          {% for repo in report.repositories %}
+          <li><a href="{{ repo.get_url() }}">{{ repo.get_display_name() }}</a></li>
+          {% endfor %}
+        </ul>
+        <p style="font-size: 7pt; font-style: italic; margin-top: 10px;">
+          (All the above subprojects are part of single
+          "{{ report.product_name }}" product)
+        </p>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Footnote -->
+  <p class="footnote-inline">
+    <sup>*</sup> w przypadku stworzenia Utworu na zasadach współautorstwa /
+    in the case of creation of the Work on the principles of co-authorship
+  </p>
+
+  <!-- Declaration Section -->
+  <div class="declaration-simple avoid-break">
+    <p><strong>OŚWIADCZENIE / DECLARATION</strong></p>
+    <p>
+      Oświadczam iż w związku z faktem przenoszenia na Pracodawcę autorskich
+      praw majątkowych do stworzonych zgodnie z Umową Utworów przeznaczyłem
+      wskazaną w tabeli powyżej, część swojego czasu pracy na wypełnienie
+      obowiązków o charakterze twórczym. Ponadto, wyrażam zgodę na anonimową
+      publikację Utworów, których jestem autorem i które zostały
+      wyszczególnione powyżej
+    </p>
+    <p>
+      I declare that due to the fact of transferring copyright to Works
+      created in accordance with the Agreement to the Employer I devoted
+      indicated in the table above, part of my time working on the
+      fulfillment of the obligations of a creative kind. In addition,
+      I agree to the anonymous publication of Works which I am the author
+      of and which are specified above
+    </p>
+  </div>
+
+  <!-- Opinion/Acceptance Table -->
+  <table class="acceptance-table avoid-break">
+    <tr>
+      <th colspan="2">
+        Opinia Osoby Upoważnionej
+        <span class="english"> / Opinion of Authorized Person</span>
+      </th>
+    </tr>
+    <tr>
+      <td class="acceptance-left">
+        Akceptacja / Acceptance <span class="checkbox"></span>
+      </td>
+      <td class="acceptance-right">
+        Brak akceptacji / No Acceptance <span class="checkbox"></span>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
