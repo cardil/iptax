@@ -15,8 +15,13 @@ from .models import Decision, Judgment, JudgmentCache
 
 logger = logging.getLogger(__name__)
 
-# Default cache location: uses get_cache_dir() for XDG compliance
-DEFAULT_CACHE_PATH = get_cache_dir() / "ai_cache.json"
+
+def get_ai_cache_path() -> Path:
+    """Get path to AI cache file.
+
+    Returns dynamically to respect environment variable changes.
+    """
+    return get_cache_dir() / "ai_cache.json"
 
 
 class JudgmentCacheManager:
@@ -28,7 +33,7 @@ class JudgmentCacheManager:
         Args:
             cache_path: Custom cache path, defaults to ~/.cache/iptax/ai_cache.json
         """
-        self.cache_path = cache_path or DEFAULT_CACHE_PATH
+        self.cache_path = cache_path or get_ai_cache_path()
         self.cache = JudgmentCache()
         self.load()
 

@@ -1,4 +1,8 @@
-"""E2E tests for report generation - generates actual PDF and Markdown files."""
+"""E2E tests for report generation - validates actual PDF content using pdfplumber.
+
+Corner case tests (format filtering, force overwrite, etc.) are covered by unit tests.
+This file only contains e2e tests that validate actual PDF text extraction.
+"""
 
 from datetime import date
 from pathlib import Path
@@ -6,7 +10,7 @@ from pathlib import Path
 import pdfplumber
 import pytest
 
-from iptax.models import Change, Decision, Judgment, ReportData, Repository
+from iptax.models import Change, ReportData, Repository
 from iptax.report.generator import generate_all
 
 
@@ -60,234 +64,85 @@ def sample_report_data() -> ReportData:
     )
 
 
-@pytest.fixture
-def sample_judgments(sample_report_data: ReportData) -> list[Judgment]:
-    """Create sample judgments matching the report data changes."""
-    return [
-        Judgment(
-            change_id=sample_report_data.changes[0].get_change_id(),
-            decision=Decision.INCLUDE,
-            reasoning="Core product feature",
-            product=sample_report_data.product_name,
-            user_decision=Decision.INCLUDE,
-        ),
-        Judgment(
-            change_id=sample_report_data.changes[1].get_change_id(),
-            decision=Decision.INCLUDE,
-            reasoning="Bug fix for core component",
-            product=sample_report_data.product_name,
-            user_decision=Decision.INCLUDE,
-        ),
-    ]
-
-
 @pytest.mark.e2e
 class TestReportGeneration:
-    """E2E tests for full report generation workflow."""
+    """E2E tests for full report generation workflow with PDF content validation."""
 
-    def test_generates_all_output_files(
+    def test_full_report_generation_and_pdf_content(
         self, tmp_path: Path, sample_report_data: ReportData
     ):
-        """Test that all three output files (MD + 2 PDFs) are generated."""
+        """
+        Comprehensive test validating full report generation workflow.
+
+        Validates:
+        - All 3 files (MD + 2 PDFs) are generated
+        - PDFs are valid PDF files
+        - Markdown contains expected sections and content
+        - Work Card PDF has bilingual content and correct work card number
+        - Tax Report PDF has bilingual content and correct hours
+        """
         output_dir = tmp_path / "reports"
         output_dir.mkdir()
 
+        # Generate all output files
         generated_files = generate_all(
             sample_report_data,
             output_dir,
             format_type="all",
         )
 
+        # 1. Verify all files generated
         assert len(generated_files) == 3
-
-        # Check file names match expected pattern
         file_names = {f.name for f in generated_files}
         assert "2024-11 IP TAX Report.md" in file_names
         assert "2024-11 IP TAX Work Card.pdf" in file_names
         assert "2024-11 IP TAX Raport.pdf" in file_names
 
-        # Check all files exist and have content
+        # 2. Verify all files exist and have content
         for file_path in generated_files:
             assert file_path.exists(), f"{file_path} should exist"
             assert file_path.stat().st_size > 0, f"{file_path} should not be empty"
 
-    def test_markdown_contains_expected_content(
-        self, tmp_path: Path, sample_report_data: ReportData
-    ):
-        """Test that Markdown report contains expected sections and content."""
-        output_dir = tmp_path / "reports"
-        output_dir.mkdir()
-
-        generate_all(sample_report_data, output_dir, format_type="md")
-
-        md_file = output_dir / "2024-11 IP TAX Report.md"
-        assert md_file.exists()
-
-        content = md_file.read_text()
-
-        # Check for Changes section with links
-        assert "## Changes" in content
-        assert "Add new feature for parsing" in content
-        assert "Fix bug in analyzer" in content
-        # Format is owner/repo#number (GitHub) or owner/repo!number (GitLab)
-        assert "acme/parser-core#101" in content
-        assert "acme/analyzer!42" in content
-
-        # Check for Projects section
-        assert "## Projects" in content
-        assert "acme / parser-core" in content
-        assert "acme / analyzer" in content
-
-    def test_pdf_files_are_valid(self, tmp_path: Path, sample_report_data: ReportData):
-        """Test that generated PDFs are valid PDF files."""
-        output_dir = tmp_path / "reports"
-        output_dir.mkdir()
-
-        generate_all(sample_report_data, output_dir, format_type="pdf")
-
+        # 3. Verify PDF magic bytes
         work_card = output_dir / "2024-11 IP TAX Work Card.pdf"
         tax_report = output_dir / "2024-11 IP TAX Raport.pdf"
-
-        # Check PDF magic bytes
         assert work_card.read_bytes()[:4] == b"%PDF"
         assert tax_report.read_bytes()[:4] == b"%PDF"
 
-        # Minimum size check (PDFs should be at least a few KB)
-        assert work_card.stat().st_size > 1000
-        assert tax_report.stat().st_size > 1000
+        # 4. Verify Markdown content
+        md_file = output_dir / "2024-11 IP TAX Report.md"
+        md_content = md_file.read_text()
+        assert "## Changes" in md_content
+        assert "## Projects" in md_content
+        assert "Add new feature for parsing" in md_content
+        assert "acme/parser-core#101" in md_content  # GitHub format
+        assert "acme/analyzer!42" in md_content  # GitLab format
 
-    def test_only_markdown_format(self, tmp_path: Path, sample_report_data: ReportData):
-        """Test generating only Markdown output."""
-        output_dir = tmp_path / "reports"
-        output_dir.mkdir()
-
-        generated_files = generate_all(sample_report_data, output_dir, format_type="md")
-
-        assert len(generated_files) == 1
-        assert generated_files[0].suffix == ".md"
-
-    def test_only_pdf_format(self, tmp_path: Path, sample_report_data: ReportData):
-        """Test generating only PDF outputs."""
-        output_dir = tmp_path / "reports"
-        output_dir.mkdir()
-
-        generated_files = generate_all(
-            sample_report_data, output_dir, format_type="pdf"
-        )
-
-        assert len(generated_files) == 2
-        assert all(f.suffix == ".pdf" for f in generated_files)
-
-    def test_bilingual_content_in_pdfs(
-        self, tmp_path: Path, sample_report_data: ReportData
-    ):
-        """Test that PDFs contain bilingual (Polish/English) content."""
-        output_dir = tmp_path / "reports"
-        output_dir.mkdir()
-
-        generate_all(sample_report_data, output_dir, format_type="pdf")
-
-        work_card = output_dir / "2024-11 IP TAX Work Card.pdf"
-        tax_report = output_dir / "2024-11 IP TAX Raport.pdf"
-
-        # Extract text from PDFs using pdfplumber
+        # 5. Extract and validate Work Card PDF content
         with pdfplumber.open(work_card) as pdf:
             work_card_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
 
-        with pdfplumber.open(tax_report) as pdf:
-            tax_report_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-
-        # Work card should contain bilingual headers (Polish / English format)
+        # Bilingual headers
         assert "Nr Karty Utworu" in work_card_text  # Polish
         assert "Work Card" in work_card_text  # English
 
-        # Tax report should contain bilingual content
-        assert "Raport" in tax_report_text  # Polish
-        assert "Report" in tax_report_text  # English
-
-    def test_work_card_number_format(
-        self, tmp_path: Path, sample_report_data: ReportData
-    ):
-        """Test that work card number is correctly formatted."""
-        output_dir = tmp_path / "reports"
-        output_dir.mkdir()
-
-        generate_all(sample_report_data, output_dir, format_type="pdf")
-
-        work_card = output_dir / "2024-11 IP TAX Work Card.pdf"
-
-        # Extract text from PDF using pdfplumber
-        with pdfplumber.open(work_card) as pdf:
-            work_card_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-
-        # Work card number should be #1-YYYYMM format
+        # Work card number format: #1-YYYYMM
         assert "#1-202411" in work_card_text
 
-    def test_hours_in_tax_report(self, tmp_path: Path, sample_report_data: ReportData):
-        """Test that hours appear correctly in tax report PDF."""
-        output_dir = tmp_path / "reports"
-        output_dir.mkdir()
+        # Employee name
+        assert "Jan Kowalski" in work_card_text
 
-        generate_all(sample_report_data, output_dir, format_type="pdf")
-
-        tax_report = output_dir / "2024-11 IP TAX Raport.pdf"
-
-        # Extract text from PDF using pdfplumber
+        # 6. Extract and validate Tax Report PDF content
         with pdfplumber.open(tax_report) as pdf:
             tax_report_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
 
-        # Tax report should contain the hours values
+        # Bilingual content
+        assert "Raport" in tax_report_text  # Polish
+        assert "Report" in tax_report_text  # English
+
+        # Hours values
         assert "160" in tax_report_text  # total_hours
         assert "128" in tax_report_text  # creative_hours
 
-    def test_different_month_formats(
-        self, tmp_path: Path, sample_report_data: ReportData
-    ):
-        """Test report generation for different months."""
-        output_dir = tmp_path / "reports"
-        output_dir.mkdir()
-
-        # Test with different month
-        sample_report_data.month = "2025-01"
-        sample_report_data.start_date = date(2025, 1, 1)
-        sample_report_data.end_date = date(2025, 1, 31)
-
-        generated_files = generate_all(
-            sample_report_data, output_dir, format_type="all"
-        )
-
-        file_names = {f.name for f in generated_files}
-        assert "2025-01 IP TAX Report.md" in file_names
-        assert "2025-01 IP TAX Work Card.pdf" in file_names
-        assert "2025-01 IP TAX Raport.pdf" in file_names
-
-    def test_force_overwrite(self, tmp_path: Path, sample_report_data: ReportData):
-        """Test that force flag allows overwriting existing files."""
-        output_dir = tmp_path / "reports"
-        output_dir.mkdir()
-
-        # Generate files first time
-        generate_all(sample_report_data, output_dir, format_type="all")
-
-        md_file = output_dir / "2024-11 IP TAX Report.md"
-
-        # Generate again with force=True
-        generate_all(sample_report_data, output_dir, format_type="all", force=True)
-
-        # File should still exist and have content
-        assert md_file.exists()
-        assert md_file.stat().st_size > 0
-
-    def test_fails_without_force_on_existing(
-        self, tmp_path: Path, sample_report_data: ReportData
-    ):
-        """Test that generation fails without force on existing files."""
-        output_dir = tmp_path / "reports"
-        output_dir.mkdir()
-
-        # Generate files first time
-        generate_all(sample_report_data, output_dir, format_type="all")
-
-        # Try to generate again without force
-        with pytest.raises(FileExistsError):
-            generate_all(sample_report_data, output_dir, format_type="all")
+        # Employee name
+        assert "Jan Kowalski" in tax_report_text

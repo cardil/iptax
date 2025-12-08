@@ -14,7 +14,7 @@ import questionary
 import yaml
 from rich.console import Console
 
-from iptax.ai.cache import DEFAULT_CACHE_PATH, JudgmentCacheManager
+from iptax.ai.cache import JudgmentCacheManager, get_ai_cache_path
 from iptax.cache.history import (
     HistoryCorruptedError,
     HistoryManager,
@@ -486,7 +486,7 @@ def _gather_ai_cache_stats() -> AICacheStats:
     cache_mgr = JudgmentCacheManager()
     stats = cache_mgr.stats()
 
-    cache_path = DEFAULT_CACHE_PATH
+    cache_path = get_ai_cache_path()
     cache_size = cache_path.stat().st_size if cache_path.exists() else 0
 
     return AICacheStats(
@@ -567,13 +567,14 @@ def cache_clear(
 
     if clear_ai or clear_both:
         # Clear AI cache
-        if DEFAULT_CACHE_PATH.exists():
+        ai_cache_path = get_ai_cache_path()
+        if ai_cache_path.exists():
             confirm = questionary.confirm(
                 "Clear AI judgment cache?",
                 default=False,
             ).unsafe_ask()
             if confirm:
-                DEFAULT_CACHE_PATH.unlink()
+                ai_cache_path.unlink()
                 click.secho("✓ Cleared AI judgment cache", fg="green")
             else:
                 click.echo("AI cache clear cancelled.")
@@ -606,7 +607,7 @@ def cache_path_cmd(show_ai: bool, show_history: bool, show_inflight: bool) -> No
     """
     # If specific path requested, output just that path (no formatting)
     if show_ai:
-        click.echo(str(DEFAULT_CACHE_PATH))
+        click.echo(str(get_ai_cache_path()))
         return
     if show_history:
         click.echo(str(get_history_path()))
@@ -619,7 +620,7 @@ def cache_path_cmd(show_ai: bool, show_history: bool, show_inflight: bool) -> No
     console = Console()
     elements.display_cache_paths(
         console,
-        ai_cache_path=DEFAULT_CACHE_PATH,
+        ai_cache_path=get_ai_cache_path(),
         history_path=get_history_path(),
         inflight_dir=get_inflight_cache_dir(),
     )

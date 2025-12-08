@@ -457,7 +457,7 @@ class TestGatherAiCacheStats:
         cache_path = tmp_path / "ai_cache.json"
 
         with (
-            patch.object(app, "DEFAULT_CACHE_PATH", cache_path),
+            patch.object(app, "get_ai_cache_path", return_value=cache_path),
             patch.object(app, "JudgmentCacheManager") as mock_mgr,
         ):
             mock_instance = MagicMock()
@@ -485,7 +485,7 @@ class TestGatherAiCacheStats:
         cache_path.write_text('{"judgments": {}}')
 
         with (
-            patch.object(app, "DEFAULT_CACHE_PATH", cache_path),
+            patch.object(app, "get_ai_cache_path", return_value=cache_path),
             patch.object(app, "JudgmentCacheManager") as mock_mgr,
         ):
             mock_instance = MagicMock()
