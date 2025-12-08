@@ -172,15 +172,10 @@ def _create_gitlab_mr_mock(
     # Create gitlabapi mock with URL
     gitlabapi_mock = Mock()
     if url is None:
-        # Extract host from path if it looks like a full path, otherwise use gitlab.com
-        if "/" in path_with_namespace:
-            gitlabapi_mock.url = (
-                f"https://gitlab.com/{path_with_namespace}/-/merge_requests/{iid}"
-            )
-        else:
-            gitlabapi_mock.url = (
-                f"https://gitlab.com/{path_with_namespace}/-/merge_requests/{iid}"
-            )
+        # Default to gitlab.com with standard MR path
+        gitlabapi_mock.url = (
+            f"https://gitlab.com/{path_with_namespace}/-/merge_requests/{iid}"
+        )
     else:
         gitlabapi_mock.url = url
     mock.gitlabapi = gitlabapi_mock

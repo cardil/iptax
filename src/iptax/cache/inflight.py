@@ -113,11 +113,10 @@ class ReportState:
 
         # Check if ready for dist
         did_ready = did == STATE_COMPLETE
-        workday_ready = (
-            workday in (STATE_COMPLETE, STATE_SKIPPED)
-            if workday_enabled
-            else workday == STATE_SKIPPED
-        )
+        # Workday is ready if complete (hours available) or explicitly skipped
+        # Accept COMPLETE even if workday is disabled (data from earlier run,
+        # or hours manually provided by user)
+        workday_ready = workday in (STATE_COMPLETE, STATE_SKIPPED)
         ai_ready = ai == STATE_COMPLETE
         reviewed_ready = reviewed == STATE_COMPLETE
 

@@ -159,6 +159,7 @@ def generate_tax_report_html(report: ReportData) -> str:
         "month_name_en": month_name_en,
         "month_name_pl": month_name_pl,
         "working_days": working_days,
+        "creative_percentage": report.creative_percentage,
         "styles": styles,
     }
 

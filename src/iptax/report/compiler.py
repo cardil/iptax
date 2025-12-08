@@ -103,6 +103,7 @@ def compile_report(inflight: InFlightReport, settings: Settings) -> ReportData:
         repositories=repositories,
         total_hours=inflight.total_hours,
         creative_hours=creative_hours,
+        creative_percentage=creative_percentage,
         employee_name=settings.employee.name,
         supervisor_name=settings.employee.supervisor,
         product_name=settings.product.name,

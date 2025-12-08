@@ -918,6 +918,10 @@ class ReportData(BaseModel):
         description="Creative work hours (calculated from total and percentage)",
         gt=0,
     )
+    creative_percentage: int = Field(
+        ...,
+        description="Percentage of work considered creative",
+    )
     employee_name: str = Field(
         ...,
         description="Employee name",

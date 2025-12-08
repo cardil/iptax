@@ -53,6 +53,7 @@ def sample_report_data() -> ReportData:
         ],
         total_hours=160.0,
         creative_hours=128.0,
+        creative_percentage=80,
         employee_name="Jan Kowalski",
         supervisor_name="Anna Nowak",
         product_name="Acme Code Analysis Suite",

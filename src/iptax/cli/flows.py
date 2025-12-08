@@ -947,27 +947,20 @@ async def dist_flow(
     fmt = output_options.output_format
     console.print(f"\n[cyan]✍[/cyan] Generating {fmt} files...")
 
-    if output_options.output_format in ("all", "md"):
-        try:
-            generated_files = generate_all(report_data, target_dir, force=force)
-            console.print(
-                f"\n[green]✓[/green] Generated {len(generated_files)} file(s):"
-            )
-            for file_path in generated_files:
-                console.print(f"  • {file_path}")
-        except FileExistsError as e:
-            console.print(f"\n[red]✗[/red] {e}")
-            console.print("Use --force to overwrite existing files")
-            return False
-        except Exception as e:
-            console.print(f"\n[red]✗[/red] Generation failed: {e}")
-            return False
-
-    if output_options.output_format == "pdf":
-        console.print(
-            "\n[yellow]⚠[/yellow] PDF generation not yet implemented. "
-            "Only markdown is available."
+    try:
+        generated_files = generate_all(
+            report_data, target_dir, force=force, format_type=fmt
         )
+        console.print(f"\n[green]✓[/green] Generated {len(generated_files)} file(s):")
+        for file_path in generated_files:
+            console.print(f"  • {file_path}")
+    except FileExistsError as e:
+        console.print(f"\n[red]✗[/red] {e}")
+        console.print("Use --force to overwrite existing files")
+        return False
+    except Exception as e:
+        console.print(f"\n[red]✗[/red] Generation failed: {e}")
+        return False
 
     console.print(f"\n[green]✓[/green] Output generated for {month_key}")
     return True
