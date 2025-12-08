@@ -5,7 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from iptax.cache.inflight import InFlightCache
+from iptax.ai.models import Decision, Judgment
+from iptax.cache.inflight import (
+    STATE_COMPLETE,
+    STATE_INCOMPLETE,
+    STATE_PENDING,
+    STATE_SKIPPED,
+    InFlightCache,
+    ReportState,
+)
 from iptax.models import InFlightReport
 
 
@@ -190,3 +198,171 @@ class TestInFlightCache:
         # Should only return valid month
         reports = cache.list_all()
         assert reports == ["2024-11"]
+
+
+class TestReportState:
+    """Test ReportState class for state derivation."""
+
+    def _create_report(
+        self,
+        *,
+        with_changes: bool = False,
+        with_total_hours: bool = False,
+        workday_validated: bool = False,
+        with_judgments: bool = False,
+        all_reviewed: bool = False,
+    ) -> InFlightReport:
+        """Create an InFlightReport with specified state."""
+        from iptax.models import Change, Repository
+
+        changes = []
+        if with_changes:
+            changes = [
+                Change(
+                    title="Test Change",
+                    repository=Repository(
+                        host="github.com",
+                        path="org/repo",
+                        provider_type="github",
+                    ),
+                    number=123,
+                )
+            ]
+
+        judgments = []
+        if with_judgments:
+            for change in changes:
+                judgment = Judgment(
+                    change_id=change.get_change_id(),
+                    decision=Decision.INCLUDE,
+                    reasoning="Test reasoning",
+                    product="Test Product",
+                )
+                if all_reviewed:
+                    judgment.user_decision = Decision.INCLUDE
+                judgments.append(judgment)
+
+        return InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=changes,
+            total_hours=10.0 if with_total_hours else None,
+            workday_validated=workday_validated,
+            judgments=judgments,
+        )
+
+    @pytest.mark.unit
+    def test_empty_report_state(self) -> None:
+        """Test state derivation for empty report."""
+        report = self._create_report()
+        state = ReportState.from_report(report)
+
+        assert state.did == STATE_PENDING
+        assert state.workday == STATE_PENDING
+        assert state.ai == STATE_PENDING
+        assert state.reviewed == STATE_PENDING
+        assert state.status == "Collecting"
+
+    @pytest.mark.unit
+    def test_did_collected_state(self) -> None:
+        """Test state after Did collection."""
+        report = self._create_report(with_changes=True)
+        state = ReportState.from_report(report)
+
+        assert state.did == STATE_COMPLETE
+        assert state.workday == STATE_PENDING
+        assert state.ai == STATE_PENDING
+        assert state.reviewed == STATE_PENDING
+        assert state.status == "Needs Workday"
+
+    @pytest.mark.unit
+    def test_workday_collected_not_validated(self) -> None:
+        """Test state when Workday hours collected but not validated."""
+        report = self._create_report(
+            with_changes=True,
+            with_total_hours=True,
+            workday_validated=False,
+        )
+        state = ReportState.from_report(report)
+
+        assert state.did == STATE_COMPLETE
+        assert state.workday == STATE_INCOMPLETE
+        assert state.status == "Workday incomplete"
+
+    @pytest.mark.unit
+    def test_workday_collected_and_validated(self) -> None:
+        """Test state when Workday hours validated."""
+        report = self._create_report(
+            with_changes=True,
+            with_total_hours=True,
+            workday_validated=True,
+        )
+        state = ReportState.from_report(report)
+
+        assert state.did == STATE_COMPLETE
+        assert state.workday == STATE_COMPLETE
+        assert state.ai == STATE_PENDING
+        assert state.status == "Needs AI filtering"
+
+    @pytest.mark.unit
+    def test_ai_analyzed_state(self) -> None:
+        """Test state after AI analysis."""
+        report = self._create_report(
+            with_changes=True,
+            with_total_hours=True,
+            workday_validated=True,
+            with_judgments=True,
+        )
+        state = ReportState.from_report(report)
+
+        assert state.did == STATE_COMPLETE
+        assert state.workday == STATE_COMPLETE
+        assert state.ai == STATE_COMPLETE
+        assert state.reviewed == STATE_PENDING
+        assert state.status == "Needs review"
+
+    @pytest.mark.unit
+    def test_fully_reviewed_state(self) -> None:
+        """Test state when fully reviewed."""
+        report = self._create_report(
+            with_changes=True,
+            with_total_hours=True,
+            workday_validated=True,
+            with_judgments=True,
+            all_reviewed=True,
+        )
+        state = ReportState.from_report(report)
+
+        assert state.did == STATE_COMPLETE
+        assert state.workday == STATE_COMPLETE
+        assert state.ai == STATE_COMPLETE
+        assert state.reviewed == STATE_COMPLETE
+        assert state.status == "Ready for dist"
+
+    @pytest.mark.unit
+    def test_workday_disabled(self) -> None:
+        """Test state when Workday is disabled."""
+        report = self._create_report(with_changes=True)
+        state = ReportState.from_report(report, workday_enabled=False)
+
+        assert state.workday == STATE_SKIPPED
+        assert state.status == "Needs AI filtering"
+
+    @pytest.mark.unit
+    def test_ready_for_dist_without_workday(self) -> None:
+        """Test ready for dist when Workday is disabled."""
+        report = self._create_report(
+            with_changes=True,
+            with_judgments=True,
+            all_reviewed=True,
+        )
+        state = ReportState.from_report(report, workday_enabled=False)
+
+        assert state.did == STATE_COMPLETE
+        assert state.workday == STATE_SKIPPED
+        assert state.ai == STATE_COMPLETE
+        assert state.reviewed == STATE_COMPLETE
+        assert state.status == "Ready for dist"

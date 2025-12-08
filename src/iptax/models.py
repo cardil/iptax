@@ -951,3 +951,40 @@ class ReportData(BaseModel):
         year, month = self.month.split("-")
         en, pl = MONTH_NAMES_BILINGUAL.get(month, ("Unknown", "Nieznany"))
         return f"{en} {year}", f"{pl} {year}"
+
+
+# Cache statistics models
+
+
+@dataclass
+class AICacheStats:
+    """AI judgment cache statistics for display."""
+
+    total_judgments: int
+    corrected_count: int
+    correct_count: int
+    correction_rate: float
+    products: list[str]
+    oldest_judgment: str | None
+    newest_judgment: str | None
+    cache_path: Path
+    cache_size_bytes: int
+
+
+@dataclass
+class HistoryCacheStats:
+    """Report history statistics for display."""
+
+    total_reports: int
+    entries: dict[str, HistoryEntry]
+    history_path: Path
+    history_size_bytes: int
+
+
+@dataclass
+class InflightCacheStats:
+    """In-flight cache statistics for display."""
+
+    active_reports: int
+    months: list[str]
+    cache_dir: Path

@@ -8,7 +8,7 @@ from rich.console import Console
 
 from iptax.ai.models import Decision, Judgment
 from iptax.cli import elements
-from iptax.models import Change, HistoryEntry, Repository
+from iptax.models import Change, HistoryEntry, InFlightReport, Repository
 
 from .conftest import strip_ansi
 
@@ -286,3 +286,192 @@ class TestFormatHistoryYaml:
         assert "2024-10" in result
         assert "2024-10-25" in result
         assert "last_cutoff_date" in result
+
+
+class TestDisplayInflightTable:
+    """Tests for display_inflight_table function."""
+
+    def _create_report(
+        self,
+        month: str = "2024-11",
+        *,
+        with_changes: bool = False,
+        workday_state: str = "none",
+        review_state: str = "none",
+    ) -> InFlightReport:
+        """Create an InFlightReport with specified state.
+
+        Args:
+            month: Month in YYYY-MM format.
+            with_changes: Whether to include changes.
+            workday_state: One of "none", "incomplete", "validated".
+            review_state: One of "none", "analyzed", "reviewed".
+        """
+        changes = []
+        if with_changes:
+            changes = [
+                Change(
+                    title="Test Change",
+                    repository=Repository(
+                        host="github.com",
+                        path="org/repo",
+                        provider_type="github",
+                    ),
+                    number=123,
+                )
+            ]
+
+        # Set workday fields based on state
+        total_hours = None
+        workday_validated = False
+        if workday_state == "incomplete":
+            total_hours = 10.0
+        elif workday_state == "validated":
+            total_hours = 10.0
+            workday_validated = True
+
+        # Set judgment fields based on review state
+        judgments = []
+        if review_state in ("analyzed", "reviewed"):
+            for change in changes:
+                judgment = Judgment(
+                    change_id=change.get_change_id(),
+                    decision=Decision.INCLUDE,
+                    reasoning="Test reasoning",
+                    product="Test Product",
+                )
+                if review_state == "reviewed":
+                    judgment.user_decision = Decision.INCLUDE
+                judgments.append(judgment)
+
+        return InFlightReport(
+            month=month,
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=changes,
+            total_hours=total_hours,
+            workday_validated=workday_validated,
+            judgments=judgments,
+        )
+
+    @pytest.mark.unit
+    def test_empty_reports_list(self):
+        """Test display with no in-flight reports."""
+        console = Console(file=StringIO(), force_terminal=True)
+        reports: list[tuple[str, InFlightReport]] = []
+
+        elements.display_inflight_table(console, reports)
+
+        output = console.file.getvalue()
+        # Should still show table title
+        assert "In-flight Reports" in output
+
+    @pytest.mark.unit
+    def test_single_report_collecting(self):
+        """Test display of single report in collecting state."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = self._create_report()
+        reports = [("2024-11", report)]
+
+        elements.display_inflight_table(console, reports)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "2024-11" in output
+        assert "Collecting" in output
+
+    @pytest.mark.unit
+    def test_single_report_ready_for_dist(self):
+        """Test display of report ready for dist."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = self._create_report(
+            with_changes=True,
+            workday_state="validated",
+            review_state="reviewed",
+        )
+        reports = [("2024-11", report)]
+
+        elements.display_inflight_table(console, reports)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "2024-11" in output
+        assert "Ready for dist" in output
+
+    @pytest.mark.unit
+    def test_multiple_reports_different_states(self):
+        """Test display of multiple reports in different states."""
+        console = Console(file=StringIO(), force_terminal=True)
+        reports = [
+            (
+                "2024-10",
+                self._create_report(
+                    month="2024-10",
+                    with_changes=True,
+                    workday_state="validated",
+                    review_state="reviewed",
+                ),
+            ),
+            (
+                "2024-11",
+                self._create_report(
+                    month="2024-11",
+                    with_changes=True,
+                ),
+            ),
+            ("2024-12", self._create_report(month="2024-12")),
+        ]
+
+        elements.display_inflight_table(console, reports)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "2024-10" in output
+        assert "2024-11" in output
+        assert "2024-12" in output
+        assert "Ready for dist" in output
+        assert "Needs Workday" in output
+        assert "Collecting" in output
+
+    @pytest.mark.unit
+    def test_legend_displayed(self):
+        """Test that legend is displayed."""
+        console = Console(file=StringIO(), force_terminal=True)
+        reports: list[tuple[str, InFlightReport]] = []
+
+        elements.display_inflight_table(console, reports)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "Legend:" in output
+        assert "complete" in output
+        assert "pending" in output
+        assert "skipped" in output
+
+    @pytest.mark.unit
+    def test_workday_disabled(self):
+        """Test display when workday is disabled."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = self._create_report(
+            with_changes=True,
+            review_state="reviewed",
+        )
+        reports = [("2024-11", report)]
+
+        elements.display_inflight_table(console, reports, workday_enabled=False)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "Ready for dist" in output
+
+    @pytest.mark.unit
+    def test_workday_incomplete_warning(self):
+        """Test display when workday is incomplete."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = self._create_report(
+            with_changes=True,
+            workday_state="incomplete",
+        )
+        reports = [("2024-11", report)]
+
+        elements.display_inflight_table(console, reports)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "Workday incomplete" in output

@@ -1,6 +1,7 @@
 """Command-line interface for iptax."""
 
 import asyncio
+import logging
 import sys
 from collections.abc import Callable
 from datetime import date
@@ -13,12 +14,13 @@ import questionary
 import yaml
 from rich.console import Console
 
+from iptax.ai.cache import DEFAULT_CACHE_PATH, JudgmentCacheManager
 from iptax.cache.history import (
     HistoryCorruptedError,
     HistoryManager,
     get_history_path,
 )
-from iptax.cache.inflight import InFlightCache
+from iptax.cache.inflight import InFlightCache, get_inflight_cache_dir
 from iptax.cli import elements, flows
 from iptax.cli.flows import DateRangeOverrides, FlowOptions, OutputOptions
 from iptax.config import (
@@ -30,10 +32,13 @@ from iptax.config import (
     load_settings as config_load_settings,
 )
 from iptax.did import DidIntegrationError
+from iptax.models import AICacheStats, HistoryCacheStats, InflightCacheStats
 from iptax.timing import resolve_date_ranges
 from iptax.utils.env import get_cache_dir
 from iptax.utils.logging import setup_logging
 from iptax.workday import WorkdayClient, WorkdayError
+
+logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -113,14 +118,18 @@ def date_override_options(f: F) -> F:
     )
 
 
+def _get_log_file() -> Path:
+    """Get the path to the log file."""
+    return get_cache_dir() / "iptax.log"
+
+
 def _setup_logging() -> None:
     """Setup logging to user's cache directory.
 
     Truncates log file on each run to keep it manageable.
     """
-    cache_dir = get_cache_dir()
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    log_file = cache_dir / "iptax.log"
+    log_file = _get_log_file()
+    log_file.parent.mkdir(parents=True, exist_ok=True)
     setup_logging(log_file)
 
 
@@ -413,44 +422,207 @@ async def dist(
         sys.exit(1)
 
 
-@cli.command()
-@click.argument("action", type=click.Choice(["list", "clear"]))
-@click.option("--month", help="Month to target (YYYY-MM, for 'clear' only)")
-def cache(action: str, month: str | None) -> None:
-    """Manage in-flight report cache.
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def cache(ctx: click.Context) -> None:
+    """Manage caches (in-flight reports, AI judgments, history)."""
+    # If no subcommand, show help
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
 
-    Actions:
-        list  - List all in-flight reports
-        clear - Clear in-flight cache (all or specific month)
+
+@cache.command(name="list")
+def cache_list() -> None:
+    """List all in-flight reports with state info."""
+    console = Console()
+    cache_mgr = InFlightCache()
+
+    month_keys = cache_mgr.list_all()
+    if not month_keys:
+        click.echo("No in-flight reports found.")
+        return
+
+    # Load reports and check workday setting
+    reports_with_months = []
+    for month_key in sorted(month_keys):
+        inflight_report = cache_mgr.load(month_key)
+        if inflight_report:
+            reports_with_months.append((month_key, inflight_report))
+
+    # Try to load settings to check if workday is enabled
+    workday_enabled = True
+    try:
+        settings = config_load_settings()
+        workday_enabled = settings.workday.enabled
+    except ConfigError:
+        # If settings can't be loaded, assume workday enabled
+        pass
+
+    elements.display_inflight_table(
+        console, reports_with_months, workday_enabled=workday_enabled
+    )
+
+
+@cache.command(name="stats")
+def cache_stats() -> None:
+    """Show AI cache and history statistics."""
+    console = Console()
+
+    # Gather all stats
+    ai_stats = _gather_ai_cache_stats()
+    history_stats = _gather_history_stats()
+    inflight_stats = _gather_inflight_stats()
+
+    # Display all stats
+    elements.display_cache_stats(console, ai_stats, history_stats, inflight_stats)
+
+
+def _gather_ai_cache_stats() -> AICacheStats:
+    """Gather AI cache statistics.
+
+    Returns:
+        AICacheStats with current AI cache state
+    """
+    cache_mgr = JudgmentCacheManager()
+    stats = cache_mgr.stats()
+
+    cache_path = DEFAULT_CACHE_PATH
+    cache_size = cache_path.stat().st_size if cache_path.exists() else 0
+
+    return AICacheStats(
+        total_judgments=stats["total_judgments"],
+        corrected_count=stats["corrected_count"],
+        correct_count=stats["correct_count"],
+        correction_rate=stats["correction_rate"],
+        products=stats["products"],
+        oldest_judgment=stats["oldest_judgment"],
+        newest_judgment=stats["newest_judgment"],
+        cache_path=cache_path,
+        cache_size_bytes=cache_size,
+    )
+
+
+def _gather_history_stats() -> HistoryCacheStats:
+    """Gather history statistics.
+
+    Returns:
+        HistoryCacheStats with current history state
+    """
+    manager = HistoryManager()
+    manager.load()
+    entries = manager.get_all_entries()
+
+    history_path = get_history_path()
+    history_size = history_path.stat().st_size if history_path.exists() else 0
+
+    return HistoryCacheStats(
+        total_reports=len(entries),
+        entries=entries,
+        history_path=history_path,
+        history_size_bytes=history_size,
+    )
+
+
+def _gather_inflight_stats() -> InflightCacheStats:
+    """Gather in-flight cache statistics.
+
+    Returns:
+        InflightCacheStats with current in-flight cache state
+    """
+    cache_mgr = InFlightCache()
+    months = cache_mgr.list_all()
+
+    return InflightCacheStats(
+        active_reports=len(months),
+        months=months,
+        cache_dir=get_inflight_cache_dir(),
+    )
+
+
+@cache.command(name="clear")
+@click.option("--month", help="Clear specific month (YYYY-MM)")
+@click.option("--inflight", "clear_inflight", is_flag=True, help="Clear in-flight only")
+@click.option("--ai", "clear_ai", is_flag=True, help="Clear AI cache only")
+def cache_clear(
+    month: str | None,
+    clear_inflight: bool,
+    clear_ai: bool,
+) -> None:
+    """Clear caches (in-flight, AI, or by month).
+
+    By default, clears in-flight cache. Use --ai to clear AI cache.
     """
     cache_mgr = InFlightCache()
 
-    if action == "list":
-        reports = cache_mgr.list_all()
-        if not reports:
-            click.echo("No in-flight reports found.")
+    # If specific month provided, clear that month's in-flight report
+    if month:
+        if cache_mgr.delete(month):
+            click.secho(f"✓ Cleared in-flight report for {month}", fg="green")
         else:
-            click.echo("In-flight reports:")
-            for month_key in sorted(reports):
-                click.echo(f"  • {month_key}")
+            click.secho(f"No in-flight report found for {month}", fg="yellow")
+        return
 
-    elif action == "clear":
-        if month:
-            if cache_mgr.delete(month):
-                click.secho(f"✓ Cleared in-flight report for {month}", fg="green")
-            else:
-                click.secho(f"No in-flight report found for {month}", fg="yellow")
-        else:
-            # Clear all
+    # Determine what to clear
+    clear_both = not clear_inflight and not clear_ai
+
+    if clear_ai or clear_both:
+        # Clear AI cache
+        if DEFAULT_CACHE_PATH.exists():
             confirm = questionary.confirm(
-                "Clear ALL in-flight reports?",
+                "Clear AI judgment cache?",
                 default=False,
             ).unsafe_ask()
             if confirm:
-                count = cache_mgr.clear_all()
-                click.secho(f"✓ Cleared {count} in-flight report(s)", fg="green")
+                DEFAULT_CACHE_PATH.unlink()
+                click.secho("✓ Cleared AI judgment cache", fg="green")
             else:
-                click.echo("Cancelled.")
+                click.echo("AI cache clear cancelled.")
+        else:
+            click.echo("No AI cache to clear.")
+
+    if clear_inflight or clear_both:
+        # Clear all in-flight reports
+        confirm = questionary.confirm(
+            "Clear ALL in-flight reports?",
+            default=False,
+        ).unsafe_ask()
+        if confirm:
+            count = cache_mgr.clear_all()
+            click.secho(f"✓ Cleared {count} in-flight report(s)", fg="green")
+        else:
+            click.echo("In-flight cache clear cancelled.")
+
+
+@cache.command(name="path")
+@click.option("--ai", "show_ai", is_flag=True, help="Show AI cache path only")
+@click.option("--history", "show_history", is_flag=True, help="Show history path only")
+@click.option(
+    "--inflight", "show_inflight", is_flag=True, help="Show in-flight dir only"
+)
+def cache_path_cmd(show_ai: bool, show_history: bool, show_inflight: bool) -> None:
+    """Show paths to all cache directories.
+
+    Use --ai, --history, or --inflight to get a specific path for piping.
+    """
+    # If specific path requested, output just that path (no formatting)
+    if show_ai:
+        click.echo(str(DEFAULT_CACHE_PATH))
+        return
+    if show_history:
+        click.echo(str(get_history_path()))
+        return
+    if show_inflight:
+        click.echo(str(get_inflight_cache_dir()))
+        return
+
+    # Show all paths with formatting
+    console = Console()
+    elements.display_cache_paths(
+        console,
+        ai_cache_path=DEFAULT_CACHE_PATH,
+        history_path=get_history_path(),
+        inflight_dir=get_inflight_cache_dir(),
+    )
 
 
 @cli.command()
@@ -653,9 +825,31 @@ def workday(month: str | None, foreground: bool, no_kerberos: bool) -> None:
 
 
 def main() -> None:
-    """Main entry point for the CLI."""
+    """Main entry point for the CLI.
+
+    Sets up logging and provides a generic catch-all error handler
+    for unexpected errors.
+    """
     _setup_logging()
-    cli()
+    try:
+        cli()
+    except Exception:
+        # Log the full traceback to the log file (details only in log)
+        logger.exception("Fatal error occurred")
+
+        # Show user-friendly error message (no exception details)
+        click.secho(
+            "\nFatal error occurred.",
+            fg="red",
+            err=True,
+        )
+        click.secho(
+            f"Check logs for details: {_get_log_file()}",
+            fg="yellow",
+            err=True,
+        )
+
+        sys.exit(1)
 
 
 if __name__ == "__main__":

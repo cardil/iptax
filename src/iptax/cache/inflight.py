@@ -10,6 +10,7 @@ and review process. The cache allows users to:
 import json
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -18,6 +19,119 @@ from iptax.models import InFlightReport
 from iptax.utils.env import get_cache_dir
 
 logger = logging.getLogger(__name__)
+
+
+# State indicators
+STATE_COMPLETE = "✓"
+STATE_PENDING = "○"
+STATE_INCOMPLETE = "⚠"
+STATE_SKIPPED = "-"
+
+
+@dataclass
+class ReportState:
+    """State of an in-flight report for display purposes.
+
+    Attributes:
+        did: Did collection state
+        workday: Workday collection state
+        ai: AI filtering state
+        reviewed: Review completion state
+        status: Human-readable status message
+    """
+
+    did: str
+    workday: str
+    ai: str
+    reviewed: str
+    status: str
+
+    @classmethod
+    def from_report(
+        cls, report: InFlightReport, workday_enabled: bool = True
+    ) -> "ReportState":
+        """Derive state from an InFlightReport.
+
+        Args:
+            report: In-flight report to analyze
+            workday_enabled: Whether Workday integration is enabled
+
+        Returns:
+            ReportState with derived states and status
+        """
+        # Did collection state
+        did = STATE_COMPLETE if report.changes else STATE_PENDING
+
+        # Workday collection state
+        if report.total_hours is not None:
+            workday = STATE_COMPLETE if report.workday_validated else STATE_INCOMPLETE
+        elif workday_enabled:
+            workday = STATE_PENDING
+        else:
+            workday = STATE_SKIPPED
+
+        # AI filtering state
+        ai = STATE_COMPLETE if report.judgments else STATE_PENDING
+
+        # Review state
+        if report.judgments:
+            all_reviewed = all(j.user_decision is not None for j in report.judgments)
+            reviewed = STATE_COMPLETE if all_reviewed else STATE_PENDING
+        else:
+            reviewed = STATE_PENDING
+
+        # Derive overall status
+        status = cls._derive_status(did, workday, ai, reviewed, workday_enabled)
+
+        return cls(
+            did=did,
+            workday=workday,
+            ai=ai,
+            reviewed=reviewed,
+            status=status,
+        )
+
+    @staticmethod
+    def _derive_status(
+        did: str, workday: str, ai: str, reviewed: str, workday_enabled: bool
+    ) -> str:
+        """Derive human-readable status from individual states.
+
+        Args:
+            did: Did collection state
+            workday: Workday collection state
+            ai: AI filtering state
+            reviewed: Review completion state
+            workday_enabled: Whether Workday integration is enabled
+
+        Returns:
+            Human-readable status message
+        """
+        # Check for incomplete workday first (warning state)
+        if workday == STATE_INCOMPLETE:
+            return "Workday incomplete"
+
+        # Check if ready for dist
+        did_ready = did == STATE_COMPLETE
+        workday_ready = (
+            workday in (STATE_COMPLETE, STATE_SKIPPED)
+            if workday_enabled
+            else workday == STATE_SKIPPED
+        )
+        ai_ready = ai == STATE_COMPLETE
+        reviewed_ready = reviewed == STATE_COMPLETE
+
+        if did_ready and workday_ready and ai_ready and reviewed_ready:
+            return "Ready for dist"
+
+        # Determine what's still needed
+        if not did_ready:
+            return "Collecting"
+
+        if not workday_ready:
+            return "Needs Workday"
+
+        return "Needs AI filtering" if not ai_ready else "Needs review"
 
 
 class InFlightCache:

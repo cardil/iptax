@@ -1,13 +1,19 @@
 """Unit tests for CLI module."""
 
-from datetime import date
-from unittest.mock import patch
+from datetime import UTC, date, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
 
 from iptax.cli import app
-from iptax.cli.app import _parse_date, cli
+from iptax.cli.app import (
+    _gather_ai_cache_stats,
+    _gather_history_stats,
+    _gather_inflight_stats,
+    _parse_date,
+    cli,
+)
 
 
 @pytest.fixture
@@ -212,10 +218,24 @@ class TestCacheCommand:
     @pytest.mark.unit
     def test_cache_list_with_reports(self, runner: CliRunner, tmp_path, monkeypatch):
         """Test cache list with existing reports."""
+        import json
+
         cache_dir = tmp_path / "cache" / "iptax" / "inflight"
         cache_dir.mkdir(parents=True)
-        # Create a mock cache file
-        (cache_dir / "2024-11.json").write_text('{"month": "2024-11"}')
+        # Create a valid InFlightReport cache file with all required fields
+        valid_report = {
+            "month": "2024-11",
+            "workday_start": "2024-11-01",
+            "workday_end": "2024-11-30",
+            "changes_since": "2024-10-25",
+            "changes_until": "2024-11-25",
+            "created_at": "2024-11-01T10:00:00+00:00",
+            "changes": [],
+            "judgments": [],
+            "workday_entries": [],
+            "workday_validated": False,
+        }
+        (cache_dir / "2024-11.json").write_text(json.dumps(valid_report))
 
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
 
@@ -285,7 +305,7 @@ class TestCacheCommand:
             result = runner.invoke(cli, ["cache", "clear"])
 
         assert result.exit_code == 0
-        assert "Cancelled" in result.output
+        assert "cancelled" in result.output
         # File should still exist
         assert (cache_dir / "2024-11.json").exists()
 
@@ -428,6 +448,234 @@ class TestAsyncCommand:
         assert call_count == 1
 
 
+class TestGatherAiCacheStats:
+    """Tests for _gather_ai_cache_stats function."""
+
+    @pytest.mark.unit
+    def test_gather_with_empty_cache(self, tmp_path):
+        """Test gathering stats from empty AI cache."""
+        cache_path = tmp_path / "ai_cache.json"
+
+        with (
+            patch.object(app, "DEFAULT_CACHE_PATH", cache_path),
+            patch.object(app, "JudgmentCacheManager") as mock_mgr,
+        ):
+            mock_instance = MagicMock()
+            mock_instance.stats.return_value = {
+                "total_judgments": 0,
+                "corrected_count": 0,
+                "correct_count": 0,
+                "correction_rate": 0.0,
+                "products": [],
+                "oldest_judgment": None,
+                "newest_judgment": None,
+            }
+            mock_mgr.return_value = mock_instance
+
+            stats = _gather_ai_cache_stats()
+
+        assert stats.total_judgments == 0
+        assert stats.corrected_count == 0
+        assert stats.cache_size_bytes == 0
+
+    @pytest.mark.unit
+    def test_gather_with_existing_cache(self, tmp_path):
+        """Test gathering stats from existing AI cache."""
+        cache_path = tmp_path / "ai_cache.json"
+        cache_path.write_text('{"judgments": {}}')
+
+        with (
+            patch.object(app, "DEFAULT_CACHE_PATH", cache_path),
+            patch.object(app, "JudgmentCacheManager") as mock_mgr,
+        ):
+            mock_instance = MagicMock()
+            mock_instance.stats.return_value = {
+                "total_judgments": 5,
+                "corrected_count": 1,
+                "correct_count": 4,
+                "correction_rate": 0.2,
+                "products": ["Product A"],
+                "oldest_judgment": "2024-10-01T10:00:00+00:00",
+                "newest_judgment": "2024-10-15T10:00:00+00:00",
+            }
+            mock_mgr.return_value = mock_instance
+
+            stats = _gather_ai_cache_stats()
+
+        assert stats.total_judgments == 5
+        assert stats.corrected_count == 1
+        assert stats.products == ["Product A"]
+        assert stats.cache_size_bytes > 0
+
+
+class TestGatherHistoryStats:
+    """Tests for _gather_history_stats function."""
+
+    @pytest.mark.unit
+    def test_gather_with_no_history(self, tmp_path):
+        """Test gathering stats when no history exists."""
+        history_path = tmp_path / "history.json"
+
+        with (
+            patch.object(app, "HistoryManager") as mock_mgr,
+            patch.object(app, "get_history_path", return_value=history_path),
+        ):
+            mock_instance = MagicMock()
+            mock_instance.get_all_entries.return_value = {}
+            mock_mgr.return_value = mock_instance
+
+            stats = _gather_history_stats()
+
+        assert stats.total_reports == 0
+        assert stats.entries == {}
+        assert stats.history_size_bytes == 0
+
+    @pytest.mark.unit
+    def test_gather_with_existing_history(self, tmp_path):
+        """Test gathering stats from existing history."""
+        from iptax.models import HistoryEntry
+
+        history_path = tmp_path / "history.json"
+        history_path.write_text("{}")
+
+        entries = {
+            "2024-10": HistoryEntry(
+                last_cutoff_date=date(2024, 10, 25),
+                generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+            )
+        }
+
+        with (
+            patch.object(app, "HistoryManager") as mock_mgr,
+            patch.object(app, "get_history_path", return_value=history_path),
+        ):
+            mock_instance = MagicMock()
+            mock_instance.get_all_entries.return_value = entries
+            mock_mgr.return_value = mock_instance
+
+            stats = _gather_history_stats()
+
+        assert stats.total_reports == 1
+        assert "2024-10" in stats.entries
+        assert stats.history_size_bytes > 0
+
+
+class TestGatherInflightStats:
+    """Tests for _gather_inflight_stats function."""
+
+    @pytest.mark.unit
+    def test_gather_with_no_inflight(self, tmp_path):
+        """Test gathering stats when no in-flight reports exist."""
+        inflight_dir = tmp_path / "inflight"
+        inflight_dir.mkdir()
+
+        with (
+            patch.object(app, "InFlightCache") as mock_cache,
+            patch.object(app, "get_inflight_cache_dir", return_value=inflight_dir),
+        ):
+            mock_instance = MagicMock()
+            mock_instance.list_all.return_value = []
+            mock_cache.return_value = mock_instance
+
+            stats = _gather_inflight_stats()
+
+        assert stats.active_reports == 0
+        assert stats.months == []
+        assert stats.cache_dir == inflight_dir
+
+    @pytest.mark.unit
+    def test_gather_with_active_reports(self, tmp_path):
+        """Test gathering stats with active in-flight reports."""
+        inflight_dir = tmp_path / "inflight"
+        inflight_dir.mkdir()
+
+        with (
+            patch.object(app, "InFlightCache") as mock_cache,
+            patch.object(app, "get_inflight_cache_dir", return_value=inflight_dir),
+        ):
+            mock_instance = MagicMock()
+            mock_instance.list_all.return_value = ["2024-10", "2024-11"]
+            mock_cache.return_value = mock_instance
+
+            stats = _gather_inflight_stats()
+
+        assert stats.active_reports == 2
+        assert stats.months == ["2024-10", "2024-11"]
+
+
+class TestCacheStatsCommand:
+    """Tests for cache stats command."""
+
+    @pytest.mark.unit
+    def test_cache_stats_displays_output(
+        self, runner: CliRunner, tmp_path, monkeypatch
+    ):
+        """Test that cache stats command displays statistics."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+        # Create cache directories
+        cache_dir = tmp_path / "cache" / "iptax"
+        cache_dir.mkdir(parents=True)
+        inflight_dir = cache_dir / "inflight"
+        inflight_dir.mkdir()
+
+        result = runner.invoke(cli, ["cache", "stats"])
+        assert result.exit_code == 0
+        assert "Cache Statistics" in result.output
+        assert "AI Judgment Cache" in result.output
+        assert "Report History" in result.output
+        assert "In-flight Cache" in result.output
+
+
+class TestCachePathCommand:
+    """Tests for cache path command."""
+
+    @pytest.mark.unit
+    def test_cache_path_displays_paths(self, runner: CliRunner, tmp_path, monkeypatch):
+        """Test that cache path command displays all paths."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+        result = runner.invoke(cli, ["cache", "path"])
+        assert result.exit_code == 0
+        assert "Cache Paths" in result.output
+        assert "AI Cache" in result.output
+        assert "History" in result.output
+        assert "In-flight" in result.output
+
+    @pytest.mark.unit
+    def test_cache_path_ai_flag(self, runner: CliRunner, tmp_path, monkeypatch):
+        """Test that --ai flag returns only AI cache path."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+        result = runner.invoke(cli, ["cache", "path", "--ai"])
+        assert result.exit_code == 0
+        # Should be just the path, no formatting
+        assert "Cache Paths" not in result.output
+        assert "ai_cache.json" in result.output
+
+    @pytest.mark.unit
+    def test_cache_path_history_flag(self, runner: CliRunner, tmp_path, monkeypatch):
+        """Test that --history flag returns only history path."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+        result = runner.invoke(cli, ["cache", "path", "--history"])
+        assert result.exit_code == 0
+        # Should be just the path, no formatting
+        assert "Cache Paths" not in result.output
+        assert "history.json" in result.output
+
+    @pytest.mark.unit
+    def test_cache_path_inflight_flag(self, runner: CliRunner, tmp_path, monkeypatch):
+        """Test that --inflight flag returns only in-flight dir."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+
+        result = runner.invoke(cli, ["cache", "path", "--inflight"])
+        assert result.exit_code == 0
+        # Should be just the path, no formatting
+        assert "Cache Paths" not in result.output
+        assert "inflight" in result.output
+
+
 class TestMain:
     """Tests for main entry point."""
 
@@ -441,3 +689,19 @@ class TestMain:
             app.main()
             mock_setup.assert_called_once()
             mock_cli.assert_called_once()
+
+    @pytest.mark.unit
+    def test_main_catches_unexpected_exceptions(self, tmp_path):
+        """Test that main catches and logs unexpected exceptions."""
+        log_file = tmp_path / "iptax.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+
+        with (
+            patch.object(app, "_setup_logging"),
+            patch.object(app, "_get_log_file", return_value=log_file),
+            patch.object(app, "cli", side_effect=RuntimeError("Test error")),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            app.main()
+
+        assert exc_info.value.code == 1
