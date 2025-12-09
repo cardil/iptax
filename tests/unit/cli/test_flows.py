@@ -677,8 +677,7 @@ class TestDisplayCollectionSummary:
         _display_collection_summary(console, report)
 
         output = strip_ansi(console.file.getvalue())
-        assert "Workday hours: 160" in output
-        assert "Working days: 20" in output
+        assert "Work time: 20 days, 160 hours" in output
 
     @pytest.mark.unit
     def test_displays_validation_warning(self):

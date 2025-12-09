@@ -34,6 +34,14 @@ def compile_report(inflight: InFlightReport, settings: Settings) -> ReportData:
     if inflight.total_hours is None:
         raise ValueError("Cannot compile report: total_hours is missing")
 
+    if inflight.working_days is None:
+        raise ValueError("Cannot compile report: working_days is missing")
+
+    # Use effective hours (excluding PTO) for IP calculation
+    effective_hours = inflight.effective_hours
+    if effective_hours is None:
+        raise ValueError("Cannot compile report: effective_hours calculation failed")
+
     if not inflight.changes:
         raise ValueError("Cannot compile report: no changes found")
 
@@ -91,9 +99,10 @@ def compile_report(inflight: InFlightReport, settings: Settings) -> ReportData:
     )
 
     # Calculate hours with rounding
+    # Use effective hours (actual work, excluding PTO) for IP creative work calculation
     creative_percentage = settings.report.creative_work_percentage
-    total_hours_rounded = round(inflight.total_hours)
-    creative_hours_rounded = round(inflight.total_hours * (creative_percentage / 100.0))
+    effective_hours_rounded = round(effective_hours)
+    creative_hours_rounded = round(effective_hours * (creative_percentage / 100.0))
 
     # Build ReportData
     return ReportData(
@@ -102,7 +111,7 @@ def compile_report(inflight: InFlightReport, settings: Settings) -> ReportData:
         end_date=inflight.workday_end,
         changes=included_changes,
         repositories=repositories,
-        total_hours=total_hours_rounded,
+        total_hours=effective_hours_rounded,
         creative_hours=creative_hours_rounded,
         creative_percentage=creative_percentage,
         employee_name=settings.employee.name,
