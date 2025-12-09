@@ -1071,6 +1071,7 @@ class TestReportFlow:
             patch.object(flows, "display_review_results"),
             patch.object(flows, "JudgmentCacheManager"),
             patch.object(flows, "dist_flow", return_value=True) as mock_dist,
+            patch.object(flows, "save_report_date"),  # Prevent history leak
         ):
             mock_cache = MagicMock()
             mock_cache.exists.return_value = True
@@ -1117,6 +1118,7 @@ class TestReportFlow:
             patch.object(flows, "did_fetch_changes", return_value=[]),
             patch.object(flows, "InFlightCache") as mock_cache_cls,
             patch.object(flows, "dist_flow", return_value=True),
+            patch.object(flows, "save_report_date"),  # Prevent history leak
         ):
             mock_cache = MagicMock()
             mock_cache.exists.side_effect = exists_calls + [True] * 10
