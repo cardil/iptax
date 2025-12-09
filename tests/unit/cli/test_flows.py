@@ -1987,5 +1987,6 @@ class TestClearHistoryCache:
             mock_confirm.return_value.unsafe_ask.return_value = False
             clear_history_cache(force=False)
 
+        assert history_file.exists()
         captured = capsys.readouterr()
         assert "cancelled" in captured.out
