@@ -24,6 +24,30 @@ Automated IP tax report generator for Polish software developers participating i
 - Python 3.11 or higher
 - [did](https://github.com/psss/did) configured with your GitHub/GitLab credentials
 
+### System Dependencies
+
+The tool requires system libraries for PDF generation (WeasyPrint) and browser
+automation (Playwright Firefox).
+
+**Fedora/RHEL/CentOS (dnf):**
+
+```bash
+sudo dnf install -y pango gdk-pixbuf2 gtk3 dbus-glib libXt alsa-lib
+```
+
+**Ubuntu/Debian (apt):**
+
+```bash
+sudo apt install -y libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+    libgtk-3-0 libdbus-glib-1-2 libxt6 libasound2
+```
+
+**macOS (Homebrew):**
+
+```bash
+brew install pango gdk-pixbuf gtk+3 dbus
+```
+
 ### Using pipx (Recommended)
 
 ```bash

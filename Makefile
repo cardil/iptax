@@ -164,6 +164,29 @@ check: lint format-check typecheck  ## Run all code quality checks
 .PHONY: verify
 verify: check test  ## Full verification
 
+##@ Distribution
+
+# Use PYPI_REPO=testpypi to publish to TestPyPI instead of PyPI
+PYPI_REPO ?= pypi
+TWINE_REPO_FLAG := $(if $(filter testpypi,$(PYPI_REPO)),--repository testpypi,)
+
+.PHONY: dist
+dist: $(GUARDS)/dist.done  ## Build wheel and sdist
+
+$(GUARDS)/dist.done: $(VENV)/init.done $(SRC_FILES) pyproject.toml README.md
+	@mkdir -p $(GUARDS)
+	@echo -e "$(BLUE)$(GEAR) Building distribution packages...$(RESET)"
+	@rm -rf dist/
+	$(VENV_PYTHON) -m build
+	@echo -e "$(GREEN)$(CHECK) Distribution packages built in dist/$(RESET)"
+	@touch $@
+
+.PHONY: publish
+publish: dist  ## Publish to PyPI (set PYPI_REPO=testpypi for TestPyPI)
+	@echo -e "$(BLUE)$(ROCKET) Publishing to $(PYPI_REPO)...$(RESET)"
+	$(VENV_PYTHON) -m twine upload $(TWINE_REPO_FLAG) dist/*
+	@echo -e "$(GREEN)$(CHECK) Published to $(PYPI_REPO)$(RESET)"
+
 ##@ Development
 
 .PHONY: clean
