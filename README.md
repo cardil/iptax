@@ -287,7 +287,7 @@ output:
 
 1. **Work Hours** - Retrieves hours from Workday or accepts manual input
 
-1. **Report Generation** - Compiles data into markdown and bilingual PDF reports
+1. **Report Generation** - Compiles data into Markdown and bilingual PDF reports
 
 1. **History Update** - Records the report to prevent duplicate changes in future
    reports
