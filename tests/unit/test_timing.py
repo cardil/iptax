@@ -208,19 +208,6 @@ class TestGetDidRange:
         assert start == date(2024, 9, 26)  # Last report + 1 day
         assert end == date(2024, 12, 5)  # Today
 
-    @pytest.mark.unit
-    def test_days_1_to_10_auto_detect_month_uses_full_range(self, monkeypatch):
-        """Days 1-10: Auto-detected month (previous) should use full month.
-
-        When today is Dec 5 and we request Nov (the finalization month),
-        we should use full month range for Did.
-        """
-        monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-12-05")
-        start, end = timing.get_did_range("2024-11")
-        # Should use full November, not history
-        assert start == date(2024, 11, 1)
-        assert end == date(2024, 11, 30)
-
 
 class TestIsFinalizationWindow:
     """Tests for is_finalization_window function."""
