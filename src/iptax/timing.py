@@ -178,10 +178,16 @@ def get_did_range(month: str) -> tuple[date, date]:
     target_year = int(year)
     target_month = int(month_num)
 
+    # Only use finalization mode (full month) if:
+    # 1. We're in finalization window (days 1-10), AND
+    # 2. The target month is the one we'd auto-detect (previous month)
+    # This prevents ignoring history when generating older reports
     if today.day <= PAYMENT_DEADLINE_DAY:
-        start_date = date(target_year, target_month, 1)
-        end_date = get_month_end_date(target_year, target_month)
-        return start_date, end_date
+        auto_month = auto_detect_month()
+        if month == auto_month:
+            start_date = date(target_year, target_month, 1)
+            end_date = get_month_end_date(target_year, target_month)
+            return start_date, end_date
 
     last_report = get_last_report_date()
 

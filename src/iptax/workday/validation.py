@@ -42,6 +42,15 @@ def get_workdays_in_range(start_date: date, end_date: date) -> list[date]:
     return workdays
 
 
+# Entry types that represent actual work or approved absence
+# These are the only types that should count for workday coverage validation
+VALID_COVERAGE_ENTRY_TYPES = {
+    "Time Tracking",  # Actual work hours
+    "Time Off",  # Approved leave/PTO
+    "Holiday Calendar Entry Type",  # Company holidays
+}
+
+
 def validate_workday_coverage(
     entries: list[WorkdayCalendarEntry],
     start_date: date,
@@ -50,10 +59,13 @@ def validate_workday_coverage(
     """Validate that all workdays in a date range have calendar entries.
 
     Checks if every workday (Mon-Fri) in the specified range has at least
-    one calendar entry. Entries can be:
+    one valid calendar entry. Valid entries include:
     - Work hours (Time Tracking type, may be multiple per day)
     - PTO (Time Off type)
     - Holiday (Holiday Calendar Entry Type)
+
+    Calendar markers like "Time Pay Calendar Event" (payroll period markers)
+    are NOT counted as valid coverage.
 
     This is critical for legal compliance - all workdays must be accounted for.
 
@@ -86,12 +98,13 @@ def validate_workday_coverage(
     # Get all workdays in the range
     workdays = get_workdays_in_range(start_date, end_date)
 
-    # Get set of dates that have entries in the specified range
-    # Any entry type counts (work hours, PTO, holiday)
+    # Get set of dates that have VALID entries in the specified range
+    # Only count actual work, time off, or holidays - not calendar markers
     entry_dates = {
         entry.entry_date
         for entry in entries
         if start_date <= entry.entry_date <= end_date
+        and entry.entry_type in VALID_COVERAGE_ENTRY_TYPES
     }
 
     # Find workdays without entries

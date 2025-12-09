@@ -193,6 +193,21 @@ class TestGetDidRange:
         assert start == date(2024, 10, 21)  # Last report + 1 day
         assert end == date(2024, 11, 25)
 
+    @pytest.mark.unit
+    def test_days_1_to_10_older_month_uses_history(self, monkeypatch):
+        """Days 1-10: Older months should still use history, not full month.
+
+        When today is Dec 5 (finalization window for Nov), but user requests
+        Oct report, we should use history-based range, not full Oct month.
+        """
+        monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-12-05")
+        # History exists with Sept 25 cutoff
+        with patch("iptax.timing.get_last_report_date", return_value=date(2024, 9, 25)):
+            start, end = timing.get_did_range("2024-10")
+        # Should start from last report + 1, not Oct 1
+        assert start == date(2024, 9, 26)  # Last report + 1 day
+        assert end == date(2024, 12, 5)  # Today
+
 
 class TestIsFinalizationWindow:
     """Tests for is_finalization_window function."""
