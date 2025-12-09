@@ -885,6 +885,16 @@ class InFlightReport(BaseModel):
         description="Absence days from Workday (if collected)",
     )
 
+    def is_reviewed(self) -> bool:
+        """Check if all judgments have been reviewed by the user.
+
+        Returns:
+            True if there are judgments and all have user_decision set.
+        """
+        return bool(self.judgments) and all(
+            j.user_decision is not None for j in self.judgments
+        )
+
 
 class ReportData(BaseModel):
     """Compiled report data ready for generation.

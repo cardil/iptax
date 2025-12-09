@@ -688,6 +688,48 @@ def _load_report_for_review(
     return report, month_key
 
 
+def _skip_if_already_reviewed(
+    console: Console,
+    report: InFlightReport,
+    force: bool,
+    *,
+    show_status_message: bool = True,
+    show_force_hint: bool = True,
+) -> bool | None:
+    """Check if review should be skipped for already-reviewed reports.
+
+    Args:
+        console: Rich console for output
+        report: Report to check
+        force: Force re-review even if already reviewed
+        show_status_message: Whether to show "This report has already been reviewed."
+        show_force_hint: Whether to show "Use --force to re-review."
+
+    Returns:
+        True if already reviewed and should skip (caller returns True early),
+        None if review should proceed.
+
+    Note:
+        The `accepted=True` parameter to `display_review_results` is correct here:
+        when `is_reviewed()` returns True, it means the user completed a previous
+        review session and accepted the results. The display shows the final
+        decisions (which may include EXCLUDE items the user explicitly marked).
+    """
+    if not report.is_reviewed() or force:
+        return None  # Proceed with review
+
+    if show_status_message:
+        console.print("\n[green]✓[/green] This report has already been reviewed.")
+
+    # Display existing review results
+    display_review_results(console, report.judgments, report.changes, accepted=True)
+
+    if show_force_hint:
+        console.print("\nUse --force to re-review.")
+
+    return True
+
+
 async def _run_review_process(
     console: Console,
     cache: InFlightCache,
@@ -705,16 +747,9 @@ async def _run_review_process(
     Returns:
         True if successful
     """
-    # Check if already reviewed (ALL judgments have user decisions)
-    all_reviewed = report.judgments and all(
-        j.user_decision is not None for j in report.judgments
-    )
-    if all_reviewed and not force:
-        console.print("\n[green]✓[/green] This report has already been reviewed.")
-        # Show the existing review summary
-        display_review_results(console, report.judgments, report.changes, accepted=True)
-        console.print("\nUse --force to re-review.")
-        return True  # Already reviewed is a success
+    # Check if already reviewed - use helper to reduce duplication
+    if (skip_result := _skip_if_already_reviewed(console, report, force)) is not None:
+        return skip_result  # Already reviewed is a success
 
     # Run AI filtering if needed
     # If --force, clear existing judgments and re-run AI
@@ -816,6 +851,18 @@ async def _process_ai_and_review(
         settings = load_settings(console)
         report.judgments = _run_ai_filtering(console, report.changes, settings)
         cache.save(report)
+
+    # Check if already reviewed - skip TUI (no status message/hint in report flow)
+    if (
+        skip_result := _skip_if_already_reviewed(
+            console,
+            report,
+            flow_options.force,
+            show_status_message=False,
+            show_force_hint=False,
+        )
+    ) is not None:
+        return skip_result
 
     # Review if needed and not skipped
     if not flow_options.skip_review and report.judgments:
