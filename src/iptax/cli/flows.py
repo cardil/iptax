@@ -63,10 +63,14 @@ def _get_playwright_command() -> list[str]:
 def _is_playwright_firefox_installed() -> bool:
     """Check if Playwright Firefox browser is installed.
 
+    Uses `playwright install --list` to check browser cache.
+    The output format lists installed browsers as paths like:
+    /home/user/.cache/ms-playwright/firefox-1495
+
     Returns:
         True if Firefox is installed, False otherwise.
     """
-    cmd = [*_get_playwright_command(), "install", "--dry-run", "firefox"]
+    cmd = [*_get_playwright_command(), "install", "--list"]
     try:
         # S603: Command is built from trusted sources (sys.executable or shutil.which)
         result = subprocess.run(  # noqa: S603
@@ -78,10 +82,8 @@ def _is_playwright_firefox_installed() -> bool:
     except FileNotFoundError:
         return False
     else:
-        # If dry-run reports "already installed" or exits 0 without action
-        return "already installed" in result.stdout.lower() or (
-            result.returncode == 0 and "downloading" not in result.stdout.lower()
-        )
+        # Look for firefox browser path in the output (e.g. "firefox-1495")
+        return result.returncode == 0 and "firefox-" in result.stdout
 
 
 def _install_playwright_firefox(console: Console) -> bool:

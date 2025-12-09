@@ -323,7 +323,7 @@ make verify
 
 ### Project Structure
 
-```
+```text
 iptax/
 ├── src/iptax/           # Source code
 │   ├── ai/              # AI filtering and cache
