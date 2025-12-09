@@ -49,6 +49,30 @@ def get_home_dir() -> Path:
     return Path(home) if home else Path.home()
 
 
+def config_dir_for_home(home_dir: Path) -> Path:
+    """Build the iptax config directory path for a given home directory.
+
+    Args:
+        home_dir: Path to the home directory
+
+    Returns:
+        Path to the iptax configuration directory (~/.config/iptax)
+    """
+    return home_dir / ".config" / "iptax"
+
+
+def cache_dir_for_home(home_dir: Path) -> Path:
+    """Build the iptax cache directory path for a given home directory.
+
+    Args:
+        home_dir: Path to the home directory
+
+    Returns:
+        Path to the iptax cache directory (~/.cache/iptax)
+    """
+    return home_dir / ".cache" / "iptax"
+
+
 def get_config_dir() -> Path:
     """Get the application's configuration directory.
 
@@ -66,7 +90,7 @@ def get_config_dir() -> Path:
         if validated_path:
             return validated_path
 
-    return get_home_dir() / ".config" / "iptax"
+    return config_dir_for_home(get_home_dir())
 
 
 def get_cache_dir() -> Path:
@@ -86,7 +110,7 @@ def get_cache_dir() -> Path:
         if validated_path:
             return validated_path
 
-    return get_home_dir() / ".cache" / "iptax"
+    return cache_dir_for_home(get_home_dir())
 
 
 def get_today() -> date:

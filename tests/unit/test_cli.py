@@ -282,10 +282,8 @@ class TestCacheCommand:
 
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
 
-        # Mock questionary confirmation
-        with patch.object(app, "questionary") as mock_q:
-            mock_q.confirm.return_value.unsafe_ask.return_value = True
-            result = runner.invoke(cli, ["cache", "clear"])
+        # Use --force to skip confirmations
+        result = runner.invoke(cli, ["cache", "clear", "--force"])
 
         assert result.exit_code == 0
         assert "Cleared 2 in-flight report(s)" in result.output
@@ -299,8 +297,8 @@ class TestCacheCommand:
 
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
 
-        # Mock questionary confirmation (user cancels)
-        with patch.object(app, "questionary") as mock_q:
+        # Mock questionary confirmation (user cancels) - now in flows module
+        with patch("iptax.cli.flows.questionary") as mock_q:
             mock_q.confirm.return_value.unsafe_ask.return_value = False
             result = runner.invoke(cli, ["cache", "clear"])
 

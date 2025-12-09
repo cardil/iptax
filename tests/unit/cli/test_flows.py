@@ -2,6 +2,7 @@
 
 from datetime import date
 from io import StringIO
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,6 +10,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from iptax.ai.review import ReviewResult
+from iptax.cache.inflight import InFlightCache
 from iptax.cli import flows
 from iptax.cli.flows import (
     FlowOptions,
@@ -20,6 +22,10 @@ from iptax.cli.flows import (
     _is_playwright_firefox_installed,
     _resolve_review_month,
     _save_judgments_to_ai_cache,
+    clear_ai_cache,
+    clear_history_cache,
+    clear_inflight_cache,
+    confirm_or_force,
     ensure_browser_installed,
     init_flow,
 )
@@ -1830,3 +1836,156 @@ class TestDistFlow:
         assert result is False
         output = strip_ansi(console.file.getvalue())
         assert "Missing work hours data" in output
+
+
+class TestConfirmOrForce:
+    """Tests for confirm_or_force function."""
+
+    @pytest.mark.unit
+    def test_returns_true_when_force_is_true(self):
+        """Test returns True immediately when force=True."""
+        result = confirm_or_force("Any prompt?", force=True)
+        assert result is True
+
+    @pytest.mark.unit
+    def test_returns_true_when_user_confirms(self):
+        """Test returns True when user confirms."""
+        with patch("iptax.cli.flows.questionary.confirm") as mock_confirm:
+            mock_confirm.return_value.unsafe_ask.return_value = True
+            result = confirm_or_force("Continue?", force=False)
+
+        assert result is True
+        mock_confirm.assert_called_once_with("Continue?", default=False)
+
+    @pytest.mark.unit
+    def test_returns_false_when_user_declines(self):
+        """Test returns False when user declines."""
+        with patch("iptax.cli.flows.questionary.confirm") as mock_confirm:
+            mock_confirm.return_value.unsafe_ask.return_value = False
+            result = confirm_or_force("Continue?", force=False)
+
+        assert result is False
+
+
+class TestClearAiCache:
+    """Tests for clear_ai_cache function."""
+
+    @pytest.mark.unit
+    def test_clears_cache_when_force(self, tmp_path: Path, capsys):
+        """Test clears AI cache without confirmation when force=True."""
+        ai_cache = tmp_path / "ai_cache.json"
+        ai_cache.write_text("{}")
+
+        with patch("iptax.cli.flows.get_ai_cache_path", return_value=ai_cache):
+            clear_ai_cache(force=True)
+
+        assert not ai_cache.exists()
+        captured = capsys.readouterr()
+        assert "Cleared AI judgment cache" in captured.out
+
+    @pytest.mark.unit
+    def test_prints_message_when_no_cache(self, tmp_path: Path, capsys):
+        """Test prints message when no AI cache exists."""
+        ai_cache = tmp_path / "nonexistent.json"
+
+        with patch("iptax.cli.flows.get_ai_cache_path", return_value=ai_cache):
+            clear_ai_cache(force=True)
+
+        captured = capsys.readouterr()
+        assert "No AI cache to clear" in captured.out
+
+    @pytest.mark.unit
+    def test_cancels_when_user_declines(self, tmp_path: Path, capsys):
+        """Test prints cancelled when user declines confirmation."""
+        ai_cache = tmp_path / "ai_cache.json"
+        ai_cache.write_text("{}")
+
+        with (
+            patch("iptax.cli.flows.get_ai_cache_path", return_value=ai_cache),
+            patch("iptax.cli.flows.questionary.confirm") as mock_confirm,
+        ):
+            mock_confirm.return_value.unsafe_ask.return_value = False
+            clear_ai_cache(force=False)
+
+        assert ai_cache.exists()  # File should still exist
+        captured = capsys.readouterr()
+        assert "cancelled" in captured.out
+
+
+class TestClearInflightCache:
+    """Tests for clear_inflight_cache function."""
+
+    @pytest.mark.unit
+    def test_clears_all_when_force(self, capsys):
+        """Test clears all in-flight reports when force=True."""
+        mock_cache = MagicMock(spec=InFlightCache)
+        mock_cache.clear_all.return_value = 3
+
+        clear_inflight_cache(mock_cache, force=True)
+
+        mock_cache.clear_all.assert_called_once()
+        captured = capsys.readouterr()
+        assert "Cleared 3 in-flight report(s)" in captured.out
+
+    @pytest.mark.unit
+    def test_cancels_when_user_declines(self, capsys):
+        """Test prints cancelled when user declines."""
+        mock_cache = MagicMock(spec=InFlightCache)
+
+        with patch("iptax.cli.flows.questionary.confirm") as mock_confirm:
+            mock_confirm.return_value.unsafe_ask.return_value = False
+            clear_inflight_cache(mock_cache, force=False)
+
+        mock_cache.clear_all.assert_not_called()
+        captured = capsys.readouterr()
+        assert "cancelled" in captured.out
+
+
+class TestClearHistoryCache:
+    """Tests for clear_history_cache function."""
+
+    @pytest.mark.unit
+    def test_clears_history_when_force(self, tmp_path: Path, capsys):
+        """Test clears history when force=True."""
+        history_file = tmp_path / "history.json"
+        history_file.write_text("{}")
+
+        with (
+            patch("iptax.cli.flows.get_history_path", return_value=history_file),
+            patch("iptax.cli.flows.HistoryManager") as mock_mgr_cls,
+        ):
+            mock_mgr = MagicMock()
+            mock_mgr_cls.return_value = mock_mgr
+
+            clear_history_cache(force=True)
+
+        mock_mgr.clear.assert_called_once()
+        captured = capsys.readouterr()
+        assert "Cleared report history" in captured.out
+
+    @pytest.mark.unit
+    def test_prints_message_when_no_history(self, tmp_path: Path, capsys):
+        """Test prints message when no history exists."""
+        history_file = tmp_path / "nonexistent.json"
+
+        with patch("iptax.cli.flows.get_history_path", return_value=history_file):
+            clear_history_cache(force=True)
+
+        captured = capsys.readouterr()
+        assert "No history to clear" in captured.out
+
+    @pytest.mark.unit
+    def test_cancels_when_user_declines(self, tmp_path: Path, capsys):
+        """Test prints cancelled when user declines."""
+        history_file = tmp_path / "history.json"
+        history_file.write_text("{}")
+
+        with (
+            patch("iptax.cli.flows.get_history_path", return_value=history_file),
+            patch("iptax.cli.flows.questionary.confirm") as mock_confirm,
+        ):
+            mock_confirm.return_value.unsafe_ask.return_value = False
+            clear_history_cache(force=False)
+
+        captured = capsys.readouterr()
+        assert "cancelled" in captured.out

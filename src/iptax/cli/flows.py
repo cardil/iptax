@@ -7,15 +7,16 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+import questionary
 from rich.console import Console
 from rich.prompt import Confirm
 
-from iptax.ai.cache import JudgmentCacheManager
+from iptax.ai.cache import JudgmentCacheManager, get_ai_cache_path
 from iptax.ai.prompts import build_judgment_prompt
 from iptax.ai.provider import AIProvider
 from iptax.ai.review import ReviewResult
 from iptax.ai.review import review_judgments as run_review_tui
-from iptax.cache.history import HistoryManager, save_report_date
+from iptax.cache.history import HistoryManager, get_history_path, save_report_date
 from iptax.cache.inflight import InFlightCache
 from iptax.config import load_settings as config_load_settings
 from iptax.did import fetch_changes as did_fetch_changes
@@ -1086,3 +1087,69 @@ async def dist_flow(
 
     console.print(f"\n[green]✓[/green] Output generated for {month_key}")
     return True
+
+
+# Cache clearing utilities
+
+
+def confirm_or_force(prompt: str, force: bool) -> bool:
+    """Return True if force is set or user confirms the prompt.
+
+    Args:
+        prompt: Question to ask the user
+        force: If True, skip confirmation and return True
+
+    Returns:
+        True if should proceed, False otherwise
+    """
+    return force or questionary.confirm(prompt, default=False).unsafe_ask()
+
+
+def clear_ai_cache(force: bool) -> None:
+    """Clear AI judgment cache with optional confirmation.
+
+    Args:
+        force: If True, skip confirmation prompt
+    """
+    ai_cache_path = get_ai_cache_path()
+    if not ai_cache_path.exists():
+        print("No AI cache to clear.")  # noqa: T201  # CLI output
+        return
+    if confirm_or_force("Clear AI judgment cache?", force):
+        ai_cache_path.unlink()
+        print("\033[32m✓ Cleared AI judgment cache\033[0m")  # noqa: T201  # CLI output
+    else:
+        print("AI cache clear cancelled.")  # noqa: T201  # CLI output
+
+
+def clear_inflight_cache(cache_mgr: InFlightCache, force: bool) -> None:
+    """Clear all in-flight reports with optional confirmation.
+
+    Args:
+        cache_mgr: InFlightCache instance
+        force: If True, skip confirmation prompt
+    """
+    if confirm_or_force("Clear ALL in-flight reports?", force):
+        count = cache_mgr.clear_all()
+        print(f"\033[32m✓ Cleared {count} in-flight report(s)\033[0m")  # noqa: T201
+    else:
+        print("In-flight cache clear cancelled.")  # noqa: T201  # CLI output
+
+
+def clear_history_cache(force: bool) -> None:
+    """Clear report history with optional confirmation.
+
+    Args:
+        force: If True, skip confirmation prompt
+    """
+    history_path = get_history_path()
+    if not history_path.exists():
+        print("No history to clear.")  # noqa: T201  # CLI output
+        return
+    if confirm_or_force(
+        "Clear report history? This resets Did date range tracking.", force
+    ):
+        HistoryManager().clear()
+        print("\033[32m✓ Cleared report history\033[0m")  # noqa: T201  # CLI output
+    else:
+        print("History clear cancelled.")  # noqa: T201  # CLI output

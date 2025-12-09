@@ -22,14 +22,16 @@ def isolated_home(tmp_path: Path, monkeypatch) -> Path:
     """Set up isolated HOME environment for testing.
 
     This fixture ensures that HOME is set to a temp directory and that
-    XDG_CONFIG_HOME is unset to avoid interference from the CI environment.
+    XDG_CONFIG_HOME and XDG_CACHE_HOME are unset to avoid interference
+    from the CI environment or user's real directories.
     This is critical for tests that rely on default path resolution.
 
     Returns:
         Path: The temporary home directory
     """
-    # Clear XDG_CONFIG_HOME to ensure HOME is used
+    # Clear XDG directories to ensure HOME is used
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
     # Set HOME to temp directory
     monkeypatch.setenv("HOME", str(tmp_path))
     return tmp_path

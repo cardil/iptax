@@ -396,29 +396,29 @@ def _display_ai_stats(console: Console, stats: AICacheStats) -> None:
     correction_pct = stats.correction_rate * 100
     correct_pct = 100 - correction_pct
 
-    console.print(f"  Total judgments:     {stats.total_judgments}")
+    console.print(f"  Total judgments:      {stats.total_judgments}")
     console.print(
         f"  Corrected (AI wrong): {stats.corrected_count} "
         f"([yellow]{correction_pct:.1f}%[/yellow])"
     )
     console.print(
-        f"  Correct (AI right):  {stats.correct_count} "
+        f"  Correct (AI right):   {stats.correct_count} "
         f"([green]{correct_pct:.1f}%[/green])"
     )
 
     if stats.products:
         products_str = ", ".join(stats.products)
-        console.print(f"  Products:            {products_str}")
+        console.print(f"  Products:             {products_str}")
 
     if stats.oldest_judgment and stats.newest_judgment:
         # Extract just the date part from ISO format
         oldest_date = stats.oldest_judgment[:10]
         newest_date = stats.newest_judgment[:10]
-        console.print(f"  Date range:          {oldest_date} to {newest_date}")
+        console.print(f"  Date range:           {oldest_date} to {newest_date}")
 
     # Format file size
     size_str = _format_file_size(stats.cache_size_bytes)
-    console.print(f"  Cache file:          {stats.cache_path} ({size_str})")
+    console.print(f"  Cache file:           {stats.cache_path} ({size_str})")
 
 
 def _display_history_stats(console: Console, stats: HistoryCacheStats) -> None:
