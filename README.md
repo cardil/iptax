@@ -50,17 +50,32 @@ brew install pango gdk-pixbuf gtk+3 dbus
 
 ### Using pipx (Recommended)
 
+> **Note:** PyPI release pending [did PR #311](https://github.com/psss/did/pull/311)
+> merge. Until then, install from source.
+
 ```bash
+# After PyPI release:
 pipx install iptax
+
+# Until then, install from source:
+pipx install git+https://github.com/cardil/iptax.git
 ```
 
 ### Using uvx (No Install)
 
 Run directly without installation:
 
+> **Note:** PyPI release pending [did PR #311](https://github.com/psss/did/pull/311)
+> merge. Until then, install from source.
+
 ```bash
+# After PyPI release:
 uvx iptax config
 uvx iptax
+
+# Until then, install from source:
+uvx --from git+https://github.com/cardil/iptax.git iptax config
+uvx --from git+https://github.com/cardil/iptax.git iptax
 ```
 
 ### From Source (Development)

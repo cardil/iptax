@@ -1,10 +1,11 @@
-# Dockerfile for testing fresh install of iptax from TestPyPI
+# Dockerfile for testing fresh install of iptax
 # Usage:
-#   First publish to TestPyPI: make PYPI_REPO=testpypi publish
-#   Then build and run: docker build -t iptax-test . && docker run -it iptax-test
+#   docker build -t iptax-test . && docker run -it iptax-test
 #
 # Note: This intentionally does NOT install system dependencies to test
 # error handling when they are missing.
+#
+# PyPI release pending did PR #311. Until then, install from source.
 
 FROM registry.access.redhat.com/ubi10/python-312-minimal:latest
 
@@ -16,12 +17,9 @@ RUN pip install --user pipx && \
 
 ENV PATH="/home/default/.local/bin:$PATH"
 
-# Install iptax from TestPyPI (with fallback to PyPI for dependencies)
-# Note: TestPyPI may not have all dependencies, so we use --extra-index-url
-ARG PYPI_INDEX=https://test.pypi.org/simple/
-RUN pipx install --index-url "${PYPI_INDEX}" \
-    --pip-args="--extra-index-url https://pypi.org/simple/" \
-    iptax
+# Install iptax from git source (PyPI blocked until did PR #311 merges)
+# After PyPI release, change to: pipx install iptax
+RUN pipx install git+https://github.com/cardil/iptax.git
 
 # Verify installation
 RUN iptax --help
