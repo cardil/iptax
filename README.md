@@ -26,26 +26,34 @@ Automated IP tax report generator for Polish software developers participating i
 
 ### System Dependencies
 
-The tool requires system libraries for PDF generation (WeasyPrint) and browser
-automation (Playwright Firefox).
+The tool requires system libraries for PDF generation (WeasyPrint), browser automation
+(Playwright Firefox), and Kerberos authentication (for git source install).
 
 **Fedora/RHEL/CentOS (dnf):**
 
 ```bash
-sudo dnf install -y pango gdk-pixbuf2 gtk3 dbus-glib libXt alsa-lib
+# Runtime libraries
+sudo dnf install -y pango gdk-pixbuf2 gtk3 dbus-glib libXt alsa-lib krb5-libs
+
+# Build dependencies (only needed for git source install)
+sudo dnf install -y krb5-devel gcc python3-devel
 ```
 
 **Ubuntu/Debian (apt):**
 
 ```bash
+# Runtime libraries
 sudo apt install -y libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
-    libgtk-3-0 libdbus-glib-1-2 libxt6 libasound2
+    libgtk-3-0 libdbus-glib-1-2 libxt6 libasound2 libkrb5-3
+
+# Build dependencies (only needed for git source install)
+sudo apt install -y libkrb5-dev gcc python3-dev
 ```
 
 **macOS (Homebrew):**
 
 ```bash
-brew install pango gdk-pixbuf gtk+3 dbus
+brew install pango gdk-pixbuf gtk+3 dbus krb5
 ```
 
 ### Using pipx (Recommended)
