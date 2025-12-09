@@ -633,6 +633,7 @@ def cache_path_cmd(show_ai: bool, show_history: bool, show_inflight: bool) -> No
 def config(show: bool, validate: bool, path: bool) -> None:
     """Configure iptax settings interactively."""
     config_path = get_config_path()
+    console = Console()
 
     # Handle --path flag
     if path:
@@ -686,11 +687,27 @@ def config(show: bool, validate: bool, path: bool) -> None:
         create_default_config(interactive=True)
         click.secho("\n✓ Configuration created successfully!", fg="green")
 
+        # Ensure browser is installed (for Workday integration)
+        flows.ensure_browser_installed(console)
+
     except ConfigError as e:
         click.secho(f"Error: {e}", fg="red", err=True)
         sys.exit(1)
     except KeyboardInterrupt:
         click.echo("\n\nConfiguration cancelled.")
+        sys.exit(1)
+
+
+@cli.command()
+def init() -> None:
+    """Initialize iptax by installing required browser.
+
+    Installs Playwright Firefox browser needed for Workday integration.
+    This is also run automatically during 'iptax config'.
+    """
+    console = Console()
+    success = flows.init_flow(console)
+    if not success:
         sys.exit(1)
 
 
