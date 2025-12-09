@@ -1,6 +1,5 @@
 """Tests for CLI flows module."""
 
-import subprocess
 from datetime import date
 from io import StringIO
 from unittest.mock import AsyncMock, MagicMock, patch
