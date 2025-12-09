@@ -74,11 +74,7 @@ class ReportState:
         ai = STATE_COMPLETE if report.judgments else STATE_PENDING
 
         # Review state
-        if report.judgments:
-            all_reviewed = all(j.user_decision is not None for j in report.judgments)
-            reviewed = STATE_COMPLETE if all_reviewed else STATE_PENDING
-        else:
-            reviewed = STATE_PENDING
+        reviewed = STATE_COMPLETE if report.is_reviewed() else STATE_PENDING
 
         # Derive overall status
         status = cls._derive_status(did, workday, ai, reviewed)

@@ -1136,6 +1136,64 @@ class TestReportFlow:
         output = strip_ansi(console.file.getvalue())
         assert "Saved to" in output  # From collect flow
 
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_skips_review_tui_when_already_reviewed(self):
+        """Test that report_flow skips TUI when all judgments already reviewed."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+        mock_settings.product.name = "TestProduct"
+        mock_settings.ai.provider = "test"
+        mock_settings.ai.model = "test-model"
+
+        changes = [
+            Change(
+                title="Test",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=100,
+            )
+        ]
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=changes,
+            judgments=[
+                Judgment(
+                    change_id=changes[0].get_change_id(),
+                    decision=Decision.INCLUDE,
+                    reasoning="Test",
+                    product="Product",
+                    user_decision=Decision.INCLUDE,  # Already reviewed
+                )
+            ],
+        )
+
+        with (
+            patch.object(flows, "config_load_settings", return_value=mock_settings),
+            patch.object(flows, "InFlightCache") as mock_cache_cls,
+            patch.object(flows, "run_review_tui") as mock_tui,
+            patch.object(flows, "display_review_results"),
+            patch.object(flows, "dist_flow", return_value=True),
+            patch.object(flows, "save_report_date"),
+        ):
+            mock_cache = MagicMock()
+            mock_cache.exists.return_value = True
+            mock_cache.load.return_value = report
+            mock_cache_cls.return_value = mock_cache
+
+            result = await flows.report_flow(console, month="2024-11")
+
+        assert result is True
+        # TUI should NOT be called since report is already reviewed
+        mock_tui.assert_not_called()
+
 
 class TestFetchWorkdayData:
     """Tests for _fetch_workday_data function."""
