@@ -160,6 +160,19 @@ class HistoryManager:
         except Exception as e:
             raise HistoryError(f"Failed to save history: {e}") from e
 
+    def clear(self) -> bool:
+        """Clear all history entries by deleting the history file.
+
+        Returns:
+            True if history was cleared, False if no history existed
+        """
+        if self.history_path.exists():
+            self.history_path.unlink()
+            self._history = {}
+            self._loaded = True
+            return True
+        return False
+
     def _ensure_loaded(self) -> None:
         """Ensure history is loaded before operations."""
         if not self._loaded:

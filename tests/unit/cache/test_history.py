@@ -49,6 +49,49 @@ class TestHistoryManager:
 
         assert path == xdg_cache / "iptax" / "history.json"
 
+    @pytest.mark.unit
+    def test_clear_removes_history_file(self, tmp_path: Path) -> None:
+        """Test clear() removes the history file."""
+        history_path = tmp_path / "history.json"
+        history_path.write_text('{"2024-10": {}}')
+
+        manager = HistoryManager(history_path=history_path)
+        result = manager.clear()
+
+        assert result is True
+        assert not history_path.exists()
+
+    @pytest.mark.unit
+    def test_clear_returns_false_when_no_file(self, tmp_path: Path) -> None:
+        """Test clear() returns False when no history file exists."""
+        history_path = tmp_path / "nonexistent.json"
+        manager = HistoryManager(history_path=history_path)
+
+        result = manager.clear()
+
+        assert result is False
+
+    @pytest.mark.unit
+    def test_clear_resets_internal_state(self, tmp_path: Path) -> None:
+        """Test clear() resets internal history state."""
+        history_path = tmp_path / "history.json"
+        history_data = {
+            "2024-10": {
+                "last_cutoff_date": "2024-10-25",
+                "generated_at": "2024-10-25T10:00:00",
+            }
+        }
+        history_path.write_text(json.dumps(history_data))
+
+        manager = HistoryManager(history_path=history_path)
+        manager.load()
+        assert len(manager.get_all_entries()) == 1
+
+        manager.clear()
+
+        assert manager._history == {}
+        assert manager._loaded is True
+
 
 class TestHistoryLoad:
     """Tests for history loading."""
@@ -326,18 +369,12 @@ class TestConvenienceFunctions:
         assert result == date(2024, 10, 25)
 
     @pytest.mark.unit
-    def test_save_report_date(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_save_report_date(self, isolated_home: Path) -> None:
         """Test save_report_date creates entry."""
-        cache_dir = tmp_path / "cache" / "iptax"
-        cache_dir.mkdir(parents=True)
-        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
-
         save_report_date(date(2024, 11, 25), "2024-11")
 
-        # Verify it was saved
-        history_file = cache_dir / "history.json"
+        # Verify it was saved (uses ~/.cache/iptax/history.json)
+        history_file = isolated_home / ".cache" / "iptax" / "history.json"
         assert history_file.exists()
 
         data = json.loads(history_file.read_text(encoding="utf-8"))

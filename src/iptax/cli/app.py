@@ -22,7 +22,14 @@ from iptax.cache.history import (
 )
 from iptax.cache.inflight import InFlightCache, get_inflight_cache_dir
 from iptax.cli import elements, flows
-from iptax.cli.flows import DateRangeOverrides, FlowOptions, OutputOptions
+from iptax.cli.flows import (
+    DateRangeOverrides,
+    FlowOptions,
+    OutputOptions,
+    clear_ai_cache,
+    clear_history_cache,
+    clear_inflight_cache,
+)
 from iptax.config import (
     ConfigError,
     create_default_config,
@@ -543,14 +550,19 @@ def _gather_inflight_stats() -> InflightCacheStats:
 @click.option("--month", help="Clear specific month (YYYY-MM)")
 @click.option("--inflight", "clear_inflight", is_flag=True, help="Clear in-flight only")
 @click.option("--ai", "clear_ai", is_flag=True, help="Clear AI cache only")
+@click.option("--history", "clear_history", is_flag=True, help="Clear history only")
+@click.option("--force", is_flag=True, help="Skip confirmation prompts")
 def cache_clear(
     month: str | None,
     clear_inflight: bool,
     clear_ai: bool,
+    clear_history: bool,
+    force: bool,
 ) -> None:
-    """Clear caches (in-flight, AI, or by month).
+    """Clear caches (in-flight, AI, history, or by month).
 
-    By default, clears both AI cache and in-flight reports with confirmation prompts.
+    By default, clears all caches (AI, in-flight, and history) with confirmation.
+    Use flags to clear specific caches only. Use --force to skip confirmations.
     """
     cache_mgr = InFlightCache()
 
@@ -562,36 +574,15 @@ def cache_clear(
             click.secho(f"No in-flight report found for {month}", fg="yellow")
         return
 
-    # Determine what to clear
-    clear_both = not clear_inflight and not clear_ai
+    # Determine what to clear - if no flags specified, clear all
+    clear_all = not clear_inflight and not clear_ai and not clear_history
 
-    if clear_ai or clear_both:
-        # Clear AI cache
-        ai_cache_path = get_ai_cache_path()
-        if ai_cache_path.exists():
-            confirm = questionary.confirm(
-                "Clear AI judgment cache?",
-                default=False,
-            ).unsafe_ask()
-            if confirm:
-                ai_cache_path.unlink()
-                click.secho("✓ Cleared AI judgment cache", fg="green")
-            else:
-                click.echo("AI cache clear cancelled.")
-        else:
-            click.echo("No AI cache to clear.")
-
-    if clear_inflight or clear_both:
-        # Clear all in-flight reports
-        confirm = questionary.confirm(
-            "Clear ALL in-flight reports?",
-            default=False,
-        ).unsafe_ask()
-        if confirm:
-            count = cache_mgr.clear_all()
-            click.secho(f"✓ Cleared {count} in-flight report(s)", fg="green")
-        else:
-            click.echo("In-flight cache clear cancelled.")
+    if clear_ai or clear_all:
+        clear_ai_cache(force)
+    if clear_inflight or clear_all:
+        clear_inflight_cache(cache_mgr, force)
+    if clear_history or clear_all:
+        clear_history_cache(force)
 
 
 @cache.command(name="path")
