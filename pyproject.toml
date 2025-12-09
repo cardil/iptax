@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iptax"
-version = "0.1.0"
+version = "0.5.0"
 description = "Automated IP tax report generator for Polish tax deduction program"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = "Apache-2.0"
 authors = [
     {name = "Chris Suszyński", email = "krzysztof.suszynski@gmail.com"}
 ]
@@ -16,7 +16,6 @@ keywords = ["tax", "reporting", "ip-tax", "automation", "polish-tax"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -65,6 +64,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    # Build and publishing
+    "build>=1.0.0",
+    "twine>=5.0.0",
+
     # Testing
     "pytest>=7.4.3",
     "pytest-cov>=4.1.0",
@@ -110,6 +113,9 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["iptax*"]
+
+[tool.setuptools.package-data]
+iptax = ["report/templates/*.html", "report/templates/*.css"]
 
 [tool.black]
 line-length = 88

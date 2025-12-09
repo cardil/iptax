@@ -15,8 +15,13 @@ from iptax.cli.flows import (
     OutputOptions,
     _display_collection_summary,
     _display_inflight_summary,
+    _get_playwright_command,
+    _install_playwright_firefox,
+    _is_playwright_firefox_installed,
     _resolve_review_month,
     _save_judgments_to_ai_cache,
+    ensure_browser_installed,
+    init_flow,
 )
 from iptax.models import (
     Change,
@@ -28,6 +33,226 @@ from iptax.models import (
 )
 
 from .conftest import strip_ansi
+
+
+class TestGetPlaywrightCommand:
+    """Tests for _get_playwright_command function."""
+
+    @pytest.mark.unit
+    def test_returns_playwright_path_when_found(self):
+        """Test returns direct playwright path when found in PATH."""
+        with patch("shutil.which", return_value="/usr/local/bin/playwright"):
+            result = _get_playwright_command()
+
+        assert result == ["/usr/local/bin/playwright"]
+
+    @pytest.mark.unit
+    def test_returns_python_module_when_playwright_not_found(self):
+        """Test returns python -m playwright when not in PATH."""
+        import sys
+
+        with patch("shutil.which", return_value=None):
+            result = _get_playwright_command()
+
+        assert result == [sys.executable, "-m", "playwright"]
+
+
+class TestIsPlaywrightFirefoxInstalled:
+    """Tests for _is_playwright_firefox_installed function."""
+
+    @pytest.mark.unit
+    def test_returns_true_when_firefox_in_output(self):
+        """Test returns True when firefox path found in output."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "/home/user/.cache/ms-playwright/firefox-1495\n"
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/playwright"),
+            patch("subprocess.run", return_value=mock_result) as mock_run,
+        ):
+            result = _is_playwright_firefox_installed()
+
+        assert result is True
+        mock_run.assert_called_once()
+        # Verify correct command was used
+        call_args = mock_run.call_args
+        assert "install" in call_args[0][0]
+        assert "--list" in call_args[0][0]
+
+    @pytest.mark.unit
+    def test_returns_false_when_firefox_not_in_output(self):
+        """Test returns False when firefox not in output."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "/home/user/.cache/ms-playwright/chromium-1234\n"
+
+        with (
+            patch("shutil.which", return_value=None),
+            patch("subprocess.run", return_value=mock_result),
+        ):
+            result = _is_playwright_firefox_installed()
+
+        assert result is False
+
+    @pytest.mark.unit
+    def test_returns_false_on_nonzero_return_code(self):
+        """Test returns False when command fails."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+
+        with (
+            patch("shutil.which", return_value=None),
+            patch("subprocess.run", return_value=mock_result),
+        ):
+            result = _is_playwright_firefox_installed()
+
+        assert result is False
+
+    @pytest.mark.unit
+    def test_returns_false_on_file_not_found(self):
+        """Test returns False when playwright command not found."""
+        with (
+            patch("shutil.which", return_value=None),
+            patch("subprocess.run", side_effect=FileNotFoundError()),
+        ):
+            result = _is_playwright_firefox_installed()
+
+        assert result is False
+
+
+class TestInstallPlaywrightFirefox:
+    """Tests for _install_playwright_firefox function."""
+
+    @pytest.mark.unit
+    def test_returns_true_on_success(self):
+        """Test returns True on successful install."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+
+        with (
+            patch("shutil.which", return_value=None),
+            patch("subprocess.run", return_value=mock_result),
+        ):
+            result = _install_playwright_firefox(console)
+
+        assert result is True
+        output = strip_ansi(console.file.getvalue())
+        assert "Installing Playwright Firefox" in output
+        assert "Playwright Firefox browser installed" in output
+
+    @pytest.mark.unit
+    def test_returns_false_on_failure(self):
+        """Test returns False on install failure."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = "install error"
+
+        with (
+            patch("shutil.which", return_value=None),
+            patch("subprocess.run", return_value=mock_result),
+        ):
+            result = _install_playwright_firefox(console)
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "Failed to install browser" in output
+
+    @pytest.mark.unit
+    def test_returns_false_on_file_not_found(self):
+        """Test returns False when playwright not found."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        with (
+            patch("shutil.which", return_value=None),
+            patch("subprocess.run", side_effect=FileNotFoundError()),
+        ):
+            result = _install_playwright_firefox(console)
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "Playwright not found" in output
+
+
+class TestEnsureBrowserInstalled:
+    """Tests for ensure_browser_installed function."""
+
+    @pytest.mark.unit
+    def test_returns_true_when_already_installed(self):
+        """Test returns True when browser already installed."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        with patch.object(flows, "_is_playwright_firefox_installed", return_value=True):
+            result = ensure_browser_installed(console)
+
+        assert result is True
+
+    @pytest.mark.unit
+    def test_installs_when_not_present(self):
+        """Test installs browser when not present."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        with (
+            patch.object(flows, "_is_playwright_firefox_installed", return_value=False),
+            patch.object(
+                flows, "_install_playwright_firefox", return_value=True
+            ) as mock_install,
+        ):
+            result = ensure_browser_installed(console)
+
+        assert result is True
+        mock_install.assert_called_once_with(console)
+
+
+class TestInitFlow:
+    """Tests for init_flow function."""
+
+    @pytest.mark.unit
+    def test_shows_already_installed(self):
+        """Test shows message when Firefox already installed."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        with patch.object(flows, "_is_playwright_firefox_installed", return_value=True):
+            result = init_flow(console)
+
+        assert result is True
+        output = strip_ansi(console.file.getvalue())
+        assert "Initializing iptax" in output
+        assert "already installed" in output
+
+    @pytest.mark.unit
+    def test_installs_when_not_present(self):
+        """Test installs browser when not present."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        with (
+            patch.object(flows, "_is_playwright_firefox_installed", return_value=False),
+            patch.object(
+                flows, "_install_playwright_firefox", return_value=True
+            ) as mock_install,
+        ):
+            result = init_flow(console)
+
+        assert result is True
+        mock_install.assert_called_once_with(console)
+
+    @pytest.mark.unit
+    def test_returns_false_on_install_failure(self):
+        """Test returns False when install fails."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        with (
+            patch.object(flows, "_is_playwright_firefox_installed", return_value=False),
+            patch.object(flows, "_install_playwright_firefox", return_value=False),
+        ):
+            result = init_flow(console)
+
+        assert result is False
 
 
 class TestFetchChanges:

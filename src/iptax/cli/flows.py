@@ -1,5 +1,8 @@
 """Reusable CLI flows for business logic."""
 
+import shutil
+import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -41,6 +44,110 @@ from .elements import (
 # Constants
 MAX_MISSING_DAYS_TO_SHOW = 5
 MIN_REPORTS_FOR_LAST = 2  # Need at least 2 reports for "last" to differ from "latest"
+
+
+def _get_playwright_command() -> list[str]:
+    """Get the command to run playwright.
+
+    Returns:
+        Command list to run playwright (either via python -m or direct path).
+    """
+    # Try to find playwright in PATH first
+    playwright_path = shutil.which("playwright")
+    if playwright_path:
+        return [playwright_path]
+    # Fallback to python -m playwright
+    return [sys.executable, "-m", "playwright"]
+
+
+def _is_playwright_firefox_installed() -> bool:
+    """Check if Playwright Firefox browser is installed.
+
+    Uses `playwright install --list` to check browser cache.
+    The output format lists installed browsers as paths like:
+    /home/user/.cache/ms-playwright/firefox-1495
+
+    Returns:
+        True if Firefox is installed, False otherwise.
+    """
+    cmd = [*_get_playwright_command(), "install", "--list"]
+    try:
+        # S603: Command is built from trusted sources (sys.executable or shutil.which)
+        result = subprocess.run(  # noqa: S603
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return False
+    else:
+        # Look for firefox browser path in the output (e.g. "firefox-1495")
+        return result.returncode == 0 and "firefox-" in result.stdout
+
+
+def _install_playwright_firefox(console: Console) -> bool:
+    """Install Playwright Firefox browser.
+
+    Args:
+        console: Rich console for output
+
+    Returns:
+        True if installation succeeded, False otherwise.
+    """
+    console.print("[cyan]🔧[/cyan] Installing Playwright Firefox browser...")
+    cmd = [*_get_playwright_command(), "install", "firefox"]
+    try:
+        # S603: Command is built from trusted sources (sys.executable or shutil.which)
+        result = subprocess.run(  # noqa: S603
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        console.print(
+            "[red]✗[/red] Playwright not found. Is iptax installed correctly?"
+        )
+        return False
+    else:
+        if result.returncode != 0:
+            console.print(f"[red]✗[/red] Failed to install browser: {result.stderr}")
+            return False
+        console.print("[green]✓[/green] Playwright Firefox browser installed")
+        return True
+
+
+def ensure_browser_installed(console: Console) -> bool:
+    """Ensure Playwright Firefox is installed, installing if necessary.
+
+    Args:
+        console: Rich console for output
+
+    Returns:
+        True if browser is available (already installed or successfully installed).
+    """
+    if _is_playwright_firefox_installed():
+        return True
+    return _install_playwright_firefox(console)
+
+
+def init_flow(console: Console) -> bool:
+    """Initialize iptax by installing required browser.
+
+    Args:
+        console: Rich console for output
+
+    Returns:
+        True if initialization succeeded.
+    """
+    console.print("[cyan]🚀[/cyan] Initializing iptax...")
+
+    if _is_playwright_firefox_installed():
+        console.print("[green]✓[/green] Playwright Firefox already installed")
+        return True
+
+    return _install_playwright_firefox(console)
 
 
 @dataclass
