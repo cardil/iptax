@@ -140,3 +140,18 @@ class TestBumpMainDev:
         assert get_next_dev_version("1.0.0") == "1.1.0.dev0"
         assert get_next_dev_version("1.5.0") == "1.6.0.dev0"
         assert get_next_dev_version("2.10.0") == "2.11.0.dev0"
+
+
+class TestGenerateChecksums:
+    """Tests for generate_checksums script."""
+
+    def test_calculate_sha256(self, tmp_path: Path) -> None:
+        """Test SHA256 calculation."""
+        from generate_checksums import calculate_sha256
+
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello, World!")
+
+        # Known SHA256 for "Hello, World!"
+        expected = "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+        assert calculate_sha256(test_file) == expected

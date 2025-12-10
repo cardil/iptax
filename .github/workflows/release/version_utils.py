@@ -30,4 +30,6 @@ def update_version(
         count=1,
         flags=re.MULTILINE,
     )
+    if updated == content:
+        sys.exit("Error: Version pattern not found in pyproject.toml")
     pyproject_path.write_text(updated)

@@ -57,10 +57,7 @@ jobs:
 
       - name: Generate checksums
         if: steps.check_dev.outputs.has_dev == 'false'
-        run: |
-          cd dist
-          sha256sum *.whl *.tar.gz > checksums.txt
-          cat checksums.txt
+        run: python3 .github/workflows/release/generate_checksums.py
 
       - name: Upload checksums to release
         if: steps.check_dev.outputs.has_dev == 'false'
