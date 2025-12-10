@@ -14,6 +14,7 @@ from iptax.cli.app import (
     _parse_date,
     cli,
 )
+from iptax.utils.env import cache_dir_for_home
 
 
 @pytest.fixture
@@ -47,8 +48,12 @@ def test_history_command_path_flag(runner: CliRunner) -> None:
 
 
 @pytest.mark.unit
-def test_history_command_with_invalid_month_format(runner: CliRunner) -> None:
+def test_history_command_with_invalid_month_format(
+    runner: CliRunner, isolated_home
+) -> None:
     """Test that history command with invalid month format shows error."""
+    # isolated_home sets HOME and clears XDG vars for test isolation
+    cache_dir_for_home(isolated_home).mkdir(parents=True, exist_ok=True)
     result = runner.invoke(cli, ["history", "--month", "invalid"])
     assert result.exit_code == 1
     assert "Invalid month format" in result.output
@@ -57,17 +62,15 @@ def test_history_command_with_invalid_month_format(runner: CliRunner) -> None:
 
 @pytest.mark.unit
 def test_history_command_with_valid_month_format(
-    runner: CliRunner, tmp_path, monkeypatch
+    runner: CliRunner, isolated_home
 ) -> None:
     """Test that history command normalizes month format correctly."""
-    # Create a test history file
     from datetime import UTC, date, datetime
 
     from iptax.cache.history import HistoryManager
     from iptax.models import HistoryEntry
 
-    # Set XDG_CACHE_HOME to temp directory
-    cache_dir = tmp_path / "cache" / "iptax"
+    cache_dir = cache_dir_for_home(isolated_home)
     cache_dir.mkdir(parents=True)
     history_file = cache_dir / "history.json"
 
@@ -75,32 +78,28 @@ def test_history_command_with_valid_month_format(
     manager = HistoryManager(history_path=history_file)
     manager._history = {
         "2024-10": HistoryEntry(
-            last_cutoff_date=date(2024, 10, 25),
+            first_change_date=date(2024, 9, 21),
+            last_change_date=date(2024, 10, 25),
             generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
         )
     }
     manager._loaded = True
     manager.save()
 
-    # Test with zero-padded month (use monkeypatch to isolate env changes)
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     result = runner.invoke(cli, ["history", "--month", "2024-10"])
     assert result.exit_code == 0
     assert "2024-10" in result.output
 
 
 @pytest.mark.unit
-def test_history_command_with_missing_month(
-    runner: CliRunner, tmp_path, monkeypatch
-) -> None:
+def test_history_command_with_missing_month(runner: CliRunner, isolated_home) -> None:
     """Test that history command handles missing month correctly."""
     from datetime import UTC, date, datetime
 
     from iptax.cache.history import HistoryManager
     from iptax.models import HistoryEntry
 
-    # Set XDG_CACHE_HOME to temp directory
-    cache_dir = tmp_path / "cache" / "iptax"
+    cache_dir = cache_dir_for_home(isolated_home)
     cache_dir.mkdir(parents=True)
     history_file = cache_dir / "history.json"
 
@@ -108,30 +107,25 @@ def test_history_command_with_missing_month(
     manager = HistoryManager(history_path=history_file)
     manager._history = {
         "2024-10": HistoryEntry(
-            last_cutoff_date=date(2024, 10, 25),
+            first_change_date=date(2024, 9, 21),
+            last_change_date=date(2024, 10, 25),
             generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
         )
     }
     manager._loaded = True
     manager.save()
 
-    # Test with month that doesn't exist
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     result = runner.invoke(cli, ["history", "--month", "2024-11"])
     assert result.exit_code == 0
     assert "No history entry found for 2024-11" in result.output
 
 
 @pytest.mark.unit
-def test_history_command_empty_history(
-    runner: CliRunner, tmp_path, monkeypatch
-) -> None:
+def test_history_command_empty_history(runner: CliRunner, isolated_home) -> None:
     """Test that history command handles empty history correctly."""
-    # Set XDG_CACHE_HOME to temp directory with no history file
-    cache_dir = tmp_path / "cache" / "iptax"
+    cache_dir = cache_dir_for_home(isolated_home)
     cache_dir.mkdir(parents=True)
 
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     result = runner.invoke(cli, ["history"])
     assert result.exit_code == 0
     assert "No report history found" in result.output
@@ -371,55 +365,55 @@ class TestHistoryCommand:
     """Tests for history command."""
 
     @pytest.mark.unit
-    def test_history_json_format(self, runner: CliRunner, tmp_path, monkeypatch):
+    def test_history_json_format(self, runner: CliRunner, isolated_home):
         """Test history command with JSON format."""
         from datetime import UTC, datetime
 
         from iptax.cache.history import HistoryManager
         from iptax.models import HistoryEntry
 
-        cache_dir = tmp_path / "cache" / "iptax"
+        cache_dir = cache_dir_for_home(isolated_home)
         cache_dir.mkdir(parents=True)
         history_file = cache_dir / "history.json"
 
         manager = HistoryManager(history_path=history_file)
         manager._history = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 21),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }
         manager._loaded = True
         manager.save()
 
-        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
         result = runner.invoke(cli, ["history", "--format", "json"])
         assert result.exit_code == 0
         assert '"2024-10"' in result.output
 
     @pytest.mark.unit
-    def test_history_yaml_format(self, runner: CliRunner, tmp_path, monkeypatch):
+    def test_history_yaml_format(self, runner: CliRunner, isolated_home):
         """Test history command with YAML format."""
         from datetime import UTC, datetime
 
         from iptax.cache.history import HistoryManager
         from iptax.models import HistoryEntry
 
-        cache_dir = tmp_path / "cache" / "iptax"
+        cache_dir = cache_dir_for_home(isolated_home)
         cache_dir.mkdir(parents=True)
         history_file = cache_dir / "history.json"
 
         manager = HistoryManager(history_path=history_file)
         manager._history = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 21),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }
         manager._loaded = True
         manager.save()
 
-        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
         result = runner.invoke(cli, ["history", "--format", "yaml"])
         assert result.exit_code == 0
         assert "2024-10" in result.output
@@ -538,7 +532,8 @@ class TestGatherHistoryStats:
 
         entries = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 21),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }

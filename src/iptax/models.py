@@ -615,11 +615,15 @@ class Settings(BaseModel):
 class HistoryEntry(BaseModel):
     """History entry for a single monthly report.
 
-    Tracks when a report was generated and what cutoff date was used.
+    Tracks when a report was generated and what date range was used.
     This prevents duplicate or missing changes between reports.
     """
 
-    last_cutoff_date: date = Field(
+    first_change_date: date = Field(
+        ...,
+        description="The start date of the Did range used for this report",
+    )
+    last_change_date: date = Field(
         ...,
         description=(
             "The end date used for this report "

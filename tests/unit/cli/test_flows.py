@@ -1,5 +1,6 @@
 """Tests for CLI flows module."""
 
+import logging
 from datetime import date
 from io import StringIO
 from pathlib import Path
@@ -37,8 +38,11 @@ from iptax.models import (
     Repository,
     WorkHours,
 )
+from iptax.utils.env import cache_dir_for_home
 
 from .conftest import strip_ansi
+
+logger = logging.getLogger(__name__)
 
 
 class TestGetPlaywrightCommand:
@@ -811,10 +815,10 @@ class TestCollectFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_successful_collection(self, tmp_path):
+    async def test_successful_collection(self, isolated_home):
         """Test successful data collection flow."""
         console = Console(file=StringIO(), force_terminal=True)
-        cache_file = tmp_path / "test.json"
+        cache_file = cache_dir_for_home(isolated_home) / "test.json"
 
         mock_settings = MagicMock()
         mock_settings.workday.enabled = False  # Skip workday for simplicity
@@ -838,8 +842,9 @@ class TestCollectFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_existing_report_without_force_fails(self):
+    async def test_existing_report_without_force_fails(self, isolated_home):
         """Test that existing report without force returns False."""
+        logger.debug("Using isolated home: %s", isolated_home)
         console = Console(file=StringIO(), force_terminal=True)
 
         mock_settings = MagicMock()
@@ -869,10 +874,10 @@ class TestCollectFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_force_deletes_existing(self, tmp_path):
+    async def test_force_deletes_existing(self, isolated_home):
         """Test that force option deletes existing report."""
         console = Console(file=StringIO(), force_terminal=True)
-        cache_file = tmp_path / "test.json"
+        cache_file = cache_dir_for_home(isolated_home) / "test.json"
 
         mock_settings = MagicMock()
         mock_settings.workday.enabled = False
@@ -896,10 +901,10 @@ class TestCollectFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_skip_did_option(self, tmp_path):
+    async def test_skip_did_option(self, isolated_home):
         """Test that skip_did option skips Did collection."""
         console = Console(file=StringIO(), force_terminal=True)
-        cache_file = tmp_path / "test.json"
+        cache_file = cache_dir_for_home(isolated_home) / "test.json"
 
         mock_settings = MagicMock()
         mock_settings.workday.enabled = False
@@ -1024,8 +1029,9 @@ class TestReportFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_successful_report_generation(self):
+    async def test_successful_report_generation(self, isolated_home):
         """Test successful report generation flow."""
+        logger.debug("Using isolated home: %s", isolated_home)
         console = Console(file=StringIO(), force_terminal=True)
 
         mock_settings = MagicMock()
@@ -1090,10 +1096,10 @@ class TestReportFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_runs_collect_when_no_inflight(self, tmp_path):
+    async def test_runs_collect_when_no_inflight(self, isolated_home):
         """Test that collect is run when no in-flight exists."""
         console = Console(file=StringIO(), force_terminal=True)
-        cache_file = tmp_path / "test.json"
+        cache_file = cache_dir_for_home(isolated_home) / "test.json"
 
         mock_settings = MagicMock()
         mock_settings.workday.enabled = False
@@ -1137,8 +1143,9 @@ class TestReportFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_skips_review_tui_when_already_reviewed(self):
+    async def test_skips_review_tui_when_already_reviewed(self, isolated_home):
         """Test that report_flow skips TUI when all judgments already reviewed."""
+        logger.debug("Using isolated home: %s", isolated_home)
         console = Console(file=StringIO(), force_terminal=True)
 
         mock_settings = MagicMock()

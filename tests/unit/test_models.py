@@ -1165,26 +1165,31 @@ class TestHistoryEntry:
 
     def test_history_entry_creation(self):
         """Test creating a HistoryEntry."""
-        cutoff = date(2024, 11, 25)
+        first_change = date(2024, 10, 21)
+        last_change = date(2024, 11, 25)
         generated = datetime(2024, 11, 26, 10, 0, 0)
 
         entry = HistoryEntry(
-            last_cutoff_date=cutoff,
+            first_change_date=first_change,
+            last_change_date=last_change,
             generated_at=generated,
         )
 
-        assert entry.last_cutoff_date == cutoff
+        assert entry.first_change_date == first_change
+        assert entry.last_change_date == last_change
         assert entry.generated_at == generated
         assert entry.regenerated_at is None
 
     def test_history_entry_with_regeneration(self):
         """Test HistoryEntry with regeneration timestamp."""
-        cutoff = date(2024, 11, 25)
+        first_change = date(2024, 10, 21)
+        last_change = date(2024, 11, 25)
         generated = datetime(2024, 11, 26, 10, 0, 0)
         regenerated = datetime(2024, 11, 27, 15, 30, 0)
 
         entry = HistoryEntry(
-            last_cutoff_date=cutoff,
+            first_change_date=first_change,
+            last_change_date=last_change,
             generated_at=generated,
             regenerated_at=regenerated,
         )

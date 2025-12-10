@@ -27,13 +27,15 @@ End date: Today (in rolling mode) or end of month (in finalization mode)
 
 from datetime import date, datetime, timedelta
 
-from iptax.cache.history import get_last_report_date
+from iptax.cache.history import HistoryManager
 from iptax.models import ReportDateRanges
 from iptax.utils.env import get_month_end_date, get_today
 
 PAYMENT_DEADLINE_DAY = 10
 
 DEFAULT_DID_START_DAY = 25
+
+DECEMBER = 12
 
 
 def resolve_date_ranges(
@@ -152,19 +154,54 @@ def get_workday_range(month: str) -> tuple[date, date]:
     return start_date, end_date
 
 
+def _get_prev_month(year: int, month: int) -> tuple[int, int]:
+    """Get previous month's year and month.
+
+    Args:
+        year: Target year
+        month: Target month (1-12)
+
+    Returns:
+        Tuple of (year, month) for previous month
+    """
+    if month == 1:
+        return year - 1, 12
+    return year, month - 1
+
+
+def _get_next_month(year: int, month: int) -> tuple[int, int]:
+    """Get next month's year and month.
+
+    Args:
+        year: Target year
+        month: Target month (1-12)
+
+    Returns:
+        Tuple of (year, month) for next month
+    """
+    if month == DECEMBER:
+        return year + 1, 1
+    return year, month + 1
+
+
 def get_did_range(month: str) -> tuple[date, date]:
-    """Get Did date range based on Polish legal timing logic.
+    """Get Did date range for a specific month.
 
-    The logic differs based on when the tool is run:
+    The Did range is determined by history to avoid missing or duplicating changes:
 
-    Days 1-10 (finalizing previous month):
-    Did uses the same range as Workday (full target month)
-    Example: Run Dec 5, Did is Nov 1-30
+    Start date:
+    - If previous month has history: prev_month.last_change_date + 1
+    - Otherwise: 1st of target month
 
-    Days 11-31 (working on current month):
-    Did uses rolling window: (today minus 1 month) to today
-    If history exists, starts from last report date plus 1
-    Example: Run Nov 25, Did is Oct 25 to Nov 25
+    End date:
+    - If target month has history: target_month.last_change_date
+    - Else if next month has history: next_month.first_change_date - 1
+    - Otherwise: 25th of target month (or today if current month)
+
+    Examples:
+    - 2024-08 with 2024-07 cutoff=23, 2024-08 cutoff=24: Jul 24 to Aug 24
+    - 2024-08 with 2024-07 cutoff=23, no 2024-08: Jul 24 to Aug 25
+    - 2024-08 with no history: Aug 1 to Aug 31
 
     Args:
         month: Month in YYYY-MM format (target month for report)
@@ -178,37 +215,51 @@ def get_did_range(month: str) -> tuple[date, date]:
     target_year = int(year)
     target_month = int(month_num)
 
-    # Only use finalization mode (full month) if:
-    # 1. We're in finalization window (days 1-10), AND
-    # 2. The target month is the one we'd auto-detect (previous month)
-    # This prevents ignoring history when generating older reports
-    if today.day <= PAYMENT_DEADLINE_DAY:
-        auto_month = auto_detect_month()
-        if month == auto_month:
-            start_date = date(target_year, target_month, 1)
-            end_date = get_month_end_date(target_year, target_month)
-            return start_date, end_date
+    # Load history
+    history = HistoryManager()
+    history.load()
+    entries = history.get_all_entries()
 
-    last_report = get_last_report_date()
+    # Get previous month key
+    prev_year, prev_month = _get_prev_month(target_year, target_month)
+    prev_month_key = f"{prev_year}-{prev_month:02d}"
 
-    if last_report is not None:
-        start_date = last_report + timedelta(days=1)
-        # Ensure start_date doesn't exceed today (e.g., if report already run today)
-        start_date = min(start_date, today)
+    # Get next month key
+    next_year, next_month = _get_next_month(target_year, target_month)
+    next_month_key = f"{next_year}-{next_month:02d}"
+
+    # Determine start date
+    if prev_month_key in entries:
+        # Start from day after previous month's cutoff
+        prev_cutoff = entries[prev_month_key].last_change_date
+        start_date = prev_cutoff + timedelta(days=1)
     else:
-        if target_month == 1:
-            prev_year = target_year - 1
-            prev_month = 12
+        # No previous history - start at 1st of target month
+        start_date = date(target_year, target_month, 1)
+
+    # Determine end date
+    if month in entries:
+        # Use target month's cutoff
+        end_date = entries[month].last_change_date
+    elif next_month_key in entries:
+        # Use next month's first_change_date - 1
+        next_start = entries[next_month_key].first_change_date
+        end_date = next_start - timedelta(days=1)
+    else:
+        # No target or next month history - use 25th or end of month
+        target_month_end = get_month_end_date(target_year, target_month)
+
+        # If target month is in the past, use 25th as default end
+        if target_month_end < today:
+            try:
+                end_date = date(target_year, target_month, DEFAULT_DID_START_DAY)
+            except ValueError:
+                end_date = target_month_end
         else:
-            prev_year = target_year
-            prev_month = target_month - 1
+            # Current or future month - use today or end of month
+            end_date = min(today, target_month_end)
 
-        try:
-            start_date = date(prev_year, prev_month, DEFAULT_DID_START_DAY)
-        except ValueError:
-            start_date = get_month_end_date(prev_year, prev_month)
-
-    return start_date, today
+    return start_date, end_date
 
 
 def is_finalization_window() -> bool:

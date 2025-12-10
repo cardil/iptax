@@ -1,19 +1,25 @@
 """Tests for timing module."""
 
-from datetime import date
-from unittest.mock import patch
+import logging
+from datetime import UTC, date, datetime
 
 import pytest
 
 from iptax import timing
+from iptax.cache.history import HistoryManager
+from iptax.models import HistoryEntry
+from iptax.utils.env import cache_dir_for_home
+
+logger = logging.getLogger(__name__)
 
 
 class TestResolveDateRanges:
     """Tests for resolve_date_ranges function."""
 
     @pytest.mark.unit
-    def test_explicit_month(self):
+    def test_explicit_month(self, isolated_home):
         """Test resolving with explicit month (YYYY-MM)."""
+        logger.debug("Using isolated home: %s", isolated_home)
         ranges = timing.resolve_date_ranges("2024-11")
 
         assert ranges.workday_start == date(2024, 11, 1)
@@ -21,16 +27,18 @@ class TestResolveDateRanges:
         assert ranges.did_start <= ranges.did_end
 
     @pytest.mark.unit
-    def test_workday_range_full_month(self):
+    def test_workday_range_full_month(self, isolated_home):
         """Test that workday range covers full calendar month."""
+        logger.debug("Using isolated home: %s", isolated_home)
         ranges = timing.resolve_date_ranges("2024-02")
 
         assert ranges.workday_start == date(2024, 2, 1)
         assert ranges.workday_end == date(2024, 2, 29)
 
     @pytest.mark.unit
-    def test_with_overrides(self):
+    def test_with_overrides(self, isolated_home):
         """Test resolving with date overrides."""
+        logger.debug("Using isolated home: %s", isolated_home)
         ranges = timing.resolve_date_ranges(
             "2024-11",
             workday_start=date(2024, 11, 5),
@@ -45,8 +53,9 @@ class TestResolveDateRanges:
         assert ranges.did_end == date(2024, 11, 20)
 
     @pytest.mark.unit
-    def test_partial_overrides(self):
+    def test_partial_overrides(self, isolated_home):
         """Test that partial overrides work."""
+        logger.debug("Using isolated home: %s", isolated_home)
         ranges = timing.resolve_date_ranges(
             "2024-11",
             workday_start=date(2024, 11, 5),
@@ -151,62 +160,127 @@ class TestGetWorkdayRange:
 
 
 class TestGetDidRange:
-    """Tests for get_did_range function."""
+    """Tests for get_did_range function.
+
+    The new logic determines dates from history:
+    - Start: prev_month.last_change_date + 1 (if exists), else 1st of target
+    - End: target.last_change_date (if exists), or next.first_change_date - 1,
+        else 25th/today
+    """
 
     @pytest.mark.unit
-    def test_days_1_to_10_uses_full_month(self, monkeypatch):
-        """Days 1-10: Did uses same range as Workday (full month)."""
+    def test_no_history_past_month_uses_defaults(self, monkeypatch, isolated_home):
+        """No history for past month: start = 1st, end = 25th."""
+        logger.debug("Using isolated home: %s", isolated_home)
         monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-12-05")
         start, end = timing.get_did_range("2024-11")
+        # No history: start = Nov 1, end = Nov 25 (default for past month)
         assert start == date(2024, 11, 1)
-        assert end == date(2024, 11, 30)
-
-    @pytest.mark.unit
-    def test_days_11_to_31_uses_rolling_window(self, monkeypatch):
-        """Days 11-31: Did uses rolling window ending at today."""
-        monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-11-25")
-        # No history means default to 25th of previous month
-        with patch("iptax.timing.get_last_report_date", return_value=None):
-            start, end = timing.get_did_range("2024-11")
-        assert start == date(2024, 10, 25)
         assert end == date(2024, 11, 25)
 
     @pytest.mark.unit
-    def test_january_previous_month_is_december(self, monkeypatch):
-        """January: Previous month default should be December."""
+    def test_no_history_current_month_ends_today(self, monkeypatch, isolated_home):
+        """No history for current month: start = 1st, end = today."""
+        logger.debug("Using isolated home: %s", isolated_home)
+        monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-11-25")
+        start, end = timing.get_did_range("2024-11")
+        # No history: start = Nov 1, end = today (Nov 25)
+        assert start == date(2024, 11, 1)
+        assert end == date(2024, 11, 25)
+
+    @pytest.mark.unit
+    def test_january_no_history(self, monkeypatch, isolated_home):
+        """January with no history: start = Jan 1, end = today."""
+        logger.debug("Using isolated home: %s", isolated_home)
         monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-01-15")
-        # No history means default to 25th of previous month (December)
-        with patch("iptax.timing.get_last_report_date", return_value=None):
-            start, end = timing.get_did_range("2024-01")
-        assert start == date(2023, 12, 25)
+        start, end = timing.get_did_range("2024-01")
+        # No history: start = Jan 1, end = today (Jan 15)
+        assert start == date(2024, 1, 1)
         assert end == date(2024, 1, 15)
 
     @pytest.mark.unit
-    def test_with_history_uses_last_report_date(self, monkeypatch):
-        """With history, Did starts from last report date + 1."""
+    def test_with_prev_month_history(self, monkeypatch, isolated_home):
+        """With previous month history: start from prev cutoff + 1."""
         monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-11-25")
-        # History exists with last report on Oct 20
-        with patch(
-            "iptax.timing.get_last_report_date", return_value=date(2024, 10, 20)
-        ):
-            start, end = timing.get_did_range("2024-11")
+
+        # Create history for October with last_change_date = Oct 20
+        cache_dir = cache_dir_for_home(isolated_home)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        history_file = cache_dir / "history.json"
+
+        manager = HistoryManager(history_path=history_file)
+        manager._history = {
+            "2024-10": HistoryEntry(
+                first_change_date=date(2024, 9, 21),
+                last_change_date=date(2024, 10, 20),
+                generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+            )
+        }
+        manager._loaded = True
+        manager.save()
+
+        start, end = timing.get_did_range("2024-11")
         assert start == date(2024, 10, 21)  # Last report + 1 day
-        assert end == date(2024, 11, 25)
+        assert end == date(2024, 11, 25)  # Today
 
     @pytest.mark.unit
-    def test_days_1_to_10_older_month_uses_history(self, monkeypatch):
-        """Days 1-10: Older months should still use history, not full month.
-
-        When today is Dec 5 (finalization window for Nov), but user requests
-        Oct report, we should use history-based range, not full Oct month.
-        """
+    def test_with_target_month_history(self, monkeypatch, isolated_home):
+        """With target month history: end = target's last_change_date."""
         monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-12-05")
-        # History exists with Sept 25 cutoff
-        with patch("iptax.timing.get_last_report_date", return_value=date(2024, 9, 25)):
-            start, end = timing.get_did_range("2024-10")
-        # Should start from last report + 1, not Oct 1
-        assert start == date(2024, 9, 26)  # Last report + 1 day
-        assert end == date(2024, 12, 5)  # Today
+
+        cache_dir = cache_dir_for_home(isolated_home)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        history_file = cache_dir / "history.json"
+
+        manager = HistoryManager(history_path=history_file)
+        manager._history = {
+            "2024-10": HistoryEntry(
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
+                generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+            ),
+            "2024-11": HistoryEntry(
+                first_change_date=date(2024, 10, 26),
+                last_change_date=date(2024, 11, 24),
+                generated_at=datetime(2024, 11, 26, 10, 0, 0, tzinfo=UTC),
+            ),
+        }
+        manager._loaded = True
+        manager.save()
+
+        start, end = timing.get_did_range("2024-11")
+        assert start == date(2024, 10, 26)  # Oct cutoff + 1
+        assert end == date(2024, 11, 24)  # Nov's last_change_date
+
+    @pytest.mark.unit
+    def test_with_next_month_history(self, monkeypatch, isolated_home):
+        """With next month history but no target: end = next's first - 1."""
+        monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-12-05")
+
+        cache_dir = cache_dir_for_home(isolated_home)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        history_file = cache_dir / "history.json"
+
+        manager = HistoryManager(history_path=history_file)
+        manager._history = {
+            "2024-10": HistoryEntry(
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
+                generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+            ),
+            # No Nov entry, but Dec exists
+            "2024-12": HistoryEntry(
+                first_change_date=date(2024, 11, 26),
+                last_change_date=date(2024, 12, 4),
+                generated_at=datetime(2024, 12, 5, 10, 0, 0, tzinfo=UTC),
+            ),
+        }
+        manager._loaded = True
+        manager.save()
+
+        start, end = timing.get_did_range("2024-11")
+        assert start == date(2024, 10, 26)  # Oct cutoff + 1
+        assert end == date(2024, 11, 25)  # Dec first - 1
 
 
 class TestIsFinalizationWindow:

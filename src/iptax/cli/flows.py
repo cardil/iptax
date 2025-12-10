@@ -1016,9 +1016,10 @@ async def report_flow(
         return False
 
     # Save report to history so next report knows where to start
-    save_report_date(report.changes_until, month_key)
+    save_report_date(report.changes_since, report.changes_until, month_key)
     console.print(
-        f"[green]✓[/green] Report saved to history (cutoff: {report.changes_until})"
+        f"[green]✓[/green] Report saved to history "
+        f"({report.changes_since} to {report.changes_until})"
     )
 
     # Note: We keep in-flight cache so dist can be run again if needed
