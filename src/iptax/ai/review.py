@@ -199,6 +199,10 @@ class ReviewApp(App):
     #changes-list {
         height: 1fr;
         scrollbar-gutter: stable;
+        scrollbar-background: $panel;
+        scrollbar-color: #1e3a5f;
+        scrollbar-color-hover: #2d4a6f;
+        scrollbar-color-active: #3d5a7f;
     }
 
     .change-row {
@@ -210,7 +214,7 @@ class ReviewApp(App):
     }
 
     .selected {
-        background: $primary-background-darken-1;
+        background: #1e3a5f;
         color: white;
     }
 
