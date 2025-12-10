@@ -67,6 +67,7 @@ dev = [
     # Build and publishing
     "build>=1.0.0",
     "twine>=5.0.0",
+    "python-semantic-release>=9.0.0",
 
     # Testing
     "pytest>=7.4.3",
@@ -250,3 +251,14 @@ exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
 ]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+build_command = "pip install build && python -m build"
+upload_to_pypi = false
+upload_to_release = true
+commit_message = "chore(release): {version}"
+
+[tool.semantic_release.branches.release]
+match = "release-*"
+prerelease = false
