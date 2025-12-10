@@ -42,7 +42,7 @@ TEST_FILES := $(shell find tests scripts -type f -name '*.py' 2>/dev/null) Makef
 MD_FILES := $(shell find docs -type f -name '*.md' 2>/dev/null) README.md
 
 # Add -v flag only on interactive terminals
-PYTEST_VERBOSE := $(shell [ -t 1 ] && echo "-v")
+PYTEST_VERBOSE := $(shell [ -t 0 ] && echo "-v" || true)
 
 ##@ Installation
 
@@ -98,7 +98,7 @@ unit: $(GUARDS)/unit.passed  ## Run unit tests
 
 $(GUARDS)/unit.passed: $(VENV)/init.done $(SRC_FILES) $(TEST_FILES)
 	@mkdir -p $(GUARDS)
-	$(VENV_BIN)/pytest tests/unit/ $(PYTEST_VERBOSE) --durations=10 --unused-fixtures
+	$(VENV_BIN)/pytest tests/unit/ $(PYTEST_VERBOSE) --durations=5 --unused-fixtures
 	@touch $@
 
 .PHONY: e2e

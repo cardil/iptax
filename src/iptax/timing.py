@@ -35,7 +35,20 @@ PAYMENT_DEADLINE_DAY = 10
 
 DEFAULT_DID_START_DAY = 25
 
+MIN_RANGE_DAYS = 15
+
 DECEMBER = 12
+
+
+class DateRangeError(Exception):
+    """Error raised when date range is invalid.
+
+    This includes:
+    - Gap detected between target month end and next month start in history
+    - Date range too short (less than 20 days)
+    """
+
+    pass
 
 
 def resolve_date_ranges(
@@ -187,27 +200,33 @@ def _get_next_month(year: int, month: int) -> tuple[int, int]:
 def get_did_range(month: str) -> tuple[date, date]:
     """Get Did date range for a specific month.
 
-    The Did range is determined by history to avoid missing or duplicating changes:
+    The Did range is determined by history to avoid missing or duplicating changes.
 
-    Start date:
-    - If previous month has history: prev_month.last_change_date + 1
-    - Otherwise: 1st of target month
+    Start date logic:
+    1. If prev month has history: prev.last_change_date + 1
+    2. Else if any history exists: 25th of prev month
+    3. Else if past month (no history): 1st of target month
+    4. Else (current month, no history): 25th of prev month
 
-    End date:
-    - If target month has history: target_month.last_change_date
-    - Else if next month has history: next_month.first_change_date - 1
-    - Otherwise: 25th of target month (or today if current month)
+    End date logic:
+    1. If target month has history: target.last_change_date
+    2. Else if next month has history: next.first_change_date - 1
+    3. Else if any history exists: 25th of target month
+    4. Else if past month (no history): end of target month
+    5. Else (current month, no history): min(today, 25th)
 
-    Examples:
-    - 2024-08 with 2024-07 cutoff=23, 2024-08 cutoff=24: Jul 24 to Aug 24
-    - 2024-08 with 2024-07 cutoff=23, no 2024-08: Jul 24 to Aug 25
-    - 2024-08 with no history: Aug 1 to Aug 31
+    Error conditions:
+    - Gap between target.last_change_date and next.first_change_date
+    - Range less than 20 days
 
     Args:
         month: Month in YYYY-MM format (target month for report)
 
     Returns:
         Tuple of (start_date, end_date)
+
+    Raises:
+        DateRangeError: If gap detected in history or range < 20 days
     """
     today = get_today()
 
@@ -220,44 +239,73 @@ def get_did_range(month: str) -> tuple[date, date]:
     history.load()
     entries = history.get_all_entries()
 
-    # Get previous month key
+    # Get adjacent month keys
     prev_year, prev_month = _get_prev_month(target_year, target_month)
     prev_month_key = f"{prev_year}-{prev_month:02d}"
 
-    # Get next month key
     next_year, next_month = _get_next_month(target_year, target_month)
     next_month_key = f"{next_year}-{next_month:02d}"
 
-    # Determine start date
-    if prev_month_key in entries:
-        # Start from day after previous month's cutoff
-        prev_cutoff = entries[prev_month_key].last_change_date
-        start_date = prev_cutoff + timedelta(days=1)
-    else:
-        # No previous history - start at 1st of target month
+    # Get history entries
+    prev_entry = entries.get(prev_month_key)
+    target_entry = entries.get(month)
+    next_entry = entries.get(next_month_key)
+
+    # Only consider history relevant to this target month (prev/target/next)
+    has_relevant_history = bool(prev_entry or target_entry or next_entry)
+
+    # Check for gap between target and next
+    if target_entry and next_entry:
+        expected_next_start = target_entry.last_change_date + timedelta(days=1)
+        if expected_next_start != next_entry.first_change_date:
+            target_end = target_entry.last_change_date
+            next_start = next_entry.first_change_date
+            raise DateRangeError(
+                f"Gap detected between target month end ({target_end}) "
+                f"and next month start ({next_start})"
+            )
+
+    # Determine if past month
+    target_month_end = get_month_end_date(target_year, target_month)
+    is_past = target_month_end < today
+
+    # Calculate start date
+    if prev_entry:
+        start_date = prev_entry.last_change_date + timedelta(days=1)
+    elif has_relevant_history:
+        # Relevant history exists but not for prev month - use 25th of prev month
+        start_date = date(prev_year, prev_month, DEFAULT_DID_START_DAY)
+    elif is_past:
+        # No relevant history, past month - use 1st of target month
         start_date = date(target_year, target_month, 1)
-
-    # Determine end date
-    if month in entries:
-        # Use target month's cutoff
-        end_date = entries[month].last_change_date
-    elif next_month_key in entries:
-        # Use next month's first_change_date - 1
-        next_start = entries[next_month_key].first_change_date
-        end_date = next_start - timedelta(days=1)
     else:
-        # No target or next month history - use 25th or end of month
-        target_month_end = get_month_end_date(target_year, target_month)
+        # No relevant history, current month - use 25th of prev month
+        start_date = date(prev_year, prev_month, DEFAULT_DID_START_DAY)
 
-        # If target month is in the past, use 25th as default end
-        if target_month_end < today:
-            try:
-                end_date = date(target_year, target_month, DEFAULT_DID_START_DAY)
-            except ValueError:
-                end_date = target_month_end
-        else:
-            # Current or future month - use today or end of month
-            end_date = min(today, target_month_end)
+    # Calculate end date
+    if target_entry:
+        end_date = target_entry.last_change_date
+    elif next_entry:
+        end_date = next_entry.first_change_date - timedelta(days=1)
+    elif has_relevant_history:
+        # Relevant history exists but not for target/next - use 25th
+        end_date = date(target_year, target_month, DEFAULT_DID_START_DAY)
+    elif is_past:
+        # No relevant history, past month - use month end
+        end_date = target_month_end
+    else:
+        # No relevant history, current month - use min(today, 25th)
+        cutoff_25th = date(target_year, target_month, DEFAULT_DID_START_DAY)
+        end_date = min(today, cutoff_25th)
+
+    # Validate range
+    range_days = (end_date - start_date).days + 1  # inclusive
+    if range_days < MIN_RANGE_DAYS:
+        raise DateRangeError(
+            f"Date range too short ({range_days} days). "
+            f"Need at least {MIN_RANGE_DAYS} days for valid report. "
+            f"Range: {start_date} to {end_date}"
+        )
 
     return start_date, end_date
 
