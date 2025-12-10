@@ -587,6 +587,29 @@ class TestDisplayInflightSummary:
         assert "Complete" in output
 
     @pytest.mark.unit
+    def test_displays_pto_when_present(self):
+        """Test that PTO hours are displayed when absence_days > 0."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            total_hours=160.0,
+            working_days=20,
+            absence_days=2,  # 2 days PTO
+            workday_validated=True,
+        )
+
+        _display_inflight_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "Paid Time Off" in output
+        assert "2 days" in output
+        assert "16 hours" in output  # 2 * 8
+
+    @pytest.mark.unit
     def test_displays_incomplete_workday(self):
         """Test that incomplete Workday validation is shown."""
         console = Console(file=StringIO(), force_terminal=True)
@@ -682,6 +705,29 @@ class TestDisplayCollectionSummary:
 
         output = strip_ansi(console.file.getvalue())
         assert "Work time: 20 days, 160 hours" in output
+
+    @pytest.mark.unit
+    def test_displays_pto_when_present(self):
+        """Test that PTO info is displayed when absence_days > 0."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            total_hours=160.0,
+            working_days=20,
+            absence_days=2,  # 2 days PTO
+            workday_validated=True,
+        )
+
+        _display_collection_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "Paid Time Off" in output
+        assert "2 days" in output
+        assert "16 hours" in output  # 2 * 8
 
     @pytest.mark.unit
     def test_displays_validation_warning(self):
