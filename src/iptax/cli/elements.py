@@ -191,7 +191,7 @@ def display_history_table(console: Console, entries: dict[str, HistoryEntry]) ->
 
         table.add_row(
             month,
-            str(entry.last_cutoff_date),
+            str(entry.last_change_date),
             entry.generated_at.strftime("%Y-%m-%d %H:%M:%S"),
             regenerated,
         )
@@ -201,7 +201,7 @@ def display_history_table(console: Console, entries: dict[str, HistoryEntry]) ->
     if entries:
         latest_month = max(entries.keys())
         latest_entry = entries[latest_month]
-        next_start = latest_entry.last_cutoff_date + timedelta(days=1)
+        next_start = latest_entry.last_change_date + timedelta(days=1)
         console.print(
             f"\nNext report will start from: [green]{next_start}[/green]",
         )
@@ -238,7 +238,8 @@ def _convert_entries_to_dict(entries: dict[str, HistoryEntry]) -> dict:
     data = {}
     for month, entry in entries.items():
         data[month] = {
-            "last_cutoff_date": str(entry.last_cutoff_date),
+            "first_change_date": str(entry.first_change_date),
+            "last_change_date": str(entry.last_change_date),
             "generated_at": entry.generated_at.isoformat(),
             "regenerated_at": (
                 entry.regenerated_at.isoformat() if entry.regenerated_at else None
@@ -449,7 +450,7 @@ def _display_history_stats(console: Console, stats: HistoryCacheStats) -> None:
     # Next report due
     if latest_month and stats.entries:
         latest_entry = stats.entries[latest_month]
-        next_start = latest_entry.last_cutoff_date + timedelta(days=1)
+        next_start = latest_entry.last_change_date + timedelta(days=1)
         # Estimate next month
         next_month = _get_next_month(latest_month)
         next_day = next_start + timedelta(days=30)

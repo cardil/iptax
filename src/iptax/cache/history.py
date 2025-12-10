@@ -1,6 +1,6 @@
 """History tracking for IP tax reports.
 
-This module manages the history of generated reports, tracking cutoff dates
+This module manages the history of generated reports, tracking date ranges
 to ensure no changes are duplicated or missed between reports.
 
 The history file is stored in JSON format at ~/.cache/iptax/history.json
@@ -31,8 +31,8 @@ class HistoryCorruptedError(HistoryError):
 class HistoryManager:
     """Manages report history.
 
-    The history file tracks when reports were generated and what cutoff
-    dates were used, ensuring no changes are duplicated or missed between
+    The history file tracks when reports were generated and what date ranges
+    were used, ensuring no changes are duplicated or missed between
     monthly reports.
 
     Examples:
@@ -42,7 +42,7 @@ class HistoryManager:
         entries = manager.get_all_entries()
 
         # Add entry after report completes
-        manager.add_entry("2024-10", date(2024, 10, 25))
+        manager.add_entry("2024-10", date(2024, 9, 26), date(2024, 10, 25))
         manager.save()
     """
 
@@ -91,9 +91,13 @@ class HistoryManager:
             for month, entry_data in data.items():
                 try:
                     # Handle date string conversion
-                    if isinstance(entry_data.get("last_cutoff_date"), str):
-                        entry_data["last_cutoff_date"] = date.fromisoformat(
-                            entry_data["last_cutoff_date"]
+                    if isinstance(entry_data.get("first_change_date"), str):
+                        entry_data["first_change_date"] = date.fromisoformat(
+                            entry_data["first_change_date"]
+                        )
+                    if isinstance(entry_data.get("last_change_date"), str):
+                        entry_data["last_change_date"] = date.fromisoformat(
+                            entry_data["last_change_date"]
                         )
                     if isinstance(entry_data.get("generated_at"), str):
                         entry_data["generated_at"] = datetime.fromisoformat(
@@ -142,7 +146,8 @@ class HistoryManager:
             data = {}
             for month, entry in self._history.items():
                 entry_dict = {
-                    "last_cutoff_date": entry.last_cutoff_date.isoformat(),
+                    "first_change_date": entry.first_change_date.isoformat(),
+                    "last_change_date": entry.last_change_date.isoformat(),
                     "generated_at": entry.generated_at.isoformat(),
                 }
                 if entry.regenerated_at:
@@ -187,12 +192,15 @@ class HistoryManager:
         self._ensure_loaded()
         return self._history.copy()
 
-    def add_entry(self, month: str, cutoff_date: date) -> None:
+    def add_entry(
+        self, month: str, first_change_date: date, last_change_date: date
+    ) -> None:
         """Add a history entry for a completed report.
 
         Args:
             month: Month in YYYY-MM format
-            cutoff_date: Last cutoff date for this report
+            first_change_date: Start date of the Did range
+            last_change_date: End date of the Did range (cutoff date)
 
         Raises:
             ValueError: If month format is invalid
@@ -213,13 +221,15 @@ class HistoryManager:
         if month_key in self._history:
             existing = self._history[month_key]
             self._history[month_key] = HistoryEntry(
-                last_cutoff_date=cutoff_date,
+                first_change_date=first_change_date,
+                last_change_date=last_change_date,
                 generated_at=existing.generated_at,
                 regenerated_at=now,
             )
         else:
             self._history[month_key] = HistoryEntry(
-                last_cutoff_date=cutoff_date,
+                first_change_date=first_change_date,
+                last_change_date=last_change_date,
                 generated_at=now,
             )
 
@@ -253,17 +263,20 @@ def get_last_report_date() -> date | None:
 
     # Get the most recent entry
     latest_month = max(entries.keys())
-    return entries[latest_month].last_cutoff_date
+    return entries[latest_month].last_change_date
 
 
-def save_report_date(report_date: date, month: str) -> None:
-    """Save a report date to history after report completes.
+def save_report_date(
+    first_change_date: date, last_change_date: date, month: str
+) -> None:
+    """Save report dates to history after report completes.
 
     Args:
-        report_date: The cutoff date for the report
+        first_change_date: The start date of the Did range
+        last_change_date: The cutoff date for the report
         month: The month being reported (YYYY-MM format)
     """
     manager = HistoryManager()
     manager.load()
-    manager.add_entry(month, report_date)
+    manager.add_entry(month, first_change_date, last_change_date)
     manager.save()

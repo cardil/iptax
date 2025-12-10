@@ -139,6 +139,13 @@ class TestCompileReport:
         with pytest.raises(ValueError, match="total_hours is missing"):
             compile_report(basic_inflight, basic_settings)
 
+    def test_fails_with_missing_working_days(self, basic_inflight, basic_settings):
+        """Test that compilation fails if working_days is missing."""
+        basic_inflight.working_days = None
+
+        with pytest.raises(ValueError, match="working_days is missing"):
+            compile_report(basic_inflight, basic_settings)
+
     def test_fails_with_no_changes(self, basic_inflight, basic_settings):
         """Test that compilation fails if no changes exist."""
         basic_inflight.changes = []

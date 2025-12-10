@@ -362,10 +362,6 @@ async def _fetch_workday_data(
         console.print("[green]✓[/green] All workdays have entries")
         report.workday_validated = True
 
-    console.print(
-        f"[green]✓[/green] Workday: {work_hours.working_days} days, "
-        f"{work_hours.total_hours} hours"
-    )
     return True
 
 
@@ -574,14 +570,40 @@ def _display_inflight_summary(console: Console, report: InFlightReport) -> None:
     )
     console.print(f"  [cyan]Changes Collected:[/cyan] {len(report.changes)}")
     if report.total_hours is not None:
-        console.print(
-            f"  [cyan]Workday Hours:[/cyan] {report.total_hours} "
-            f"({report.working_days} days)"
-        )
+        eff_hrs = int(report.effective_hours) if report.effective_hours else 0
+        eff_days = report.effective_days or 0
+        console.print(f"  [cyan]Work Time:[/cyan] {eff_days} days, {eff_hrs} hours")
+        # Show PTO separately if any
+        if report.absence_days and report.absence_days > 0:
+            pto_days = report.absence_days
+            pto_hrs = int(pto_days * 8)
+            console.print(
+                f"  [cyan]Paid Time Off:[/cyan] {pto_days} days, {pto_hrs} hours"
+            )
+            total_days = report.working_days or 0
+            total_hrs = int(report.total_hours)
+            console.print(
+                f"  [cyan]Total Recorded:[/cyan] {total_days} days, {total_hrs} hours"
+            )
         if report.workday_validated:
             console.print("  [green]✓ Workday Coverage:[/green] Complete")
         else:
-            console.print("  [yellow]⚠ Workday Coverage:[/yellow] INCOMPLETE")
+            # Calculate and show missing days
+            missing = validate_workday_coverage(
+                report.workday_entries, report.workday_start, report.workday_end
+            )
+            missing_count = len(missing)
+            console.print(
+                f"  [yellow]⚠ Workday Coverage:[/yellow] INCOMPLETE "
+                f"({missing_count} day{'s' if missing_count != 1 else ''} missing)"
+            )
+            # Show first few missing days
+            for day in missing[:MAX_MISSING_DAYS_TO_SHOW]:
+                console.print(f"    - {day.strftime('%Y-%m-%d (%A)')}")
+            if missing_count > MAX_MISSING_DAYS_TO_SHOW:
+                console.print(
+                    f"    ... and {missing_count - MAX_MISSING_DAYS_TO_SHOW} more"
+                )
     if report.judgments:
         console.print(f"  [cyan]AI Judgments:[/cyan] {len(report.judgments)}")
 
@@ -596,8 +618,20 @@ def _display_collection_summary(console: Console, report: InFlightReport) -> Non
     console.print("\n[bold]Data Collection:[/bold]")
     console.print(f"  • Did changes: {len(report.changes)}")
     if report.total_hours is not None:
-        console.print(f"  • Workday hours: {report.total_hours}")
-        console.print(f"  • Working days: {report.working_days}")
+        # Display hours as integer for cleaner output
+        effective_hrs = int(report.effective_hours) if report.effective_hours else 0
+        eff_days = report.effective_days or 0
+        console.print(f"  • Work time: {eff_days} days, {effective_hrs} hours")
+        # Show PTO separately if any
+        if report.absence_days and report.absence_days > 0:
+            pto_days = report.absence_days
+            pto_hrs = int(pto_days * 8)
+            console.print(f"  • 🌴 Paid Time Off: {pto_days} days, {pto_hrs} hours")
+            total_days = report.working_days or 0
+            total_hrs = int(report.total_hours)
+            console.print(
+                f"  • 📅 Total recorded: {total_days} days, {total_hrs} hours"
+            )
         if not report.workday_validated:
             console.print("  [yellow]⚠ Workday validation: INCOMPLETE[/yellow]")
 
@@ -982,9 +1016,10 @@ async def report_flow(
         return False
 
     # Save report to history so next report knows where to start
-    save_report_date(report.changes_until, month_key)
+    save_report_date(report.changes_since, report.changes_until, month_key)
     console.print(
-        f"[green]✓[/green] Report saved to history (cutoff: {report.changes_until})"
+        f"[green]✓[/green] Report saved to history "
+        f"({report.changes_since} to {report.changes_until})"
     )
 
     # Note: We keep in-flight cache so dist can be run again if needed

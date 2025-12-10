@@ -1,5 +1,6 @@
 """Tests for CLI flows module."""
 
+import logging
 from datetime import date
 from io import StringIO
 from pathlib import Path
@@ -37,8 +38,11 @@ from iptax.models import (
     Repository,
     WorkHours,
 )
+from iptax.utils.env import cache_dir_for_home
 
 from .conftest import strip_ansi
+
+logger = logging.getLogger(__name__)
 
 
 class TestGetPlaywrightCommand:
@@ -583,6 +587,29 @@ class TestDisplayInflightSummary:
         assert "Complete" in output
 
     @pytest.mark.unit
+    def test_displays_pto_when_present(self):
+        """Test that PTO hours are displayed when absence_days > 0."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            total_hours=160.0,
+            working_days=20,
+            absence_days=2,  # 2 days PTO
+            workday_validated=True,
+        )
+
+        _display_inflight_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "Paid Time Off" in output
+        assert "2 days" in output
+        assert "16 hours" in output  # 2 * 8
+
+    @pytest.mark.unit
     def test_displays_incomplete_workday(self):
         """Test that incomplete Workday validation is shown."""
         console = Console(file=StringIO(), force_terminal=True)
@@ -677,8 +704,30 @@ class TestDisplayCollectionSummary:
         _display_collection_summary(console, report)
 
         output = strip_ansi(console.file.getvalue())
-        assert "Workday hours: 160" in output
-        assert "Working days: 20" in output
+        assert "Work time: 20 days, 160 hours" in output
+
+    @pytest.mark.unit
+    def test_displays_pto_when_present(self):
+        """Test that PTO info is displayed when absence_days > 0."""
+        console = Console(file=StringIO(), force_terminal=True)
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            total_hours=160.0,
+            working_days=20,
+            absence_days=2,  # 2 days PTO
+            workday_validated=True,
+        )
+
+        _display_collection_summary(console, report)
+
+        output = strip_ansi(console.file.getvalue())
+        assert "Paid Time Off" in output
+        assert "2 days" in output
+        assert "16 hours" in output  # 2 * 8
 
     @pytest.mark.unit
     def test_displays_validation_warning(self):
@@ -812,10 +861,10 @@ class TestCollectFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_successful_collection(self, tmp_path):
+    async def test_successful_collection(self, isolated_home):
         """Test successful data collection flow."""
         console = Console(file=StringIO(), force_terminal=True)
-        cache_file = tmp_path / "test.json"
+        cache_file = cache_dir_for_home(isolated_home) / "test.json"
 
         mock_settings = MagicMock()
         mock_settings.workday.enabled = False  # Skip workday for simplicity
@@ -839,8 +888,9 @@ class TestCollectFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_existing_report_without_force_fails(self):
+    async def test_existing_report_without_force_fails(self, isolated_home):
         """Test that existing report without force returns False."""
+        logger.debug("Using isolated home: %s", isolated_home)
         console = Console(file=StringIO(), force_terminal=True)
 
         mock_settings = MagicMock()
@@ -870,10 +920,10 @@ class TestCollectFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_force_deletes_existing(self, tmp_path):
+    async def test_force_deletes_existing(self, isolated_home):
         """Test that force option deletes existing report."""
         console = Console(file=StringIO(), force_terminal=True)
-        cache_file = tmp_path / "test.json"
+        cache_file = cache_dir_for_home(isolated_home) / "test.json"
 
         mock_settings = MagicMock()
         mock_settings.workday.enabled = False
@@ -897,10 +947,10 @@ class TestCollectFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_skip_did_option(self, tmp_path):
+    async def test_skip_did_option(self, isolated_home):
         """Test that skip_did option skips Did collection."""
         console = Console(file=StringIO(), force_terminal=True)
-        cache_file = tmp_path / "test.json"
+        cache_file = cache_dir_for_home(isolated_home) / "test.json"
 
         mock_settings = MagicMock()
         mock_settings.workday.enabled = False
@@ -1025,8 +1075,9 @@ class TestReportFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_successful_report_generation(self):
+    async def test_successful_report_generation(self, isolated_home):
         """Test successful report generation flow."""
+        logger.debug("Using isolated home: %s", isolated_home)
         console = Console(file=StringIO(), force_terminal=True)
 
         mock_settings = MagicMock()
@@ -1091,10 +1142,10 @@ class TestReportFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_runs_collect_when_no_inflight(self, tmp_path):
+    async def test_runs_collect_when_no_inflight(self, isolated_home):
         """Test that collect is run when no in-flight exists."""
         console = Console(file=StringIO(), force_terminal=True)
-        cache_file = tmp_path / "test.json"
+        cache_file = cache_dir_for_home(isolated_home) / "test.json"
 
         mock_settings = MagicMock()
         mock_settings.workday.enabled = False
@@ -1138,8 +1189,9 @@ class TestReportFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_skips_review_tui_when_already_reviewed(self):
+    async def test_skips_review_tui_when_already_reviewed(self, isolated_home):
         """Test that report_flow skips TUI when all judgments already reviewed."""
+        logger.debug("Using isolated home: %s", isolated_home)
         console = Console(file=StringIO(), force_terminal=True)
 
         mock_settings = MagicMock()

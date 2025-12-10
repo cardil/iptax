@@ -77,7 +77,8 @@ class TestHistoryManager:
         history_path = tmp_path / "history.json"
         history_data = {
             "2024-10": {
-                "last_cutoff_date": "2024-10-25",
+                "first_change_date": "2024-09-26",
+                "last_change_date": "2024-10-25",
                 "generated_at": "2024-10-25T10:00:00",
             }
         }
@@ -111,7 +112,8 @@ class TestHistoryLoad:
         history_file = tmp_path / "history.json"
         data = {
             "2024-10": {
-                "last_cutoff_date": "2024-10-25",
+                "first_change_date": "2024-09-26",
+                "last_change_date": "2024-10-25",
                 "generated_at": "2024-10-26T10:00:00",
             }
         }
@@ -121,7 +123,8 @@ class TestHistoryLoad:
         manager.load()
 
         assert "2024-10" in manager._history
-        assert manager._history["2024-10"].last_cutoff_date == date(2024, 10, 25)
+        assert manager._history["2024-10"].first_change_date == date(2024, 9, 26)
+        assert manager._history["2024-10"].last_change_date == date(2024, 10, 25)
 
     @pytest.mark.unit
     def test_load_with_regenerated_at(self, tmp_path: Path) -> None:
@@ -129,7 +132,8 @@ class TestHistoryLoad:
         history_file = tmp_path / "history.json"
         data = {
             "2024-10": {
-                "last_cutoff_date": "2024-10-25",
+                "first_change_date": "2024-09-26",
+                "last_change_date": "2024-10-25",
                 "generated_at": "2024-10-26T10:00:00",
                 "regenerated_at": "2024-10-28T14:00:00",
             }
@@ -176,7 +180,8 @@ class TestHistorySave:
         manager._loaded = True
         manager._history = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }
@@ -194,7 +199,8 @@ class TestHistorySave:
         manager._loaded = True
         manager._history = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }
@@ -206,7 +212,8 @@ class TestHistorySave:
         manager2.load()
 
         assert "2024-10" in manager2._history
-        assert manager2._history["2024-10"].last_cutoff_date == date(2024, 10, 25)
+        assert manager2._history["2024-10"].first_change_date == date(2024, 9, 26)
+        assert manager2._history["2024-10"].last_change_date == date(2024, 10, 25)
 
     @pytest.mark.unit
     def test_save_sets_permissions(self, tmp_path: Path) -> None:
@@ -244,14 +251,16 @@ class TestHistoryGetAllEntries:
         manager._loaded = True
         manager._history = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }
 
         entries = manager.get_all_entries()
         entries["2024-11"] = HistoryEntry(
-            last_cutoff_date=date(2024, 11, 25),
+            first_change_date=date(2024, 10, 26),
+            last_change_date=date(2024, 11, 25),
             generated_at=datetime(2024, 11, 26, 10, 0, 0, tzinfo=UTC),
         )
 
@@ -269,10 +278,11 @@ class TestHistoryAddEntry:
         manager._loaded = True
         manager._history = {}
 
-        manager.add_entry("2024-10", date(2024, 10, 25))
+        manager.add_entry("2024-10", date(2024, 9, 26), date(2024, 10, 25))
 
         assert "2024-10" in manager._history
-        assert manager._history["2024-10"].last_cutoff_date == date(2024, 10, 25)
+        assert manager._history["2024-10"].first_change_date == date(2024, 9, 26)
+        assert manager._history["2024-10"].last_change_date == date(2024, 10, 25)
 
     @pytest.mark.unit
     def test_add_entry_overwrites_existing(self, tmp_path: Path) -> None:
@@ -281,14 +291,16 @@ class TestHistoryAddEntry:
         manager._loaded = True
         manager._history = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 20),
+                first_change_date=date(2024, 9, 21),
+                last_change_date=date(2024, 10, 20),
                 generated_at=datetime(2024, 10, 21, 10, 0, 0, tzinfo=UTC),
             )
         }
 
-        manager.add_entry("2024-10", date(2024, 10, 25))
+        manager.add_entry("2024-10", date(2024, 9, 26), date(2024, 10, 25))
 
-        assert manager._history["2024-10"].last_cutoff_date == date(2024, 10, 25)
+        assert manager._history["2024-10"].first_change_date == date(2024, 9, 26)
+        assert manager._history["2024-10"].last_change_date == date(2024, 10, 25)
 
     @pytest.mark.unit
     def test_add_entry_invalid_month(self, tmp_path: Path) -> None:
@@ -298,7 +310,7 @@ class TestHistoryAddEntry:
         manager._history = {}
 
         with pytest.raises(ValueError, match="Invalid month format"):
-            manager.add_entry("invalid", date(2024, 10, 25))
+            manager.add_entry("invalid", date(2024, 9, 26), date(2024, 10, 25))
 
     @pytest.mark.unit
     def test_add_entry_auto_loads(self, tmp_path: Path) -> None:
@@ -307,7 +319,7 @@ class TestHistoryAddEntry:
         manager = HistoryManager(history_path=history_file)
         # Not loaded yet
 
-        manager.add_entry("2024-10", date(2024, 10, 25))
+        manager.add_entry("2024-10", date(2024, 9, 26), date(2024, 10, 25))
 
         assert manager._loaded is True
 
@@ -351,11 +363,13 @@ class TestConvenienceFunctions:
 
         data = {
             "2024-09": {
-                "last_cutoff_date": "2024-09-25",
+                "first_change_date": "2024-08-26",
+                "last_change_date": "2024-09-25",
                 "generated_at": "2024-09-26T10:00:00",
             },
             "2024-10": {
-                "last_cutoff_date": "2024-10-25",
+                "first_change_date": "2024-09-26",
+                "last_change_date": "2024-10-25",
                 "generated_at": "2024-10-26T10:00:00",
             },
         }
@@ -371,7 +385,7 @@ class TestConvenienceFunctions:
     @pytest.mark.unit
     def test_save_report_date(self, isolated_home: Path) -> None:
         """Test save_report_date creates entry."""
-        save_report_date(date(2024, 11, 25), "2024-11")
+        save_report_date(date(2024, 10, 26), date(2024, 11, 25), "2024-11")
 
         # Verify it was saved (uses ~/.cache/iptax/history.json)
         history_file = isolated_home / ".cache" / "iptax" / "history.json"
@@ -379,7 +393,8 @@ class TestConvenienceFunctions:
 
         data = json.loads(history_file.read_text(encoding="utf-8"))
         assert "2024-11" in data
-        assert data["2024-11"]["last_cutoff_date"] == "2024-11-25"
+        assert data["2024-11"]["first_change_date"] == "2024-10-26"
+        assert data["2024-11"]["last_change_date"] == "2024-11-25"
 
 
 class TestEnsureLoaded:
@@ -391,7 +406,8 @@ class TestEnsureLoaded:
         history_file = tmp_path / "history.json"
         data = {
             "2024-10": {
-                "last_cutoff_date": "2024-10-25",
+                "first_change_date": "2024-09-26",
+                "last_change_date": "2024-10-25",
                 "generated_at": "2024-10-26T10:00:00",
             }
         }

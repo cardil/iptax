@@ -41,6 +41,9 @@ SRC_FILES := $(shell find src -type f -name '*.py' 2>/dev/null)
 TEST_FILES := $(shell find tests scripts -type f -name '*.py' 2>/dev/null) Makefile
 MD_FILES := $(shell find docs -type f -name '*.md' 2>/dev/null) README.md
 
+# Add -v flag only on interactive terminals
+PYTEST_VERBOSE := $(shell [ -t 0 ] && echo "-v" || true)
+
 ##@ Installation
 
 .PHONY: install
@@ -95,7 +98,7 @@ unit: $(GUARDS)/unit.passed  ## Run unit tests
 
 $(GUARDS)/unit.passed: $(VENV)/init.done $(SRC_FILES) $(TEST_FILES)
 	@mkdir -p $(GUARDS)
-	$(VENV_BIN)/pytest tests/unit/ -v --durations=10 --unused-fixtures
+	$(VENV_BIN)/pytest tests/unit/ $(PYTEST_VERBOSE) --durations=5 --unused-fixtures
 	@touch $@
 
 .PHONY: e2e
@@ -105,7 +108,7 @@ e2e: $(GUARDS)/e2e.passed  ## Run end-to-end tests
 $(GUARDS)/e2e.passed: $(VENV)/init.done $(GUARDS)/unit.passed \
 	$(SRC_FILES) $(TEST_FILES)
 	@mkdir -p $(GUARDS)
-	$(VENV_BIN)/pytest tests/e2e/ -v --no-cov
+	$(VENV_BIN)/pytest tests/e2e/ $(PYTEST_VERBOSE) --no-cov
 	@touch $@
 
 .PHONY: test-watch

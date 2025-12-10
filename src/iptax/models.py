@@ -22,6 +22,9 @@ from pydantic import (
 )
 from pydantic.fields import FieldInfo
 
+# Work schedule constants (may become configurable in the future)
+HOURS_PER_DAY = 8.0
+
 
 class Fields:
     """Proxy class for accessing Pydantic model field info via attributes.
@@ -453,14 +456,14 @@ class WorkHours(BaseModel):
     )
 
     @property
-    def effective_days(self) -> int:
-        """Days actually worked."""
-        return self.working_days - self.absence_days
-
-    @property
     def effective_hours(self) -> float:
         """Hours actually worked (assuming 8h/day for absences)."""
-        return self.total_hours - (self.absence_days * 8.0)
+        return self.total_hours - (self.absence_days * HOURS_PER_DAY)
+
+    @property
+    def effective_days(self) -> int:
+        """Days actually worked (derived from hours for consistency)."""
+        return int(self.effective_hours / HOURS_PER_DAY)
 
 
 class DidConfig(BaseModel):
@@ -612,11 +615,15 @@ class Settings(BaseModel):
 class HistoryEntry(BaseModel):
     """History entry for a single monthly report.
 
-    Tracks when a report was generated and what cutoff date was used.
+    Tracks when a report was generated and what date range was used.
     This prevents duplicate or missing changes between reports.
     """
 
-    last_cutoff_date: date = Field(
+    first_change_date: date = Field(
+        ...,
+        description="The start date of the Did range used for this report",
+    )
+    last_change_date: date = Field(
         ...,
         description=(
             "The end date used for this report "
@@ -894,6 +901,33 @@ class InFlightReport(BaseModel):
         return bool(self.judgments) and all(
             j.user_decision is not None for j in self.judgments
         )
+
+    @property
+    def effective_hours(self) -> float | None:
+        """Actual work hours (excluding PTO/absences).
+
+        Used for IP tax calculation - creative work percentage should
+        only apply to actual work hours, not time off.
+
+        Returns:
+            Actual work hours or None if total_hours not set.
+        """
+        if self.total_hours is None:
+            return None
+        absence_hours = (self.absence_days or 0) * HOURS_PER_DAY
+        return self.total_hours - absence_hours
+
+    @property
+    def effective_days(self) -> int | None:
+        """Actual work days (derived from effective hours).
+
+        Returns:
+            Actual work days or None if hours not set.
+        """
+        hours = self.effective_hours
+        if hours is None:
+            return None
+        return int(hours / HOURS_PER_DAY)
 
 
 class ReportData(BaseModel):

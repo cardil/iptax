@@ -218,7 +218,8 @@ class TestDisplayHistoryTable:
         console = Console(file=StringIO(), force_terminal=True)
         entries = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }
@@ -235,7 +236,8 @@ class TestDisplayHistoryTable:
         console = Console(file=StringIO(), force_terminal=True)
         entries = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }
@@ -262,14 +264,15 @@ class TestFormatHistoryJson:
         """Test JSON formatting of single entry."""
         entries = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }
         result = elements.format_history_json(entries)
         assert "2024-10" in result
         assert "2024-10-25" in result
-        assert '"last_cutoff_date"' in result
+        assert '"last_change_date"' in result
 
 
 class TestFormatHistoryYaml:
@@ -287,14 +290,15 @@ class TestFormatHistoryYaml:
         """Test YAML formatting of single entry."""
         entries = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }
         result = elements.format_history_yaml(entries)
         assert "2024-10" in result
         assert "2024-10-25" in result
-        assert "last_cutoff_date" in result
+        assert "last_change_date" in result
 
 
 class TestDisplayInflightTable:
@@ -570,11 +574,13 @@ class TestDisplayCacheStats:
         console = Console(file=StringIO(), force_terminal=True)
         entries = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             ),
             "2024-11": HistoryEntry(
-                last_cutoff_date=date(2024, 11, 25),
+                first_change_date=date(2024, 10, 26),
+                last_change_date=date(2024, 11, 25),
                 generated_at=datetime(2024, 11, 26, 10, 0, 0, tzinfo=UTC),
             ),
         }
@@ -703,7 +709,8 @@ class TestHelperFunctions:
         """Test finding continuous periods with single entry."""
         entries = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             )
         }
@@ -716,15 +723,18 @@ class TestHelperFunctions:
         """Test finding continuous periods with consecutive months."""
         entries = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             ),
             "2024-11": HistoryEntry(
-                last_cutoff_date=date(2024, 11, 25),
+                first_change_date=date(2024, 10, 26),
+                last_change_date=date(2024, 11, 25),
                 generated_at=datetime(2024, 11, 26, 10, 0, 0, tzinfo=UTC),
             ),
             "2024-12": HistoryEntry(
-                last_cutoff_date=date(2024, 12, 25),
+                first_change_date=date(2024, 11, 26),
+                last_change_date=date(2024, 12, 25),
                 generated_at=datetime(2024, 12, 26, 10, 0, 0, tzinfo=UTC),
             ),
         }
@@ -737,11 +747,13 @@ class TestHelperFunctions:
         """Test finding continuous periods with gap."""
         entries = {
             "2024-10": HistoryEntry(
-                last_cutoff_date=date(2024, 10, 25),
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
                 generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
             ),
             "2024-12": HistoryEntry(
-                last_cutoff_date=date(2024, 12, 25),
+                first_change_date=date(2024, 11, 26),
+                last_change_date=date(2024, 12, 25),
                 generated_at=datetime(2024, 12, 26, 10, 0, 0, tzinfo=UTC),
             ),
         }
