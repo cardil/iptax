@@ -61,6 +61,7 @@ class JudgmentCacheManager:
 
         with self.cache_path.open("w") as f:
             json.dump(self.cache.model_dump(mode="json"), f, indent=2)
+        self.cache_path.chmod(0o600)
         logger.debug(f"Saved {len(self.cache.judgments)} judgments to cache")
 
     def add_judgment(self, judgment: Judgment) -> None:
