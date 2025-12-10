@@ -244,9 +244,10 @@ The tool generates three files in `~/Documents/iptax/YYYY/`:
 Configuration is stored in `~/.config/iptax/settings.yaml`:
 
 ```yaml
-# User information
-author:
-  full_name: "Jan Kowalski"
+# Employee information
+employee:
+  name: "Jan Kowalski"
+  supervisor: "Maria Nowak"
 
 # Product being reported
 product:
@@ -366,6 +367,10 @@ For SSO+Kerberos issues:
 1. Ensure you have a valid Kerberos ticket: `klist`
 1. Try with visible browser: `iptax workday --foreground`
 1. Use password fallback: `iptax workday --no-kerberos`
+
+**Debug Snapshots**: When authentication fails, debug snapshots (HTML pages and
+screenshots) are saved to `~/.cache/iptax/` for troubleshooting. These files may contain
+sensitive information - review and clean them up after resolving issues.
 
 ### did Integration
 
