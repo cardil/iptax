@@ -25,10 +25,11 @@ If no history: Start from approx 25th of the previous month
 End date: Today (in rolling mode) or end of month (in finalization mode)
 """
 
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from iptax.cache.history import HistoryManager
-from iptax.models import ReportDateRanges
+from iptax.models import HistoryEntry, ReportDateRanges
 from iptax.utils.env import get_month_end_date, get_today
 
 PAYMENT_DEADLINE_DAY = 10
@@ -197,27 +198,53 @@ def _get_next_month(year: int, month: int) -> tuple[int, int]:
     return year, month + 1
 
 
+@dataclass
+class _DidRangeContext:
+    """Context for Did date range calculation."""
+
+    prev_entry: HistoryEntry | None
+    target_entry: HistoryEntry | None
+    next_entry: HistoryEntry | None
+    has_relevant_history: bool
+    is_past: bool
+    prev_year: int
+    prev_month: int
+    target_year: int
+    target_month: int
+    target_month_end: date
+    today: date
+
+
+def _calculate_did_start_date(ctx: _DidRangeContext) -> date:
+    """Calculate Did start date based on history and context."""
+    if ctx.prev_entry:
+        return ctx.prev_entry.last_change_date + timedelta(days=1)
+    if ctx.has_relevant_history:
+        return date(ctx.prev_year, ctx.prev_month, DEFAULT_DID_START_DAY)
+    if ctx.is_past:
+        return date(ctx.target_year, ctx.target_month, 1)
+    return date(ctx.prev_year, ctx.prev_month, DEFAULT_DID_START_DAY)
+
+
+def _calculate_did_end_date(ctx: _DidRangeContext) -> date:
+    """Calculate Did end date based on history and context."""
+    if ctx.target_entry:
+        return ctx.target_entry.last_change_date
+    if ctx.next_entry:
+        return ctx.next_entry.first_change_date - timedelta(days=1)
+    if ctx.is_past:
+        if ctx.has_relevant_history:
+            return date(ctx.target_year, ctx.target_month, DEFAULT_DID_START_DAY)
+        return ctx.target_month_end
+    cutoff_25th = date(ctx.target_year, ctx.target_month, DEFAULT_DID_START_DAY)
+    return min(ctx.today, cutoff_25th)
+
+
 def get_did_range(month: str) -> tuple[date, date]:
     """Get Did date range for a specific month.
 
     The Did range is determined by history to avoid missing or duplicating changes.
-
-    Start date logic:
-    1. If prev month has history: prev.last_change_date + 1
-    2. Else if any history exists: 25th of prev month
-    3. Else if past month (no history): 1st of target month
-    4. Else (current month, no history): 25th of prev month
-
-    End date logic:
-    1. If target month has history: target.last_change_date
-    2. Else if next month has history: next.first_change_date - 1
-    3. Else if any history exists: 25th of target month
-    4. Else if past month (no history): end of target month
-    5. Else (current month, no history): min(today, 25th)
-
-    Error conditions:
-    - Gap between target.last_change_date and next.first_change_date
-    - Range less than MIN_RANGE_DAYS days
+    See _calculate_did_start_date and _calculate_did_end_date for detailed logic.
 
     Args:
         month: Month in YYYY-MM format (target month for report)
@@ -226,7 +253,7 @@ def get_did_range(month: str) -> tuple[date, date]:
         Tuple of (start_date, end_date)
 
     Raises:
-        DateRangeError: If gap detected in history or range < 20 days
+        DateRangeError: If gap detected in history or range < MIN_RANGE_DAYS days
     """
     today = get_today()
 
@@ -269,37 +296,25 @@ def get_did_range(month: str) -> tuple[date, date]:
     target_month_end = get_month_end_date(target_year, target_month)
     is_past = target_month_end < today
 
-    # Calculate start date
-    if prev_entry:
-        start_date = prev_entry.last_change_date + timedelta(days=1)
-    elif has_relevant_history:
-        # Relevant history exists but not for prev month - use 25th of prev month
-        start_date = date(prev_year, prev_month, DEFAULT_DID_START_DAY)
-    elif is_past:
-        # No relevant history, past month - use 1st of target month
-        start_date = date(target_year, target_month, 1)
-    else:
-        # No relevant history, current month - use 25th of prev month
-        start_date = date(prev_year, prev_month, DEFAULT_DID_START_DAY)
-
-    # Calculate end date
-    if target_entry:
-        end_date = target_entry.last_change_date
-    elif next_entry:
-        end_date = next_entry.first_change_date - timedelta(days=1)
-    elif has_relevant_history:
-        # Relevant history exists but not for target/next - use 25th
-        end_date = date(target_year, target_month, DEFAULT_DID_START_DAY)
-    elif is_past:
-        # No relevant history, past month - use month end
-        end_date = target_month_end
-    else:
-        # No relevant history, current month - use min(today, 25th)
-        cutoff_25th = date(target_year, target_month, DEFAULT_DID_START_DAY)
-        end_date = min(today, cutoff_25th)
+    # Calculate dates using context
+    ctx = _DidRangeContext(
+        prev_entry=prev_entry,
+        target_entry=target_entry,
+        next_entry=next_entry,
+        has_relevant_history=has_relevant_history,
+        is_past=is_past,
+        prev_year=prev_year,
+        prev_month=prev_month,
+        target_year=target_year,
+        target_month=target_month,
+        target_month_end=target_month_end,
+        today=today,
+    )
+    start_date = _calculate_did_start_date(ctx)
+    end_date = _calculate_did_end_date(ctx)
 
     # Validate range
-    range_days = (end_date - start_date).days + 1  # inclusive
+    range_days = (end_date - start_date).days + 1
     if range_days < MIN_RANGE_DAYS:
         raise DateRangeError(
             f"Date range too short ({range_days} days). "

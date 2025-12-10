@@ -310,6 +310,16 @@ DID_RANGE_CASES = [
         exp_end="Nov 25",
     ),
     DidRangeCase(
+        name="5.5: Current, has prev, before 25th",
+        today="Oct 23, 2024",
+        target="Oct 2024",
+        prev_last="Sep 25",
+        target_last=None,
+        next_first=None,
+        exp_start="Sep 26",
+        exp_end="Oct 23",  # Should be today, not 25th!
+    ),
+    DidRangeCase(
         name="6: Past, has prev",
         today="Dec 05, 2024",
         target="Nov 2024",

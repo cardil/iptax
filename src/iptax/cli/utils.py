@@ -5,7 +5,7 @@ For date range timing logic, see iptax.timing module.
 
 from datetime import date, datetime
 
-from iptax.utils.env import get_month_end_date
+from iptax.utils.env import get_month_end_date, get_today
 
 
 def parse_month_key(month: str | None) -> str:
@@ -21,7 +21,7 @@ def parse_month_key(month: str | None) -> str:
         ValueError: If month format is invalid
     """
     if month is None:
-        return datetime.now().strftime("%Y-%m")
+        return get_today().strftime("%Y-%m")
 
     parsed = datetime.strptime(month, "%Y-%m")
     return parsed.strftime("%Y-%m")
