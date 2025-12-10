@@ -202,7 +202,7 @@ class ReviewApp(App):
     }
 
     .change-row {
-        height: 1;
+        height: 2;
     }
 
     .change-row:focus {
@@ -301,7 +301,12 @@ class ReviewApp(App):
 
             # Add edited marker on right side, dimmed
             edited_marker = " [dim]*[/]" if judgment.was_corrected else ""
-            row_content = f"  [{color}]{icon}[/] {title}{edited_marker}"
+            # Line 1: Icon + Title + edited marker
+            # Line 2: Change ID (indented, dimmed)
+            row_content = (
+                f"  [{color}]{icon}[/] {title}{edited_marker}\n"
+                f"    [dim]{judgment.change_id}[/]"
+            )
 
             # Use CSS class for selection styling
             classes = (
@@ -340,9 +345,9 @@ class ReviewApp(App):
             scroll_y = changes_list.scroll_y
             viewport_height = changes_list.size.height
 
-            # Row position (each row is 1 unit high)
-            row_top = index
-            row_bottom = index + 1
+            # Row position (each row is 2 units high)
+            row_top = index * 2
+            row_bottom = index * 2 + 2
             viewport_bottom = scroll_y + viewport_height
 
             # Only scroll if row is outside visible area
