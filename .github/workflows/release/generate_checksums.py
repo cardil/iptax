@@ -25,7 +25,7 @@ def main() -> None:
         sys.exit(f"Error: Distribution directory not found: {DIST_DIR}")
 
     # Find all wheel and sdist files
-    dist_files = sorted(DIST_DIR.glob("*.whl")) + sorted(DIST_DIR.glob("*.tar.gz"))
+    dist_files = sorted(list(DIST_DIR.glob("*.whl")) + list(DIST_DIR.glob("*.tar.gz")))
 
     if not dist_files:
         sys.exit("Error: No distribution files found in dist/")
