@@ -45,7 +45,7 @@ class DateRangeError(Exception):
 
     This includes:
     - Gap detected between target month end and next month start in history
-    - Date range too short (less than 20 days)
+    - Date range too short (less than MIN_RANGE_DAYS days)
     """
 
     pass
@@ -217,7 +217,7 @@ def get_did_range(month: str) -> tuple[date, date]:
 
     Error conditions:
     - Gap between target.last_change_date and next.first_change_date
-    - Range less than 20 days
+    - Range less than MIN_RANGE_DAYS days
 
     Args:
         month: Month in YYYY-MM format (target month for report)
