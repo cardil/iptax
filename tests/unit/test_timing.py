@@ -25,11 +25,11 @@ def _parse_date(s: str, default_year: int = 2024) -> date:
             return dt.strptime(s, fmt).date()
         except ValueError:
             continue
-    # Try without year - use default_year
+    # Try without year - append default_year to string to avoid deprecation warning
     for fmt in ("%b %d", "%B %d"):
         try:
-            parsed = dt.strptime(s, fmt)
-            return date(default_year, parsed.month, parsed.day)
+            parsed = dt.strptime(f"{s}, {default_year}", f"{fmt}, %Y")
+            return parsed.date()
         except ValueError:
             continue
     raise ValueError(f"Cannot parse date: {s}")
@@ -135,6 +135,13 @@ class TestResolveDateRanges:
 
 class TestResolveMonthSpec:
     """Tests for resolve_month_spec function."""
+
+    @pytest.mark.unit
+    def test_none_uses_auto_detect(self, monkeypatch):
+        """Test None month spec uses auto_detect_month."""
+        monkeypatch.setenv("IPTAX_FAKE_DATE", "2024-11-15")
+        result = timing.resolve_month_spec(None)
+        assert result == "2024-11"  # Day 15 returns current month
 
     @pytest.mark.unit
     def test_explicit_month(self):
@@ -433,6 +440,16 @@ DID_RANGE_CASES = [
         target_last=None,
         next_first=None,
         error_match="at least 15 days",
+    ),
+    DidRangeCase(
+        name="19: December target with next",
+        today="Jan 10, 2025",
+        target="Dec 2024",
+        prev_last="Nov 20",
+        target_last=None,
+        next_first="Dec 23",  # This is Jan 2025 history key
+        exp_start="Nov 21",
+        exp_end="Dec 22",
     ),
 ]
 
