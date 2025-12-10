@@ -237,6 +237,7 @@ async def review(
     console: Console,
     judgments: list[Judgment],
     changes: list[Change],
+    date_range: tuple[date, date] | None = None,
 ) -> ReviewResult:
     """Run interactive review of AI judgments with summary.
 
@@ -246,6 +247,7 @@ async def review(
         console: Rich console for output
         judgments: List of AI judgments to review
         changes: List of changes for title lookup
+        date_range: Optional tuple of (start_date, end_date) to display in header
 
     Returns:
         ReviewResult with potentially modified judgments
@@ -263,7 +265,7 @@ async def review(
     console.print(f"\n[bold]AI analysis:[/] {summary}")
 
     # Run TUI
-    result = await run_review_tui(judgments, changes)
+    result = await run_review_tui(judgments, changes, date_range)
 
     # Mark all judgments as reviewed by setting user_decision if not set
     if result.accepted:
@@ -801,7 +803,8 @@ async def _run_review_process(
         console.print("[green]✓[/green] AI filtering complete")
 
     # Run review TUI
-    result = await review(console, report.judgments, report.changes)
+    date_range = (report.changes_since, report.changes_until)
+    result = await review(console, report.judgments, report.changes, date_range)
 
     # Always save judgments (even partial reviews when user quits)
     report.judgments = result.judgments
@@ -900,7 +903,8 @@ async def _process_ai_and_review(
 
     # Review if needed and not skipped
     if not flow_options.skip_review and report.judgments:
-        result = await review(console, report.judgments, report.changes)
+        date_range = (report.changes_since, report.changes_until)
+        result = await review(console, report.judgments, report.changes, date_range)
 
         # Always save judgments (even partial reviews)
         report.judgments = result.judgments

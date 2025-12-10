@@ -8,7 +8,7 @@ import io
 import logging
 import re
 from contextlib import redirect_stderr, redirect_stdout
-from datetime import date
+from datetime import date, datetime
 from typing import Literal, cast
 from urllib.parse import urlparse
 
@@ -481,6 +481,12 @@ def _convert_github_pr(stat: Issue) -> Change:
     # Get URL from data dict
     if not hasattr(stat, "data") or not isinstance(stat.data, dict):
         raise InvalidStatDataError(f"Missing data dict for {owner}/{project}#{number}")
+
+    # Debug: log available keys in data dict
+    logger.debug(
+        f"GitHub PR {owner}/{project}#{number} data keys: {list(stat.data.keys())}"
+    )
+
     url = stat.data.get("html_url")
     if not url:
         raise InvalidStatDataError(
@@ -496,6 +502,29 @@ def _convert_github_pr(stat: Issue) -> Change:
     # Build repository path
     repo_path = f"{owner}/{project}"
 
+    # Extract merged_at timestamp if available
+    # GitHub Issue API embeds PR data in 'pull_request' object
+    merged_at = None
+    pull_request_obj = stat.data.get("pull_request")
+    if pull_request_obj and isinstance(pull_request_obj, dict):
+        logger.debug(
+            f"GitHub PR {repo_path}#{number} pull_request keys: "
+            f"{list(pull_request_obj.keys())}"
+        )
+        merged_at_str = pull_request_obj.get("merged_at")
+        logger.debug(f"GitHub PR {repo_path}#{number} merged_at value: {merged_at_str}")
+        if merged_at_str:
+            try:
+                # GitHub provides ISO format timestamp
+                merged_at = datetime.fromisoformat(merged_at_str.replace("Z", "+00:00"))
+                logger.debug(
+                    f"GitHub PR {repo_path}#{number} parsed merged_at: {merged_at}"
+                )
+            except (ValueError, AttributeError) as e:
+                logger.debug(f"Failed to parse merged_at for {repo_path}#{number}: {e}")
+    else:
+        logger.debug(f"GitHub PR {repo_path}#{number} has no pull_request object")
+
     # Create Repository object
     repository = Repository(
         host=host,
@@ -507,7 +536,7 @@ def _convert_github_pr(stat: Issue) -> Change:
         title=title,
         repository=repository,
         number=number,
-        merged_at=None,
+        merged_at=merged_at,
     )
 
 
@@ -546,6 +575,10 @@ def _convert_gitlab_mr(stat: MergedRequest) -> Change:
         raise InvalidStatDataError(
             f"Expected data dict, got {type(stat_data).__name__}"
         )
+
+    # Debug: log available keys in data dict
+    logger.debug(f"GitLab MR {repo_path}!{number} data keys: {list(stat_data.keys())}")
+
     if "title" not in stat_data:
         raise InvalidStatDataError(f"Missing title for {repo_path}!{number}")
     title = stat_data["title"]
@@ -565,6 +598,20 @@ def _convert_gitlab_mr(stat: MergedRequest) -> Change:
     # Clean emoji from title
     title = _clean_emoji(title)
 
+    # Extract merged_at timestamp if available
+    merged_at = None
+    merged_at_str = stat_data.get("merged_at")
+    logger.debug(f"GitLab MR {repo_path}!{number} merged_at value: {merged_at_str}")
+    if merged_at_str:
+        try:
+            # GitLab provides ISO format timestamp
+            merged_at = datetime.fromisoformat(merged_at_str.replace("Z", "+00:00"))
+            logger.debug(
+                f"GitLab MR {repo_path}!{number} parsed merged_at: {merged_at}"
+            )
+        except (ValueError, AttributeError) as e:
+            logger.debug(f"Failed to parse merged_at for {repo_path}!{number}: {e}")
+
     # Create Repository object
     repository = Repository(
         host=host,
@@ -576,7 +623,7 @@ def _convert_gitlab_mr(stat: MergedRequest) -> Change:
         title=title,
         repository=repository,
         number=number,
-        merged_at=None,
+        merged_at=merged_at,
     )
 
 
