@@ -205,6 +205,97 @@ class TestGenerateMarkdown:
         # Should have blank line between sections
         assert "## Changes\n\n" in md or "\n\n## Projects" in md
 
+    def test_workday_coverage_warnings_in_summary(self):
+        """Test workday coverage warnings appear when days are missing."""
+        from iptax.models import WorkdayCalendarEntry
+
+        # Create workday entries for Nov 1-3 only (missing Nov 4-5)
+        workday_entries = [
+            WorkdayCalendarEntry(
+                entry_date=date(2024, 11, 1),
+                title="Work",
+                entry_type="Time Tracking",
+                hours=8.0,
+            ),
+            WorkdayCalendarEntry(
+                entry_date=date(2024, 11, 2),
+                title="Work",
+                entry_type="Time Tracking",
+                hours=8.0,
+            ),
+            WorkdayCalendarEntry(
+                entry_date=date(2024, 11, 3),
+                title="Work",
+                entry_type="Time Tracking",
+                hours=8.0,
+            ),
+        ]
+
+        report = ReportData(
+            month="2024-11",
+            start_date=date(2024, 11, 1),
+            end_date=date(2024, 11, 5),  # Coverage through Nov 5
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
+            changes=[],
+            repositories=[],
+            total_hours=160,
+            creative_hours=128,
+            creative_percentage=80,
+            workday_entries=workday_entries,
+            employee_name="John Doe",
+            supervisor_name="Jane Smith",
+            product_name="Test Product",
+        )
+
+        md = generate_markdown(report)
+
+        # Check for coverage warning
+        assert "⚠ Work Time Coverage" in md
+        assert "INCOMPLETE" in md
+        assert "2 days missing" in md
+        # Check that missing days are listed
+        assert "2024-11-04" in md
+        assert "2024-11-05" in md
+
+    def test_workday_coverage_complete_no_warning(self):
+        """Test that no warning appears when workday coverage is complete."""
+        from iptax.models import WorkdayCalendarEntry
+
+        # Create complete workday entries for Nov 1-5
+        workday_entries = [
+            WorkdayCalendarEntry(
+                entry_date=date(2024, 11, day),
+                title="Work",
+                entry_type="Time Tracking",
+                hours=8.0,
+            )
+            for day in range(1, 6)
+        ]
+
+        report = ReportData(
+            month="2024-11",
+            start_date=date(2024, 11, 1),
+            end_date=date(2024, 11, 5),
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
+            changes=[],
+            repositories=[],
+            total_hours=160,
+            creative_hours=128,
+            creative_percentage=80,
+            workday_entries=workday_entries,
+            employee_name="John Doe",
+            supervisor_name="Jane Smith",
+            product_name="Test Product",
+        )
+
+        md = generate_markdown(report)
+
+        # Check that no warning appears
+        assert "⚠ Work Time Coverage" not in md
+        assert "INCOMPLETE" not in md
+
 
 class TestGenerateWorkCardPdf:
     """Test generate_work_card_pdf function."""
