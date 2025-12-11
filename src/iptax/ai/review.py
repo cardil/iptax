@@ -553,12 +553,12 @@ class ReviewApp(App):
         self.push_screen(ReasonModal(judgment.user_reasoning or ""), handle_reason)
 
     def _get_viewport_height(self) -> int:
-        """Get the viewport height for page navigation."""
+        """Get the number of visible rows for page navigation."""
         try:
             changes_list = self.query_one("#changes-list", ListScroll)
-            return max(1, changes_list.size.height)
+            return max(1, changes_list.size.height // 2)
         except LookupError:
-            return 10  # Fallback when widget is missing
+            return 5  # Fallback when widget is missing
 
     def _has_modal_open(self) -> bool:
         """Check if a modal screen is currently open."""
