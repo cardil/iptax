@@ -26,7 +26,9 @@ class TestTotalDaysCalculation:
             changes_since=date(2024, 10, 25),
             changes_until=date(2024, 11, 25),
             total_hours=160.0,  # 19 work days + 1 PTO day = 20 days * 8h = 160h
-            working_days=20,  # This represents all working calendar days
+            # 23 calendar working days, but only 19 worked + 1 PTO recorded.
+            # Previously, total_days used working_days (23) causing 23 vs 20 bug.
+            working_days=23,
             absence_days=1,  # 1 day PTO
             workday_validated=True,
         )
@@ -55,7 +57,8 @@ class TestTotalDaysCalculation:
             changes_since=date(2024, 10, 25),
             changes_until=date(2024, 11, 25),
             total_hours=160.0,
-            working_days=20,
+            # Same 23 vs 20 calendar vs recorded scenario as above.
+            working_days=23,
             absence_days=1,
             workday_validated=True,
         )
@@ -84,7 +87,8 @@ class TestTotalDaysCalculation:
             changes_since=date(2024, 10, 25),
             changes_until=date(2024, 11, 25),
             total_hours=176.0,  # 18 work days + 4 PTO days = 22 days * 8h = 176h
-            working_days=22,
+            # Example with missing days: 25 calendar working days vs 22 recorded.
+            working_days=25,
             absence_days=4,  # 4 days PTO
             workday_validated=True,
         )
