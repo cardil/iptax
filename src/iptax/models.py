@@ -943,11 +943,19 @@ class ReportData(BaseModel):
     )
     start_date: date = Field(
         ...,
-        description="Start date of reporting period",
+        description="Start date of reporting period (Workday start)",
     )
     end_date: date = Field(
         ...,
-        description="End date of reporting period",
+        description="End date of reporting period (Workday end)",
+    )
+    changes_since: date = Field(
+        ...,
+        description="Start date for Did changes collection",
+    )
+    changes_until: date = Field(
+        ...,
+        description="End date for Did changes collection",
     )
     changes: list[Change] = Field(
         default_factory=list,
@@ -970,6 +978,10 @@ class ReportData(BaseModel):
     creative_percentage: int = Field(
         ...,
         description="Percentage of work considered creative",
+    )
+    workday_entries: list[WorkdayCalendarEntry] = Field(
+        default_factory=list,
+        description="Workday calendar entries (for coverage validation in markdown)",
     )
     employee_name: str = Field(
         ...,

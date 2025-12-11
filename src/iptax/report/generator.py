@@ -12,6 +12,7 @@ from weasyprint import HTML
 
 from iptax.models import ReportData
 from iptax.report.fonts import generate_font_face_css
+from iptax.workday.validation import validate_workday_coverage
 
 # Template directory path
 TEMPLATES_DIR = resources.files("iptax.report") / "templates"
@@ -20,9 +21,10 @@ TEMPLATES_DIR = resources.files("iptax.report") / "templates"
 def generate_markdown(report: ReportData) -> str:
     """Generate markdown report content.
 
-    Creates a markdown document with two sections:
-    1. Changes: List of included changes with links
-    2. Projects: List of unique repositories
+    Creates a markdown document with three sections:
+    1. Summary: Report statistics (period, hours, changes, workday coverage)
+    2. Changes: List of included changes with links
+    3. Projects: List of unique repositories
 
     Args:
         report: Compiled report data
@@ -31,6 +33,40 @@ def generate_markdown(report: ReportData) -> str:
         Markdown content as string
     """
     lines = []
+
+    # Summary section - use list format for better rendering
+    lines.append("## Summary\n")
+    lines.append(f"- **Product:** {report.product_name}")
+    lines.append(f"- **Employee:** {report.employee_name}")
+    lines.append(f"- **Supervisor:** {report.supervisor_name}")
+    lines.append(f"- **Report Period:** {report.month}")
+    lines.append(
+        f"- **Changes Range:** {report.changes_since} to {report.changes_until}"
+    )
+
+    # Calculate working days from total hours (assuming 8-hour days)
+    working_days = report.total_hours // 8
+    lines.append(f"- **Work Time:** {working_days} days, {report.total_hours} hours")
+    lines.append(
+        f"- **Creative Work:** {report.creative_hours} hours "
+        f"({report.creative_percentage}%)"
+    )
+
+    # Check for missing workday coverage
+    if report.workday_entries:
+        missing = validate_workday_coverage(
+            report.workday_entries, report.start_date, report.end_date
+        )
+        if missing:
+            lines.append(
+                f"- **⚠ Work Time Coverage:** INCOMPLETE ({len(missing)} "
+                f"day{'s' if len(missing) != 1 else ''} missing)"
+            )
+            for day in missing:
+                day_str = day.strftime("%Y-%m-%d (%A)")
+                lines.append(f"  - {day_str}")
+
+    lines.append("")  # Empty line between sections
 
     # Changes section
     lines.append("## Changes\n")

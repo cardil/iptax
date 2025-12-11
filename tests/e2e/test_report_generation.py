@@ -21,6 +21,8 @@ def sample_report_data() -> ReportData:
         month="2024-11",
         start_date=date(2024, 11, 1),
         end_date=date(2024, 11, 30),
+        changes_since=date(2024, 10, 26),
+        changes_until=date(2024, 11, 23),
         changes=[
             Change(
                 title="Add new feature for parsing",
@@ -55,9 +57,10 @@ def sample_report_data() -> ReportData:
                 provider_type="gitlab",
             ),
         ],
-        total_hours=160.0,
-        creative_hours=128.0,
+        total_hours=160,
+        creative_hours=128,
         creative_percentage=80,
+        workday_entries=[],
         employee_name="Jan Kowalski",
         supervisor_name="Anna Nowak",
         product_name="Acme Code Analysis Suite",
