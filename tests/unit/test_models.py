@@ -1326,11 +1326,14 @@ class TestReportData:
             month="2024-11",
             start_date=date(2024, 11, 1),
             end_date=date(2024, 11, 30),
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
             changes=[change],
             repositories=[repo],
-            total_hours=160.0,
-            creative_hours=128.0,
+            total_hours=160,
+            creative_hours=128,
             creative_percentage=80,
+            workday_entries=[],
             employee_name="John Doe",
             supervisor_name="Jane Smith",
             product_name="Test Product",
@@ -1338,7 +1341,7 @@ class TestReportData:
 
         assert report.month == "2024-11"
         assert len(report.changes) == 1
-        assert report.total_hours == 160.0
+        assert report.total_hours == 160
 
     def test_get_work_card_number(self):
         """Test work card number generation."""
@@ -1346,9 +1349,12 @@ class TestReportData:
             month="2024-11",
             start_date=date(2024, 11, 1),
             end_date=date(2024, 11, 30),
-            total_hours=160.0,
-            creative_hours=128.0,
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
+            total_hours=160,
+            creative_hours=128,
             creative_percentage=80,
+            workday_entries=[],
             employee_name="John Doe",
             supervisor_name="Jane Smith",
             product_name="Test Product",
@@ -1364,9 +1370,12 @@ class TestReportData:
             month="2024-11",
             start_date=date(2024, 11, 1),
             end_date=date(2024, 11, 30),
-            total_hours=160.0,
-            creative_hours=128.0,
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
+            total_hours=160,
+            creative_hours=128,
             creative_percentage=80,
+            workday_entries=[],
             employee_name="John Doe",
             supervisor_name="Jane Smith",
             product_name="Test Product",
@@ -1384,9 +1393,12 @@ class TestReportData:
                 month="2024-11",
                 start_date=date(2024, 11, 1),
                 end_date=date(2024, 11, 30),
+                changes_since=date(2024, 10, 26),
+                changes_until=date(2024, 11, 23),
                 total_hours=0,
                 creative_hours=0,
                 creative_percentage=80,
+                workday_entries=[],
                 employee_name="John Doe",
                 supervisor_name="Jane Smith",
                 product_name="Test Product",

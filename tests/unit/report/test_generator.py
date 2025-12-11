@@ -46,11 +46,14 @@ def basic_report(github_repo):
         month="2024-11",
         start_date=date(2024, 11, 1),
         end_date=date(2024, 11, 30),
+        changes_since=date(2024, 10, 26),
+        changes_until=date(2024, 11, 23),
         changes=[change],
         repositories=[github_repo],
-        total_hours=160.0,
-        creative_hours=128.0,
+        total_hours=160,
+        creative_hours=128,
         creative_percentage=80,
+        workday_entries=[],
         employee_name="John Doe",
         supervisor_name="Jane Smith",
         product_name="Test Product",
@@ -64,6 +67,7 @@ class TestGenerateMarkdown:
         """Test that markdown has correct structure with sections."""
         md = generate_markdown(basic_report)
 
+        assert "## Summary" in md
         assert "## Changes" in md
         assert "## Projects" in md
 
@@ -82,6 +86,25 @@ class TestGenerateMarkdown:
         # Should contain: * [owner / repo](url)
         assert "* [owner / repo](https://github.com/owner/repo)" in md
 
+    def test_summary_section_content(self, basic_report):
+        """Test that summary section contains expected fields."""
+        md = generate_markdown(basic_report)
+
+        # Check for summary section
+        assert "## Summary" in md
+        # Check for report period (month format)
+        assert "**Report Period:** 2024-11" in md
+        # Check for changes range
+        assert "**Changes Range:** 2024-10-26 to 2024-11-23" in md
+        # Check for work time
+        assert "**Work Time:**" in md
+        assert "20 days" in md  # 160 hours / 8
+        assert "160 hours" in md
+        # Check for creative work
+        assert "**Creative Work:**" in md
+        assert "128 hours" in md
+        assert "80%" in md
+
     def test_handles_multiple_changes(self, github_repo):
         """Test formatting with multiple changes."""
         changes = [
@@ -94,11 +117,14 @@ class TestGenerateMarkdown:
             month="2024-11",
             start_date=date(2024, 11, 1),
             end_date=date(2024, 11, 30),
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
             changes=changes,
             repositories=[github_repo],
-            total_hours=160.0,
-            creative_hours=128.0,
+            total_hours=160,
+            creative_hours=128,
             creative_percentage=80,
+            workday_entries=[],
             employee_name="John Doe",
             supervisor_name="Jane Smith",
             product_name="Test Product",
@@ -120,11 +146,14 @@ class TestGenerateMarkdown:
             month="2024-11",
             start_date=date(2024, 11, 1),
             end_date=date(2024, 11, 30),
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
             changes=[change1, change2],
             repositories=[github_repo, gitlab_repo],
-            total_hours=160.0,
-            creative_hours=128.0,
+            total_hours=160,
+            creative_hours=128,
             creative_percentage=80,
+            workday_entries=[],
             employee_name="John Doe",
             supervisor_name="Jane Smith",
             product_name="Test Product",
@@ -145,11 +174,14 @@ class TestGenerateMarkdown:
             month="2024-11",
             start_date=date(2024, 11, 1),
             end_date=date(2024, 11, 30),
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
             changes=[change],
             repositories=[gitlab_repo],
-            total_hours=160.0,
-            creative_hours=128.0,
+            total_hours=160,
+            creative_hours=128,
             creative_percentage=80,
+            workday_entries=[],
             employee_name="John Doe",
             supervisor_name="Jane Smith",
             product_name="Test Product",
@@ -172,6 +204,97 @@ class TestGenerateMarkdown:
 
         # Should have blank line between sections
         assert "## Changes\n\n" in md or "\n\n## Projects" in md
+
+    def test_workday_coverage_warnings_in_summary(self):
+        """Test workday coverage warnings appear when days are missing."""
+        from iptax.models import WorkdayCalendarEntry
+
+        # Create workday entries for Nov 1-3 only (missing Nov 4-5)
+        workday_entries = [
+            WorkdayCalendarEntry(
+                entry_date=date(2024, 11, 1),
+                title="Work",
+                entry_type="Time Tracking",
+                hours=8.0,
+            ),
+            WorkdayCalendarEntry(
+                entry_date=date(2024, 11, 2),
+                title="Work",
+                entry_type="Time Tracking",
+                hours=8.0,
+            ),
+            WorkdayCalendarEntry(
+                entry_date=date(2024, 11, 3),
+                title="Work",
+                entry_type="Time Tracking",
+                hours=8.0,
+            ),
+        ]
+
+        report = ReportData(
+            month="2024-11",
+            start_date=date(2024, 11, 1),
+            end_date=date(2024, 11, 5),  # Coverage through Nov 5
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
+            changes=[],
+            repositories=[],
+            total_hours=160,
+            creative_hours=128,
+            creative_percentage=80,
+            workday_entries=workday_entries,
+            employee_name="John Doe",
+            supervisor_name="Jane Smith",
+            product_name="Test Product",
+        )
+
+        md = generate_markdown(report)
+
+        # Check for coverage warning
+        assert "⚠ Work Time Coverage" in md
+        assert "INCOMPLETE" in md
+        assert "2 days missing" in md
+        # Check that missing days are listed
+        assert "2024-11-04" in md
+        assert "2024-11-05" in md
+
+    def test_workday_coverage_complete_no_warning(self):
+        """Test that no warning appears when workday coverage is complete."""
+        from iptax.models import WorkdayCalendarEntry
+
+        # Create complete workday entries for Nov 1-5
+        workday_entries = [
+            WorkdayCalendarEntry(
+                entry_date=date(2024, 11, day),
+                title="Work",
+                entry_type="Time Tracking",
+                hours=8.0,
+            )
+            for day in range(1, 6)
+        ]
+
+        report = ReportData(
+            month="2024-11",
+            start_date=date(2024, 11, 1),
+            end_date=date(2024, 11, 5),
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
+            changes=[],
+            repositories=[],
+            total_hours=160,
+            creative_hours=128,
+            creative_percentage=80,
+            workday_entries=workday_entries,
+            employee_name="John Doe",
+            supervisor_name="Jane Smith",
+            product_name="Test Product",
+        )
+
+        md = generate_markdown(report)
+
+        # Check that no warning appears
+        assert "⚠ Work Time Coverage" not in md
+        assert "INCOMPLETE" not in md
 
 
 class TestGenerateWorkCardPdf:
@@ -255,6 +378,7 @@ class TestGenerateAll:
 
         # Read and verify content
         md_content = files[0].read_text(encoding="utf-8")
+        assert "## Summary" in md_content
         assert "## Changes" in md_content
         assert "## Projects" in md_content
         assert "Fix bug in handler" in md_content
