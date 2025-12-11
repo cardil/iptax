@@ -69,12 +69,46 @@ $(VENV)/venv.done: pyproject.toml
 	$(VENV_PIP) install --upgrade pip setuptools wheel
 	@touch $@
 
+.PHONY: lock
+lock: $(VENV)/venv.done  ## Generate requirements.lock from current environment
+	@echo -e "$(BLUE)$(GEAR) Generating requirements.lock...$(RESET)"
+	@if [ ! -f "$(VENV)/lib/python3.*/site-packages/pip/__init__.py" ]; then \
+		echo -e "$(YELLOW)Installing dependencies first...$(RESET)"; \
+		$(VENV_PIP) install -e ".[dev]"; \
+	fi
+	$(VENV_BIN)/pip freeze | grep -v '^-e ' | grep -v '^iptax' > requirements.lock
+	@echo -e "$(GREEN)$(CHECK) requirements.lock generated$(RESET)"
+
+.PHONY: upgrade
+upgrade: $(VENV)/venv.done pyproject.toml  ## Upgrade all dependencies
+	@echo -e "$(BLUE)$(GEAR) Upgrading dependencies...$(RESET)"
+	$(VENV_PIP) install --upgrade --upgrade-strategy eager -e ".[dev]"
+	$(VENV_PYTHON) -m playwright install firefox
+	@# Fix certifi
+	@SYSTEM_CERTIFI=$$(ls /usr/lib/python3.*/site-packages/certifi/core.py \
+		2>/dev/null | head -1); \
+	VENV_CERTIFI=$$(ls $(VENV)/lib/python3.*/site-packages/certifi/core.py \
+		2>/dev/null | head -1); \
+	if [ -n "$$SYSTEM_CERTIFI" ] && [ -n "$$VENV_CERTIFI" ]; then \
+		echo -e "$(BLUE)$(GEAR) Linking certifi to system certs...$(RESET)"; \
+		ln -sf "$$SYSTEM_CERTIFI" "$$VENV_CERTIFI"; \
+	fi
+	@echo -e "$(GREEN)$(CHECK) Dependencies upgraded$(RESET)"
+	@$(MAKE) lock
+
 .PHONY: init
 init: $(VENV)/init.done  ## Initialize development environment (install deps)
 
 $(VENV)/init.done: $(VENV)/venv.done pyproject.toml
 	@mkdir -p $(GUARDS)
-	$(VENV_PIP) install -e ".[dev]"
+	@if [ -f requirements.lock ]; then \
+		echo -e "$(BLUE)$(GEAR) Installing from requirements.lock...$(RESET)"; \
+		$(VENV_PIP) install -r requirements.lock; \
+	else \
+		echo -e "$(BLUE)$(GEAR) Installing from pyproject.toml...$(RESET)"; \
+		$(VENV_PIP) install -e ".[dev]"; \
+	fi
+	$(VENV_PIP) install -e . --no-deps
 	$(VENV_PYTHON) -m playwright install firefox
 	@# Fix certifi to use system certs (for corporate SSL proxies)
 	@SYSTEM_CERTIFI=$$(ls /usr/lib/python3.*/site-packages/certifi/core.py \
