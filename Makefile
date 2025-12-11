@@ -38,8 +38,12 @@ VENV_PIP := $(VENV_PYTHON) -m pip
 
 # Source tracking
 SRC_FILES := $(shell find src -type f -name '*.py' 2>/dev/null)
-TEST_FILES := $(shell find tests scripts -type f -name '*.py' 2>/dev/null) Makefile
+TEST_FILES := $(shell find tests -type f -name '*.py' 2>/dev/null) Makefile
+SCRIPT_FILES := $(shell find scripts bin .github/workflows/release \
+	-type f \( -name '*.py' -o -name '*.sh' -o -name 'iptax' \) 2>/dev/null)
 MD_FILES := $(shell find docs -type f -name '*.md' 2>/dev/null) README.md
+YAML_FILES := $(shell find .github -type f -name '*.yml' 2>/dev/null)
+HTML_FILES := $(shell find src tests -type f -name '*.html' 2>/dev/null)
 
 # Add -v flag only on interactive terminals
 PYTEST_VERBOSE := $(shell [ -t 0 ] && echo "-v" || true)
@@ -72,7 +76,7 @@ $(VENV)/venv.done: pyproject.toml
 .PHONY: lock
 lock: $(VENV)/venv.done  ## Generate requirements.lock from current environment
 	@echo -e "$(BLUE)$(GEAR) Generating requirements.lock...$(RESET)"
-	@if [ ! -f "$(VENV)/lib/python3.*/site-packages/pip/__init__.py" ]; then \
+	@if ! ls $(VENV)/lib/python3.*/site-packages/pip/__init__.py >/dev/null 2>&1; then \
 		echo -e "$(YELLOW)Installing dependencies first...$(RESET)"; \
 		$(VENV_PIP) install -e ".[dev]"; \
 	fi
@@ -155,7 +159,8 @@ test-watch: $(VENV)/init.done  ## Run tests in watch mode
 lint: $(GUARDS)/lint.passed  ## Run linter (idempotent)
 
 $(GUARDS)/lint.passed: $(VENV)/init.done $(SRC_FILES) $(TEST_FILES) \
-	$(MD_FILES) pyproject.toml .editorconfig
+	$(SCRIPT_FILES) $(MD_FILES) $(YAML_FILES) $(HTML_FILES) \
+	pyproject.toml .editorconfig
 	@mkdir -p $(GUARDS)
 	$(VENV_BIN)/ruff check src/ tests/
 	$(VENV_BIN)/ec
