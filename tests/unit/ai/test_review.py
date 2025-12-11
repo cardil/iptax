@@ -1,5 +1,7 @@
 """Unit tests for AI review TUI interface."""
 
+from datetime import datetime
+
 import pytest
 
 from iptax.ai.models import Decision, Judgment
@@ -645,3 +647,164 @@ class TestReviewJudgmentsFunction:
         # verify the function signature exists and returns correct type
         # This is mainly for import/signature testing
         assert callable(review_judgments)
+
+
+class TestReviewAppSorting:
+    """Tests for ReviewApp sorting by merged_at date."""
+
+    @pytest.mark.asyncio
+    async def test_sorting_by_merged_at_oldest_first(self):
+        """Test that changes are sorted by merged_at, oldest first."""
+        # Create changes with different merged_at timestamps
+        changes = [
+            Change(
+                title="Newest",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=3,
+                merged_at=datetime(2025, 12, 10, 12, 0, 0),
+            ),
+            Change(
+                title="Oldest",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=1,
+                merged_at=datetime(2025, 11, 25, 10, 0, 0),
+            ),
+            Change(
+                title="Middle",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=2,
+                merged_at=datetime(2025, 12, 1, 15, 0, 0),
+            ),
+        ]
+
+        # Create judgments in original order (newest, oldest, middle)
+        judgments = [
+            Judgment(
+                change_id=changes[0].get_change_id(),
+                decision=Decision.INCLUDE,
+                reasoning="Test",
+                product="Test",
+            ),
+            Judgment(
+                change_id=changes[1].get_change_id(),
+                decision=Decision.INCLUDE,
+                reasoning="Test",
+                product="Test",
+            ),
+            Judgment(
+                change_id=changes[2].get_change_id(),
+                decision=Decision.INCLUDE,
+                reasoning="Test",
+                product="Test",
+            ),
+        ]
+
+        app = ReviewApp(judgments, changes)
+        async with app.run_test():
+            # After sorting, order should be: oldest, middle, newest
+            assert app.judgments[0].change_id == changes[1].get_change_id()
+            assert app.judgments[1].change_id == changes[2].get_change_id()
+            assert app.judgments[2].change_id == changes[0].get_change_id()
+
+    @pytest.mark.asyncio
+    async def test_sorting_items_without_merged_at_last(self):
+        """Test that items without merged_at appear last."""
+        changes = [
+            Change(
+                title="With date",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=1,
+                merged_at=datetime(2025, 12, 1, 10, 0, 0),
+            ),
+            Change(
+                title="Without date",
+                repository=Repository(
+                    host="github.com", path="org/repo", provider_type="github"
+                ),
+                number=2,
+                merged_at=None,
+            ),
+        ]
+
+        judgments = [
+            Judgment(
+                change_id=changes[1].get_change_id(),  # Without date first
+                decision=Decision.INCLUDE,
+                reasoning="Test",
+                product="Test",
+            ),
+            Judgment(
+                change_id=changes[0].get_change_id(),  # With date second
+                decision=Decision.INCLUDE,
+                reasoning="Test",
+                product="Test",
+            ),
+        ]
+
+        app = ReviewApp(judgments, changes)
+        async with app.run_test():
+            # After sorting, item with merged_at should be first
+            assert app.judgments[0].change_id == changes[0].get_change_id()
+            assert app.judgments[1].change_id == changes[1].get_change_id()
+
+
+class TestReviewAppMergedDateDisplay:
+    """Tests for displaying merged date in detail view."""
+
+    @pytest.mark.asyncio
+    async def test_detail_view_shows_merged_date(self):
+        """Test that detail view displays merged date when available."""
+        change = Change(
+            title="Test change",
+            repository=Repository(
+                host="github.com", path="org/repo", provider_type="github"
+            ),
+            number=1,
+            merged_at=datetime(2025, 11, 24, 10, 30, 0),
+        )
+        judgment = Judgment(
+            change_id=change.get_change_id(),
+            decision=Decision.INCLUDE,
+            reasoning="Test",
+            product="Test",
+        )
+
+        app = ReviewApp([judgment], [change])
+        async with app.run_test() as pilot:
+            # Enter detail view
+            await pilot.press("enter")
+            assert app.in_detail_view
+            # We can't easily check the rendered text, but we can verify no errors
+
+    @pytest.mark.asyncio
+    async def test_detail_view_without_merged_date(self):
+        """Test that detail view works when merged_at is None."""
+        change = Change(
+            title="Test change",
+            repository=Repository(
+                host="github.com", path="org/repo", provider_type="github"
+            ),
+            number=1,
+            merged_at=None,
+        )
+        judgment = Judgment(
+            change_id=change.get_change_id(),
+            decision=Decision.INCLUDE,
+            reasoning="Test",
+            product="Test",
+        )
+
+        app = ReviewApp([judgment], [change])
+        async with app.run_test() as pilot:
+            # Enter detail view
+            await pilot.press("enter")
+            assert app.in_detail_view
+            # Should work fine without merged_at

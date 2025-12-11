@@ -1,7 +1,7 @@
 """Unit tests for did integration module."""
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -15,6 +15,7 @@ from iptax.did import (
     InvalidStatDataError,
     _clean_emoji,
     _convert_github_pr,
+    _convert_gitlab_mr,
     _convert_to_change,
     _determine_provider_type,
     _fetch_provider_changes,
@@ -134,6 +135,156 @@ class TestInvalidStatDataError:
             assert str(error) == "Invalid data"
             assert isinstance(error.__cause__, ValueError)
             assert str(error.__cause__) == "Bad value"
+
+
+class TestGitHubPRMergedAtExtraction:
+    """Test merged_at timestamp extraction from GitHub PRs."""
+
+    def test_github_pr_with_merged_at(self) -> None:
+        """Test extracting merged_at from GitHub PR with pull_request object."""
+        stat = Mock(spec=Issue)
+        stat.owner = "owner"
+        stat.project = "repo"
+        stat.id = 1
+        stat.title = "Test PR"
+        stat.data = {
+            "html_url": "https://github.com/owner/repo/pull/1",
+            "title": "Test PR",
+            "pull_request": {
+                "merged_at": "2024-01-15T10:30:00Z",
+                "state": "closed",
+            },
+        }
+
+        change = _convert_github_pr(stat)
+
+        assert change.merged_at is not None
+        assert change.merged_at == datetime(
+            2024,
+            1,
+            15,
+            10,
+            30,
+            0,
+            tzinfo=datetime.fromisoformat("2024-01-15T10:30:00+00:00").tzinfo,
+        )
+
+    def test_github_pr_without_pull_request_object(self) -> None:
+        """Test GitHub PR without pull_request object in data."""
+        stat = Mock(spec=Issue)
+        stat.owner = "owner"
+        stat.project = "repo"
+        stat.id = 1
+        stat.title = "Test PR"
+        stat.data = {
+            "html_url": "https://github.com/owner/repo/pull/1",
+            "title": "Test PR",
+        }
+
+        change = _convert_github_pr(stat)
+
+        assert change.merged_at is None
+
+    def test_github_pr_with_pull_request_but_no_merged_at(self) -> None:
+        """Test GitHub PR with pull_request object but no merged_at field."""
+        stat = Mock(spec=Issue)
+        stat.owner = "owner"
+        stat.project = "repo"
+        stat.id = 1
+        stat.title = "Test PR"
+        stat.data = {
+            "html_url": "https://github.com/owner/repo/pull/1",
+            "title": "Test PR",
+            "pull_request": {
+                "state": "open",
+            },
+        }
+
+        change = _convert_github_pr(stat)
+
+        assert change.merged_at is None
+
+    def test_github_pr_with_invalid_merged_at_format(self) -> None:
+        """Test GitHub PR with invalid merged_at timestamp format."""
+        stat = Mock(spec=Issue)
+        stat.owner = "owner"
+        stat.project = "repo"
+        stat.id = 1
+        stat.title = "Test PR"
+        stat.data = {
+            "html_url": "https://github.com/owner/repo/pull/1",
+            "title": "Test PR",
+            "pull_request": {
+                "merged_at": "invalid-date",
+            },
+        }
+
+        # Should not raise, just log and set merged_at to None
+        change = _convert_github_pr(stat)
+        assert change.merged_at is None
+
+
+class TestGitLabMRMergedAtExtraction:
+    """Test merged_at timestamp extraction from GitLab MRs."""
+
+    def test_gitlab_mr_with_merged_at(self) -> None:
+        """Test extracting merged_at from GitLab MR."""
+        stat = Mock(spec=MergedRequest)
+        stat.project = {"path_with_namespace": "group/project"}
+        stat.data = {
+            "title": "Test MR",
+            "merged_at": "2024-01-20T14:45:00Z",
+        }
+        stat.iid = Mock(return_value=1)
+        gitlabapi_mock = Mock()
+        gitlabapi_mock.url = "https://gitlab.com/group/project/-/merge_requests/1"
+        stat.gitlabapi = gitlabapi_mock
+
+        change = _convert_gitlab_mr(stat)
+
+        assert change.merged_at is not None
+        assert change.merged_at == datetime(
+            2024,
+            1,
+            20,
+            14,
+            45,
+            0,
+            tzinfo=datetime.fromisoformat("2024-01-20T14:45:00+00:00").tzinfo,
+        )
+
+    def test_gitlab_mr_without_merged_at(self) -> None:
+        """Test GitLab MR without merged_at field."""
+        stat = Mock(spec=MergedRequest)
+        stat.project = {"path_with_namespace": "group/project"}
+        stat.data = {
+            "title": "Test MR",
+        }
+        stat.iid = Mock(return_value=1)
+        gitlabapi_mock = Mock()
+        gitlabapi_mock.url = "https://gitlab.com/group/project/-/merge_requests/1"
+        stat.gitlabapi = gitlabapi_mock
+
+        change = _convert_gitlab_mr(stat)
+
+        assert change.merged_at is None
+
+    def test_gitlab_mr_with_invalid_merged_at_format(self) -> None:
+        """Test GitLab MR with invalid merged_at timestamp format."""
+        stat = Mock(spec=MergedRequest)
+        stat.project = {"path_with_namespace": "group/project"}
+        stat.data = {
+            "title": "Test MR",
+            "merged_at": "not-a-date",
+        }
+        stat.iid = Mock(return_value=1)
+        gitlabapi_mock = Mock()
+        gitlabapi_mock.url = "https://gitlab.com/group/project/-/merge_requests/1"
+        stat.gitlabapi = gitlabapi_mock
+
+        # Should not raise, just log and set merged_at to None
+        change = _convert_gitlab_mr(stat)
+        assert change.merged_at is None
 
 
 def _create_github_issue_mock(

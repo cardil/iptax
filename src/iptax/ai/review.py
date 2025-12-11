@@ -1,16 +1,20 @@
 """Textual-based TUI review interface for AI judgments."""
 
+import logging
 from contextlib import suppress
+from datetime import date
 from typing import ClassVar
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, VerticalScroll
 from textual.events import Key
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Header, Input, Label, Static
 
 from iptax.cli.elements import count_decisions, format_decision_summary
 from iptax.models import Change, Decision, Judgment
+
+logger = logging.getLogger(__name__)
 
 # Decision icons
 ICONS = {
@@ -187,7 +191,6 @@ class ReasonModal(ModalScreen[str | None]):
 class ReviewApp(App):
     """Textual app for reviewing AI judgments."""
 
-    TITLE = "iptax"
     ENABLE_COMMAND_PALETTE = False
 
     CSS = """
@@ -199,10 +202,14 @@ class ReviewApp(App):
     #changes-list {
         height: 1fr;
         scrollbar-gutter: stable;
+        scrollbar-background: $panel;
+        scrollbar-color: #1e3a5f;
+        scrollbar-color-hover: #2d4a6f;
+        scrollbar-color-active: #3d5a7f;
     }
 
     .change-row {
-        height: 1;
+        height: 2;
     }
 
     .change-row:focus {
@@ -210,7 +217,7 @@ class ReviewApp(App):
     }
 
     .selected {
-        background: $primary-background-darken-1;
+        background: #1e3a5f;
         color: white;
     }
 
@@ -265,18 +272,41 @@ class ReviewApp(App):
         self,
         judgments: list[Judgment],
         changes: list[Change],
+        date_range: tuple[date, date] | None = None,
     ) -> None:
         super().__init__()
         self.theme = "textual-ansi"
-        self.judgments = judgments
         self.changes = changes
         self.change_map = {c.get_change_id(): c for c in changes}
+
+        # Sort judgments by merged_at date (oldest first)
+        # Use change_id to look up the corresponding change
+        def get_sort_key(j: Judgment) -> tuple:
+            change = self.change_map.get(j.change_id)
+            # Put items with merged_at first, sorted oldest to newest
+            # Then items without merged_at
+            if change and change.merged_at:
+                return (0, change.merged_at.timestamp())
+            return (1, j.change_id)
+
+        self.judgments = sorted(judgments, key=get_sort_key)
+
+        self.date_range = date_range
         self.accepted = False
         self.in_detail_view = False
         self.selected_index = 0
 
+        # Set title with date range if provided
+        if date_range:
+            start_str = date_range[0].strftime("%b %d, %Y")
+            end_str = date_range[1].strftime("%b %d, %Y")
+            self.title = f"Iptax Review for {start_str} to {end_str}"
+        else:
+            self.title = "Iptax"
+
     def compose(self) -> ComposeResult:
         """Create child widgets."""
+        yield Header(show_clock=False)
         yield Container(
             ListScroll(id="changes-list"),
             id="list-container",
@@ -301,7 +331,12 @@ class ReviewApp(App):
 
             # Add edited marker on right side, dimmed
             edited_marker = " [dim]*[/]" if judgment.was_corrected else ""
-            row_content = f"  [{color}]{icon}[/] {title}{edited_marker}"
+            # Line 1: Icon + Title + edited marker
+            # Line 2: Change ID (indented, dimmed)
+            row_content = (
+                f"  [{color}]{icon}[/] {title}{edited_marker}\n"
+                f"    [dim]{judgment.change_id}[/]"
+            )
 
             # Use CSS class for selection styling
             classes = (
@@ -340,9 +375,9 @@ class ReviewApp(App):
             scroll_y = changes_list.scroll_y
             viewport_height = changes_list.size.height
 
-            # Row position (each row is 1 unit high)
-            row_top = index
-            row_bottom = index + 1
+            # Row position (each row is 2 units high)
+            row_top = index * 2
+            row_bottom = index * 2 + 2
             viewport_bottom = scroll_y + viewport_height
 
             # Only scroll if row is outside visible area
@@ -407,7 +442,24 @@ class ReviewApp(App):
         content_parts.append("[bold ansi_blue]📋 Change Information[/]")
         content_parts.append(f"   [bold]Title:[/] {title}")
         content_parts.append(f"   [bold]Repo:[/] {repo}")
-        content_parts.append(f"   [bold]URL:[/] {url}\n")
+        content_parts.append(f"   [bold]URL:[/] {url}")
+        # Add merged date if available
+        logger.debug(f"change_id={judgment.change_id}, change={change}")
+        if change:
+            merged_val = getattr(change, "merged_at", "NO_ATTR")
+            logger.debug(f"change.merged_at={merged_val}")
+        if change and hasattr(change, "merged_at") and change.merged_at:
+            merged_date = change.merged_at.strftime("%b %d, %Y")
+            content_parts.append(f"   [bold]Merged:[/] {merged_date}")
+            logger.debug(f"Added merged date: {merged_date}")
+        else:
+            has_attr = hasattr(change, "merged_at") if change else False
+            val = change.merged_at if change and has_attr else "N/A"
+            logger.debug(
+                f"No merged - change={change is not None}, "
+                f"has_attr={has_attr}, value={val}"
+            )
+        content_parts.append("")  # Empty line after section
 
         # AI Decision section
         content_parts.append("[bold ansi_blue]🤖 AI Analysis[/]")
@@ -501,12 +553,12 @@ class ReviewApp(App):
         self.push_screen(ReasonModal(judgment.user_reasoning or ""), handle_reason)
 
     def _get_viewport_height(self) -> int:
-        """Get the viewport height for page navigation."""
+        """Get the number of visible rows for page navigation."""
         try:
             changes_list = self.query_one("#changes-list", ListScroll)
-            return max(1, changes_list.size.height)
+            return max(1, changes_list.size.height // 2)
         except LookupError:
-            return 10  # Fallback when widget is missing
+            return 5  # Fallback when widget is missing
 
     def _has_modal_open(self) -> bool:
         """Check if a modal screen is currently open."""
@@ -580,17 +632,19 @@ class ReviewApp(App):
 async def review_judgments(
     judgments: list[Judgment],
     changes: list[Change],
+    date_range: tuple[date, date] | None = None,
 ) -> ReviewResult:
     """Interactive review of AI judgments using Textual TUI.
 
     Args:
         judgments: List of AI judgments to review
         changes: List of changes (for title lookup)
+        date_range: Optional tuple of (start_date, end_date) to display in header
 
     Returns:
         ReviewResult with potentially modified judgments
     """
-    app = ReviewApp(judgments, changes)
+    app = ReviewApp(judgments, changes, date_range)
     await app.run_async()
 
     return ReviewResult(judgments=judgments, accepted=app.accepted)
