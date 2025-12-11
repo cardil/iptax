@@ -582,7 +582,7 @@ def _display_inflight_summary(console: Console, report: InFlightReport) -> None:
             console.print(
                 f"  [cyan]Paid Time Off:[/cyan] {pto_days} days, {pto_hrs} hours"
             )
-            total_days = report.working_days or 0
+            total_days = (report.effective_days or 0) + (report.absence_days or 0)
             total_hrs = int(report.total_hours)
             console.print(
                 f"  [cyan]Total Recorded:[/cyan] {total_days} days, {total_hrs} hours"
@@ -629,7 +629,7 @@ def _display_collection_summary(console: Console, report: InFlightReport) -> Non
             pto_days = report.absence_days
             pto_hrs = int(pto_days * 8)
             console.print(f"  • 🌴 Paid Time Off: {pto_days} days, {pto_hrs} hours")
-            total_days = report.working_days or 0
+            total_days = (report.effective_days or 0) + (report.absence_days or 0)
             total_hrs = int(report.total_hours)
             console.print(
                 f"  • 📅 Total recorded: {total_days} days, {total_hrs} hours"
