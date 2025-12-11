@@ -1,7 +1,7 @@
 name: Auto Cherry-Pick to Release Branch
 
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
   issue_comment:
     types: [created]
@@ -14,18 +14,58 @@ jobs:
   backport:
     name: Backport to release branch
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'pull_request' &&
-        github.event.pull_request.merged == true) ||
+    if: >
+      (github.event_name == 'pull_request_target' &&
+      github.event.pull_request.merged) ||
       (github.event_name == 'issue_comment' &&
-        github.event.issue.pull_request &&
-        startsWith(github.event.comment.body, '/backport'))
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/backport'))
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Backport Action
+        id: backport
         uses: korthout/backport-action@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          pull_description: |
-            Backport of #${pull_number}
-
-            ${pull_description}
+          add_author_as_assignee: true
+          branch_name: backport/${pull_number}/${target_branch}
+          label_pattern: ^backport/([^ ]+)$
+          pull_title: "[${target_branch}] ${pull_title}"
+      - name: Comment on success
+        if: steps.backport.outputs.was_successful == 'true'
+        uses: actions/github-script@v7
+        env:
+          CREATED_PRS: ${{ steps.backport.outputs.created_pull_requests }}
+        with:
+          script: |
+            const prs = JSON.parse(process.env.CREATED_PRS);
+            const prLinks = prs.map(pr => `- ${pr.url}`).join('\n');
+            const issueNum = context.payload.pull_request?.number ||
+              context.payload.issue?.number;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNum,
+              body: `🍒 Cherry-pick PRs created:\n${prLinks}`
+            });
+      - name: Comment on failure
+        if: >
+          always() &&
+          (failure() || steps.backport.outputs.was_successful == 'false')
+        uses: actions/github-script@v7
+        env:
+          RUN_URL: >-
+            ${{ github.server_url }}/${{ github.repository
+            }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const issueNum = context.payload.pull_request?.number ||
+              context.payload.issue?.number;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNum,
+              body: `❌ Cherry-pick failed. See [workflow run](${process.env.RUN_URL}).`
+            });
