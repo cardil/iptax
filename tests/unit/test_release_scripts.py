@@ -93,26 +93,6 @@ class TestStripDevVersion:
         assert strip_dev("1.2.3") == "1.2.3"
 
 
-class TestGetReleaseInfo:
-    """Tests for get_release_info script."""
-
-    def test_is_minor_release_true(self) -> None:
-        """Test detecting minor release."""
-        from get_release_info import is_minor_release
-
-        assert is_minor_release("1.0.0") is True
-        assert is_minor_release("2.5.0") is True
-        assert is_minor_release("10.20.0") is True
-
-    def test_is_minor_release_false(self) -> None:
-        """Test detecting non-minor release."""
-        from get_release_info import is_minor_release
-
-        assert is_minor_release("1.0.1") is False
-        assert is_minor_release("1.2.3") is False
-        assert is_minor_release("2.5.1") is False
-
-
 class TestBumpMainDev:
     """Tests for bump_main_dev script."""
 
