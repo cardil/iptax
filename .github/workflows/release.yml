@@ -1,5 +1,6 @@
 name: Release
 
+# Triggers on push to release branches (e.g., release-0.5, release-1.0)
 on:
   push:
     branches:
@@ -7,70 +8,94 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
+  # Check if release should proceed (prevents infinite loop from bot commits)
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check if triggered by bot
+        id: check
+        run: |
+          AUTHOR=$(git log -1 --pretty=format:'%an')
+          if [[ "$AUTHOR" == "iptax-release[bot]" ]]; then
+            echo "Skipping - triggered by bot commit"
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "Proceeding - triggered by $AUTHOR"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          fi
+
   release:
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.AUTOMATION_TOKEN }}
+          fetch-tags: true
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Check for dev version
-        id: check_dev
+      - name: Install dependencies
+        run: pip install commitizen build
+
+      - name: Configure git
         run: |
-          python3 .github/workflows/release/check_dev_version.py >> $GITHUB_OUTPUT
+          git config user.name "iptax-release[bot]"
+          git config user.email "iptax-release[bot]@users.noreply.github.com"
 
-      - name: Strip dev version and commit
-        if: steps.check_dev.outputs.has_dev == 'true'
+      # Bump version: strips .dev suffix OR increments patch
+      - name: Bump version
+        id: bump
         run: |
-          python3 .github/workflows/release/strip_dev_version.py
+          cz bump --increment PATCH --yes
+          VERSION=$(cz version --project)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Install system dependencies
-        if: steps.check_dev.outputs.has_dev == 'false'
-        run: sudo apt-get update && sudo apt-get install -y libkrb5-dev
+      - name: Push changes and tags
+        run: git push origin HEAD --tags
 
-      - name: Run checks and unit tests
-        if: steps.check_dev.outputs.has_dev == 'false'
-        run: |
-          make check unit
-
-      - name: Run semantic release
-        if: steps.check_dev.outputs.has_dev == 'false'
-        id: release
-        env:
-          GH_TOKEN: ${{ secrets.AUTOMATION_TOKEN }}
-        run: |
-          # Run semantic-release
-          .venv/bin/semantic-release version
-          .venv/bin/semantic-release publish
-
-          # Get release information
-          python3 .github/workflows/release/get_release_info.py >> $GITHUB_OUTPUT
+      - name: Build package
+        run: python -m build
 
       - name: Generate checksums
-        if: steps.check_dev.outputs.has_dev == 'false'
         run: python3 .github/workflows/release/generate_checksums.py
 
-      - name: Upload checksums to release
-        if: steps.check_dev.outputs.has_dev == 'false'
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.release.outputs.version }}
-          files: dist/checksums.txt
+          tag_name: ${{ steps.bump.outputs.tag }}
+          name: Release ${{ steps.bump.outputs.version }}
+          generate_release_notes: true
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
+      # Bump main to next dev version only for minor releases (X.Y.0)
       - name: Bump main to next dev version
-        if: >
-          steps.check_dev.outputs.has_dev == 'false' &&
-          steps.release.outputs.is_minor == 'true'
+        if: endsWith(steps.bump.outputs.version, '.0')
         run: |
-          python3 .github/workflows/release/bump_main_dev.py \
-            "${{ steps.release.outputs.version }}"
+          git checkout main
+          git pull origin main
+          cz bump --increment MINOR --devrelease 0 --files-only --yes
+          git add pyproject.toml
+          git commit -m "chore: bump to next dev version"
+          git push origin main
