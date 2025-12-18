@@ -12,8 +12,6 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    env:
-      SCRIPTS_DIR: .github/workflows/release
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,78 +25,47 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Check for dev version
-        id: check_dev
-        run: python3 ${{ env.SCRIPTS_DIR }}/check_dev_version.py >> $GITHUB_OUTPUT
+      - name: Install dependencies
+        run: pip install commitizen build
 
-      - name: Strip dev version and commit
-        if: steps.check_dev.outputs.has_dev == 'true'
-        run: python3 ${{ env.SCRIPTS_DIR }}/strip_dev_version.py
-
-      # Extract minor version from branch: release-0.5 -> 0.5
-      - name: Extract minor version from branch
-        if: steps.check_dev.outputs.has_dev == 'false'
-        id: minor
-        run: echo "version=${GITHUB_REF_NAME#release-}" >> $GITHUB_OUTPUT
-
-      - name: Determine next version
-        if: steps.check_dev.outputs.has_dev == 'false'
-        id: version
-        uses: reecetech/version-increment@2024.10.1
-        with:
-          scheme: semver
-          increment: patch
-          tag_prefix: "v${{ steps.minor.outputs.version }}."
-
-      - name: Update version in pyproject.toml
-        if: steps.check_dev.outputs.has_dev == 'false'
-        run: |
-          python3 ${{ env.SCRIPTS_DIR }}/update_version.py \
-            "${{ steps.version.outputs.version }}"
-
-      - name: Install system dependencies
-        if: steps.check_dev.outputs.has_dev == 'false'
-        run: sudo apt-get update && sudo apt-get install -y libkrb5-dev
-
-      - name: Run checks and unit tests
-        if: steps.check_dev.outputs.has_dev == 'false'
-        run: make check unit
-
-      - name: Configure git and commit version
-        if: steps.check_dev.outputs.has_dev == 'false'
+      - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml
-          git commit -m "chore(release): ${{ steps.version.outputs.version }}"
-          VERSION="${{ steps.version.outputs.v-version }}"
-          git tag -a "$VERSION" -m "Release ${{ steps.version.outputs.version }}"
-          git push origin HEAD --tags
+
+      # Bump version: strips .dev suffix OR increments patch
+      - name: Bump version
+        id: bump
+        run: |
+          cz bump --increment PATCH --yes
+          VERSION=$(cz version --project)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Push changes and tags
+        run: git push origin HEAD --tags
 
       - name: Build package
-        if: steps.check_dev.outputs.has_dev == 'false'
-        run: |
-          pip install build
-          python -m build
+        run: python -m build
 
       - name: Generate checksums
-        if: steps.check_dev.outputs.has_dev == 'false'
-        run: python3 ${{ env.SCRIPTS_DIR }}/generate_checksums.py
+        run: python3 .github/workflows/release/generate_checksums.py
 
       - name: Create GitHub release
-        if: steps.check_dev.outputs.has_dev == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.v-version }}
-          name: Release ${{ steps.version.outputs.version }}
+          tag_name: ${{ steps.bump.outputs.tag }}
+          name: Release ${{ steps.bump.outputs.version }}
           generate_release_notes: true
           files: dist/*
 
       # Bump main to next dev version only for minor releases (X.Y.0)
       - name: Bump main to next dev version
-        if: >
-          steps.check_dev.outputs.has_dev == 'false' &&
-          endsWith(steps.version.outputs.version, '.0')
+        if: endsWith(steps.bump.outputs.version, '.0')
         run: |
-          python3 ${{ env.SCRIPTS_DIR }}/bump_main_dev.py \
-            "${{ steps.version.outputs.version }}"
+          git checkout main
+          git pull origin main
+          cz bump --increment MINOR --devrelease 0 --files-only --yes
+          git add pyproject.toml
+          git commit -m "chore: bump to next dev version"
+          git push origin main

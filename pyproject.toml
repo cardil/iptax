@@ -64,9 +64,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    # Build and publishing
+    # Build, publishing, and release automation
     "build>=1.0.0",
     "twine>=5.0.0",
+    "commitizen>=4.0.0",
 
     # Testing
     "pytest>=7.4.3",
@@ -251,3 +252,7 @@ exclude_lines = [
     "if __name__ == .__main__.:",
 ]
 
+
+[tool.commitizen]
+version_provider = "pep621"
+tag_format = "v$version"
