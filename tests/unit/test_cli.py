@@ -267,6 +267,130 @@ class TestCacheCommand:
         assert "No in-flight report found for 2024-12" in result.output
 
     @pytest.mark.unit
+    def test_cache_clear_history_month(self, runner: CliRunner, isolated_home):
+        """Test clearing a specific month's history entry."""
+        import json
+
+        from iptax.cache.history import HistoryManager
+        from iptax.models import HistoryEntry
+
+        cache_dir = cache_dir_for_home(isolated_home)
+        cache_dir.mkdir(parents=True)
+        history_file = cache_dir / "history.json"
+
+        # Create history with multiple entries
+        manager = HistoryManager(history_path=history_file)
+        manager._history = {
+            "2024-10": HistoryEntry(
+                first_change_date=date(2024, 9, 21),
+                last_change_date=date(2024, 10, 25),
+                generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+            ),
+            "2024-11": HistoryEntry(
+                first_change_date=date(2024, 10, 26),
+                last_change_date=date(2024, 11, 25),
+                generated_at=datetime(2024, 11, 26, 10, 0, 0, tzinfo=UTC),
+            ),
+        }
+        manager._loaded = True
+        manager.save()
+
+        result = runner.invoke(
+            cli, ["cache", "clear", "--history", "--month", "2024-10"]
+        )
+        assert result.exit_code == 0
+        assert "Cleared history entry for 2024-10" in result.output
+
+        # Verify only 2024-10 was deleted
+        data = json.loads(history_file.read_text())
+        assert "2024-10" not in data
+        assert "2024-11" in data
+
+    @pytest.mark.unit
+    def test_cache_clear_history_month_nonexistent(
+        self, runner: CliRunner, isolated_home
+    ):
+        """Test clearing a nonexistent month's history entry."""
+        from iptax.cache.history import HistoryManager
+        from iptax.models import HistoryEntry
+
+        cache_dir = cache_dir_for_home(isolated_home)
+        cache_dir.mkdir(parents=True)
+        history_file = cache_dir / "history.json"
+
+        # Create history with one entry
+        manager = HistoryManager(history_path=history_file)
+        manager._history = {
+            "2024-10": HistoryEntry(
+                first_change_date=date(2024, 9, 21),
+                last_change_date=date(2024, 10, 25),
+                generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+            )
+        }
+        manager._loaded = True
+        manager.save()
+
+        result = runner.invoke(
+            cli, ["cache", "clear", "--history", "--month", "2024-12"]
+        )
+        assert result.exit_code == 0
+        assert "No history entry found for 2024-12" in result.output
+
+    @pytest.mark.unit
+    def test_cache_clear_inflight_and_history_month(
+        self, runner: CliRunner, isolated_home
+    ):
+        """Test clearing both in-flight and history for a specific month."""
+        import json
+
+        from iptax.cache.history import HistoryManager
+        from iptax.models import HistoryEntry
+
+        cache_dir = cache_dir_for_home(isolated_home)
+        cache_dir.mkdir(parents=True)
+
+        # Create in-flight cache
+        inflight_dir = cache_dir / "inflight"
+        inflight_dir.mkdir()
+        (inflight_dir / "2024-11.json").write_text('{"month": "2024-11"}')
+
+        # Create history
+        history_file = cache_dir / "history.json"
+        manager = HistoryManager(history_path=history_file)
+        manager._history = {
+            "2024-11": HistoryEntry(
+                first_change_date=date(2024, 10, 26),
+                last_change_date=date(2024, 11, 25),
+                generated_at=datetime(2024, 11, 26, 10, 0, 0, tzinfo=UTC),
+            )
+        }
+        manager._loaded = True
+        manager.save()
+
+        result = runner.invoke(
+            cli, ["cache", "clear", "--inflight", "--history", "--month", "2024-11"]
+        )
+        assert result.exit_code == 0
+        assert "Cleared in-flight report for 2024-11" in result.output
+        assert "Cleared history entry for 2024-11" in result.output
+
+        # Verify both were deleted
+        assert not (inflight_dir / "2024-11.json").exists()
+        data = json.loads(history_file.read_text())
+        assert "2024-11" not in data
+
+    @pytest.mark.unit
+    def test_cache_clear_ai_with_month_warning(self, runner: CliRunner, isolated_home):
+        """Test that using --ai with --month shows a warning."""
+        # isolated_home ensures test runs in isolated environment
+        cache_dir = cache_dir_for_home(isolated_home)
+        cache_dir.mkdir(parents=True)
+
+        result = runner.invoke(cli, ["cache", "clear", "--ai", "--month", "2024-11"])
+        assert result.exit_code == 0
+        assert "AI cache cannot be cleared per-month" in result.output
+
+    @pytest.mark.unit
     def test_cache_clear_all_confirmed(self, runner: CliRunner, tmp_path, monkeypatch):
         """Test clearing all cache with confirmation."""
         cache_dir = tmp_path / "cache" / "iptax" / "inflight"

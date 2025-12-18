@@ -178,6 +178,36 @@ class HistoryManager:
             return True
         return False
 
+    def delete_entry(self, month: str) -> bool:
+        """Delete a single history entry for a specific month.
+
+        Args:
+            month: Month in YYYY-MM format
+
+        Returns:
+            True if entry was deleted, False if it didn't exist
+
+        Raises:
+            ValueError: If month format is invalid
+        """
+        self._ensure_loaded()
+
+        # Validate month format
+        try:
+            parsed_month = datetime.strptime(month, "%Y-%m")
+        except ValueError as e:
+            raise ValueError(f"Invalid month format '{month}', expected YYYY-MM") from e
+
+        # Normalize to YYYY-MM format
+        month_key = parsed_month.strftime("%Y-%m")
+
+        # Delete if exists
+        if month_key in self._history:
+            del self._history[month_key]
+            self.save()
+            return True
+        return False
+
     def _ensure_loaded(self) -> None:
         """Ensure history is loaded before operations."""
         if not self._loaded:
