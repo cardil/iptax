@@ -572,24 +572,19 @@ def cache_clear(
         # (for backward compatibility with existing behavior)
         clear_all = not clear_inflight and not clear_ai and not clear_history
 
-        inflight_cleared = False
-        history_cleared = False
-
         # Clear in-flight if requested or no specific cache specified
         if clear_inflight or clear_all:
             if cache_mgr.delete(month):
                 click.secho(f"✓ Cleared in-flight report for {month}", fg="green")
-                inflight_cleared = True
             else:
                 click.secho(f"No in-flight report found for {month}", fg="yellow")
 
-        # Clear history if requested
-        if clear_history:
+        # Clear history if requested or no specific cache specified
+        if clear_history or clear_all:
             history_mgr = HistoryManager()
             history_mgr.load()
             if history_mgr.delete_entry(month):
                 click.secho(f"✓ Cleared history entry for {month}", fg="green")
-                history_cleared = True
             else:
                 click.secho(f"No history entry found for {month}", fg="yellow")
 
@@ -600,10 +595,6 @@ def cache_clear(
                 "Use without --month to clear all.",
                 fg="yellow",
             )
-
-        # Exit if nothing was found
-        if not inflight_cleared and not history_cleared:
-            return
 
         return
 
