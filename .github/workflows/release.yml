@@ -13,12 +13,19 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
-          token: ${{ secrets.AUTOMATION_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -30,8 +37,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "iptax-release[bot]"
+          git config user.email "iptax-release[bot]@users.noreply.github.com"
 
       # Bump version: strips .dev suffix OR increments patch
       - name: Bump version
@@ -58,6 +65,8 @@ jobs:
           name: Release ${{ steps.bump.outputs.version }}
           generate_release_notes: true
           files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
       # Bump main to next dev version only for minor releases (X.Y.0)
       - name: Bump main to next dev version
