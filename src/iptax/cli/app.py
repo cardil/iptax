@@ -568,8 +568,9 @@ def cache_clear(
 
     # If specific month provided, clear that month's data from specified cache(s)
     if month:
-        # Determine what to clear - if no flags specified, clear in-flight only
-        # (for backward compatibility with existing behavior)
+        # Determine what to clear - if no flags specified, clear both
+        # in-flight and history (for consistency, as month-specific
+        # clearing targets related data)
         clear_all = not clear_inflight and not clear_ai and not clear_history
 
         # Clear in-flight if requested or no specific cache specified
