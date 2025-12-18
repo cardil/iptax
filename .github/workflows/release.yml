@@ -10,7 +10,28 @@ permissions:
   contents: write
 
 jobs:
+  # Check if release should proceed (prevents infinite loop from bot commits)
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check if triggered by bot
+        id: check
+        run: |
+          AUTHOR=$(git log -1 --pretty=format:'%an')
+          if [[ "$AUTHOR" == "iptax-release[bot]" ]]; then
+            echo "Skipping - triggered by bot commit"
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          else
+            echo "Proceeding - triggered by $AUTHOR"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          fi
+
   release:
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Generate GitHub App token
