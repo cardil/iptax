@@ -324,6 +324,112 @@ class TestHistoryAddEntry:
         assert manager._loaded is True
 
 
+class TestHistoryDeleteEntry:
+    """Tests for delete_entry method."""
+
+    @pytest.mark.unit
+    def test_delete_entry_existing(self, tmp_path: Path) -> None:
+        """Test deleting an existing entry."""
+        manager = HistoryManager(history_path=tmp_path / "history.json")
+        manager._loaded = True
+        manager._history = {
+            "2024-10": HistoryEntry(
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
+                generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+            ),
+            "2024-11": HistoryEntry(
+                first_change_date=date(2024, 10, 26),
+                last_change_date=date(2024, 11, 25),
+                generated_at=datetime(2024, 11, 26, 10, 0, 0, tzinfo=UTC),
+            ),
+        }
+
+        result = manager.delete_entry("2024-10")
+
+        assert result is True
+        assert "2024-10" not in manager._history
+        assert "2024-11" in manager._history
+
+    @pytest.mark.unit
+    def test_delete_entry_nonexistent(self, tmp_path: Path) -> None:
+        """Test deleting non-existent entry returns False."""
+        manager = HistoryManager(history_path=tmp_path / "history.json")
+        manager._loaded = True
+        manager._history = {
+            "2024-10": HistoryEntry(
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
+                generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+            )
+        }
+
+        result = manager.delete_entry("2024-11")
+
+        assert result is False
+        assert "2024-10" in manager._history
+
+    @pytest.mark.unit
+    def test_delete_entry_invalid_month(self, tmp_path: Path) -> None:
+        """Test deleting with invalid month format."""
+        manager = HistoryManager(history_path=tmp_path / "history.json")
+        manager._loaded = True
+        manager._history = {}
+
+        with pytest.raises(ValueError, match="Invalid month format"):
+            manager.delete_entry("invalid")
+
+    @pytest.mark.unit
+    def test_delete_entry_saves_to_file(self, tmp_path: Path) -> None:
+        """Test delete_entry persists changes to file."""
+        history_file = tmp_path / "history.json"
+        manager = HistoryManager(history_path=history_file)
+        manager._loaded = True
+        manager._history = {
+            "2024-10": HistoryEntry(
+                first_change_date=date(2024, 9, 26),
+                last_change_date=date(2024, 10, 25),
+                generated_at=datetime(2024, 10, 26, 10, 0, 0, tzinfo=UTC),
+            ),
+            "2024-11": HistoryEntry(
+                first_change_date=date(2024, 10, 26),
+                last_change_date=date(2024, 11, 25),
+                generated_at=datetime(2024, 11, 26, 10, 0, 0, tzinfo=UTC),
+            ),
+        }
+        manager.save()
+
+        # Delete entry
+        manager.delete_entry("2024-10")
+
+        # Reload and verify
+        manager2 = HistoryManager(history_path=history_file)
+        manager2.load()
+        assert "2024-10" not in manager2._history
+        assert "2024-11" in manager2._history
+
+    @pytest.mark.unit
+    def test_delete_entry_auto_loads(self, tmp_path: Path) -> None:
+        """Test delete_entry auto-loads if not loaded."""
+        history_file = tmp_path / "history.json"
+        data = {
+            "2024-10": {
+                "first_change_date": "2024-09-26",
+                "last_change_date": "2024-10-25",
+                "generated_at": "2024-10-26T10:00:00",
+            }
+        }
+        history_file.write_text(json.dumps(data), encoding="utf-8")
+
+        manager = HistoryManager(history_path=history_file)
+        # Not loaded yet
+        assert manager._loaded is False
+
+        manager.delete_entry("2024-10")
+
+        assert manager._loaded is True
+
+
 class TestConvenienceFunctions:
     """Tests for convenience functions."""
 

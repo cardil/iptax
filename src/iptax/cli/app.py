@@ -566,12 +566,37 @@ def cache_clear(
     """
     cache_mgr = InFlightCache()
 
-    # If specific month provided, clear that month's in-flight report
+    # If specific month provided, clear that month's data from specified cache(s)
     if month:
-        if cache_mgr.delete(month):
-            click.secho(f"✓ Cleared in-flight report for {month}", fg="green")
-        else:
-            click.secho(f"No in-flight report found for {month}", fg="yellow")
+        # Determine what to clear - if no flags specified, clear both
+        # in-flight and history (for consistency, as month-specific
+        # clearing targets related data)
+        clear_all = not clear_inflight and not clear_ai and not clear_history
+
+        # Clear in-flight if requested or no specific cache specified
+        if clear_inflight or clear_all:
+            if cache_mgr.delete(month):
+                click.secho(f"✓ Cleared in-flight report for {month}", fg="green")
+            else:
+                click.secho(f"No in-flight report found for {month}", fg="yellow")
+
+        # Clear history if requested or no specific cache specified
+        if clear_history or clear_all:
+            history_mgr = HistoryManager()
+            history_mgr.load()
+            if history_mgr.delete_entry(month):
+                click.secho(f"✓ Cleared history entry for {month}", fg="green")
+            else:
+                click.secho(f"No history entry found for {month}", fg="yellow")
+
+        # AI cache doesn't support per-month clearing
+        if clear_ai:
+            click.secho(
+                "Warning: AI cache cannot be cleared per-month. "
+                "Use without --month to clear all.",
+                fg="yellow",
+            )
+
         return
 
     # Determine what to clear - if no flags specified, clear all
