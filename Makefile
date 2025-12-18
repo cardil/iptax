@@ -108,11 +108,9 @@ $(VENV)/init.done: $(VENV)/venv.done pyproject.toml
 	@if [ -f requirements.lock ]; then \
 		echo -e "$(BLUE)$(GEAR) Installing from requirements.lock...$(RESET)"; \
 		$(VENV_PIP) install -r requirements.lock; \
-	else \
-		echo -e "$(BLUE)$(GEAR) Installing from pyproject.toml...$(RESET)"; \
-		$(VENV_PIP) install -e ".[dev]"; \
 	fi
-	$(VENV_PIP) install -e . --no-deps
+	@echo -e "$(BLUE)$(GEAR) Installing from pyproject.toml...$(RESET)"
+	$(VENV_PIP) install -e ".[dev]"
 	$(VENV_PYTHON) -m playwright install firefox
 	@# Fix certifi to use system certs (for corporate SSL proxies)
 	@SYSTEM_CERTIFI=$$(ls /usr/lib/python3.*/site-packages/certifi/core.py \
