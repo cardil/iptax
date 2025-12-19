@@ -16,7 +16,6 @@ from iptax.cli import flows
 from iptax.cli.flows import (
     FlowOptions,
     OutputOptions,
-    _display_collection_summary,
     _display_inflight_summary,
     _get_playwright_command,
     _install_playwright_firefox,
@@ -654,100 +653,6 @@ class TestDisplayInflightSummary:
         output = strip_ansi(console.file.getvalue())
         assert "AI Judgments" in output
         assert "1" in output
-
-
-class TestDisplayCollectionSummary:
-    """Tests for _display_collection_summary function."""
-
-    @pytest.mark.unit
-    def test_displays_changes_count(self):
-        """Test that changes count is displayed."""
-        console = Console(file=StringIO(), force_terminal=True)
-        report = InFlightReport(
-            month="2024-11",
-            workday_start=date(2024, 11, 1),
-            workday_end=date(2024, 11, 30),
-            changes_since=date(2024, 10, 25),
-            changes_until=date(2024, 11, 25),
-            changes=[
-                Change(
-                    title="Test",
-                    repository=Repository(
-                        host="github.com", path="org/repo", provider_type="github"
-                    ),
-                    number=100,
-                )
-            ],
-        )
-
-        _display_collection_summary(console, report)
-
-        output = strip_ansi(console.file.getvalue())
-        assert "Data Collection" in output
-        assert "Did changes: 1" in output
-
-    @pytest.mark.unit
-    def test_displays_workday_data(self):
-        """Test that Workday data is displayed when present."""
-        console = Console(file=StringIO(), force_terminal=True)
-        report = InFlightReport(
-            month="2024-11",
-            workday_start=date(2024, 11, 1),
-            workday_end=date(2024, 11, 30),
-            changes_since=date(2024, 10, 25),
-            changes_until=date(2024, 11, 25),
-            total_hours=160.0,
-            working_days=20,
-            workday_validated=True,
-        )
-
-        _display_collection_summary(console, report)
-
-        output = strip_ansi(console.file.getvalue())
-        assert "Work time: 20 days, 160 hours" in output
-
-    @pytest.mark.unit
-    def test_displays_pto_when_present(self):
-        """Test that PTO info is displayed when absence_days > 0."""
-        console = Console(file=StringIO(), force_terminal=True)
-        report = InFlightReport(
-            month="2024-11",
-            workday_start=date(2024, 11, 1),
-            workday_end=date(2024, 11, 30),
-            changes_since=date(2024, 10, 25),
-            changes_until=date(2024, 11, 25),
-            total_hours=160.0,
-            working_days=20,
-            absence_days=2,  # 2 days PTO
-            workday_validated=True,
-        )
-
-        _display_collection_summary(console, report)
-
-        output = strip_ansi(console.file.getvalue())
-        assert "Paid Time Off" in output
-        assert "2 days" in output
-        assert "16 hours" in output  # 2 * 8
-
-    @pytest.mark.unit
-    def test_displays_validation_warning(self):
-        """Test that validation warning is displayed when incomplete."""
-        console = Console(file=StringIO(), force_terminal=True)
-        report = InFlightReport(
-            month="2024-11",
-            workday_start=date(2024, 11, 1),
-            workday_end=date(2024, 11, 30),
-            changes_since=date(2024, 10, 25),
-            changes_until=date(2024, 11, 25),
-            total_hours=120.0,
-            working_days=15,
-            workday_validated=False,
-        )
-
-        _display_collection_summary(console, report)
-
-        output = strip_ansi(console.file.getvalue())
-        assert "INCOMPLETE" in output
 
 
 class TestResolveReviewMonth:

@@ -324,6 +324,7 @@ async def _fetch_workday_data(
     report.total_hours = work_hours.total_hours
     report.working_days = work_hours.working_days
     report.absence_days = work_hours.absence_days
+    report.holiday_days = work_hours.holiday_days
 
     # Validate coverage
     missing = validate_workday_coverage(
@@ -561,31 +562,46 @@ def _display_inflight_summary(console: Console, report: InFlightReport) -> None:
         report: In-flight report to summarize
     """
     console.print("\n[bold]📋 In-Flight Report Summary:[/bold]")
-    console.print(f"  [cyan]Report Month:[/cyan] {report.month}")
+    console.print(f"  [cyan]📅 Report Month:[/cyan] {report.month}")
     console.print(
-        f"  [cyan]Workday Range:[/cyan] "
+        f"  [cyan]📆 Workday Range:[/cyan] "
         f"{report.workday_start} to {report.workday_end}"
     )
     console.print(
-        f"  [cyan]Changes Range:[/cyan] "
+        f"  [cyan]🔄 Changes Range:[/cyan] "
         f"{report.changes_since} to {report.changes_until}"
     )
-    console.print(f"  [cyan]Changes Collected:[/cyan] {len(report.changes)}")
+    console.print(f"  [cyan]📥 Changes Collected:[/cyan] {len(report.changes)}")
     if report.total_hours is not None:
         eff_hrs = int(report.effective_hours) if report.effective_hours else 0
         eff_days = report.effective_days or 0
-        console.print(f"  [cyan]Work Time:[/cyan] {eff_days} days, {eff_hrs} hours")
+        console.print(f"  [cyan]💼 Work Time:[/cyan] {eff_days} days, {eff_hrs} hours")
         # Show PTO separately if any
         if report.absence_days and report.absence_days > 0:
             pto_days = report.absence_days
             pto_hrs = int(pto_days * 8)
             console.print(
-                f"  [cyan]Paid Time Off:[/cyan] {pto_days} days, {pto_hrs} hours"
+                f"  [cyan]🌴 Paid Time Off:[/cyan] {pto_days} days, {pto_hrs} hours"
             )
-            total_days = (report.effective_days or 0) + (report.absence_days or 0)
+        # Show holidays separately if any
+        if report.holiday_days and report.holiday_days > 0:
+            holiday_days = report.holiday_days
+            holiday_hrs = int(holiday_days * 8)
+            console.print(
+                f"  [cyan]🎄 Holidays:[/cyan] {holiday_days} days, {holiday_hrs} hours"
+            )
+        # Show total if there's PTO or holidays
+        if (report.absence_days and report.absence_days > 0) or (
+            report.holiday_days and report.holiday_days > 0
+        ):
+            total_days = (
+                (report.effective_days or 0)
+                + (report.absence_days or 0)
+                + (report.holiday_days or 0)
+            )
             total_hrs = int(report.total_hours)
             console.print(
-                f"  [cyan]Total Recorded:[/cyan] {total_days} days, {total_hrs} hours"
+                f"  [cyan]📊 Total Recorded:[/cyan] {total_days} days, {total_hrs} hours"
             )
         if report.workday_validated:
             console.print("  [green]✓ Workday Coverage:[/green] Complete")
@@ -608,34 +624,6 @@ def _display_inflight_summary(console: Console, report: InFlightReport) -> None:
                 )
     if report.judgments:
         console.print(f"  [cyan]AI Judgments:[/cyan] {len(report.judgments)}")
-
-
-def _display_collection_summary(console: Console, report: InFlightReport) -> None:
-    """Display data collection summary (used in report flow).
-
-    Args:
-        console: Rich console for output
-        report: In-flight report to summarize
-    """
-    console.print("\n[bold]Data Collection:[/bold]")
-    console.print(f"  • Did changes: {len(report.changes)}")
-    if report.total_hours is not None:
-        # Display hours as integer for cleaner output
-        effective_hrs = int(report.effective_hours) if report.effective_hours else 0
-        eff_days = report.effective_days or 0
-        console.print(f"  • Work time: {eff_days} days, {effective_hrs} hours")
-        # Show PTO separately if any
-        if report.absence_days and report.absence_days > 0:
-            pto_days = report.absence_days
-            pto_hrs = int(pto_days * 8)
-            console.print(f"  • 🌴 Paid Time Off: {pto_days} days, {pto_hrs} hours")
-            total_days = (report.effective_days or 0) + (report.absence_days or 0)
-            total_hrs = int(report.total_hours)
-            console.print(
-                f"  • 📅 Total recorded: {total_days} days, {total_hrs} hours"
-            )
-        if not report.workday_validated:
-            console.print("  [yellow]⚠ Workday validation: INCOMPLETE[/yellow]")
 
 
 # Month alias sets for _resolve_review_month
@@ -989,7 +977,7 @@ async def report_flow(
     console.print(f"\n[cyan]📊[/cyan] Generating report for {month_key}")
 
     # Display collected data
-    _display_collection_summary(console, report)
+    _display_inflight_summary(console, report)
 
     # Process AI and review
     review_accepted = await _process_ai_and_review(console, cache, report, options)

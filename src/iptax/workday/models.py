@@ -78,7 +78,9 @@ class CalendarEntriesCollector:
 
         return added
 
-    def get_hours_for_month(self, year: int, month: int) -> tuple[float, float, float]:
+    def get_hours_for_month(
+        self, year: int, month: int
+    ) -> tuple[float, float, float, float]:
         """Calculate hours for a specific month.
 
         Args:
@@ -86,29 +88,45 @@ class CalendarEntriesCollector:
             month: Target month (1-12)
 
         Returns:
-            Tuple of (working_hours, time_off_hours, total_hours)
+            Tuple of (working_hours, pto_hours, holiday_hours, total_hours)
         """
         working_hours = 0.0
-        time_off_hours = 0.0
+        pto_hours = 0.0
+        holiday_hours = 0.0
 
+        # First, collect all Time Tracking entries by date
+        time_tracking_dates = set()
+        for entry in self.entries:
+            if entry.entry_date.year != year or entry.entry_date.month != month:
+                continue
+            if entry.entry_type == "Time Tracking":
+                time_tracking_dates.add(entry.entry_date)
+
+        # Now process all entries
         for entry in self.entries:
             if entry.entry_date.year != year or entry.entry_date.month != month:
                 continue
 
             if entry.entry_type == "Time Tracking":
-                # Check for time off entries that have "Time Tracking" type
-                # but are actually paid time off (vacation, PTO, etc.)
-                if entry.title in ("Paid Holiday", "Paid Time Off in Hours"):
-                    time_off_hours += entry.hours
+                # Separate holidays from PTO in Time Tracking entries
+                if entry.title == "Paid Holiday":
+                    holiday_hours += entry.hours
+                elif entry.title == "Paid Time Off in Hours":
+                    pto_hours += entry.hours
                 else:
                     working_hours += entry.hours
-            # Note: We skip "Time Off" entries (e.g., "Annual Leave") because
-            # the actual hours are captured in "Time Tracking" entries like
-            # "Paid Time Off in Hours". The "Time Off" entries are just
-            # absence request/approval markers without actual hour values.
-            # Also skip "Holiday Calendar Entry Type" - just markers, no hours
+            elif (
+                entry.entry_type == "Time Off"
+                and entry.entry_date not in time_tracking_dates
+            ):
+                # Count Time Off entries only if there's no Time Tracking for that date
+                # This handles future PTO that only has markers
+                pto_hours += entry.hours
 
-        return working_hours, time_off_hours, working_hours + time_off_hours
+            # Skip "Holiday Calendar Entry Type" - just markers, no hours
+
+        total_hours = working_hours + pto_hours + holiday_hours
+        return working_hours, pto_hours, holiday_hours, total_hours
 
     def get_entries_for_range(
         self, start_date: date, end_date: date
