@@ -16,7 +16,6 @@ from rich.console import Console
 
 from iptax.ai.cache import JudgmentCacheManager, get_ai_cache_path
 from iptax.cache.history import (
-    HistoryCorruptedError,
     HistoryManager,
     get_history_path,
 )
@@ -287,9 +286,6 @@ async def report(  # noqa: PLR0913  # CLI commands need many options for flexibi
     except DidIntegrationError as e:
         click.secho(f"Did integration error: {e}", fg="red", err=True)
         click.echo("\nCheck your did configuration and try again.")
-        sys.exit(1)
-    except HistoryCorruptedError as e:
-        click.secho(f"History error: {e}", fg="red", err=True)
         sys.exit(1)
     except WorkdayError as e:
         click.secho(f"Workday error: {e}", fg="red", err=True)
@@ -747,13 +743,8 @@ def history(month: str | None, output_format: str, path: bool) -> None:
         return
 
     # Load history
-    try:
-        manager = HistoryManager()
-        manager.load()
-    except HistoryCorruptedError as e:
-        click.secho(f"Error: {e}", fg="red", err=True)
-        click.echo("\nRun 'iptax' to fix the corrupted history file.")
-        sys.exit(1)
+    manager = HistoryManager()
+    manager.load()
 
     entries = manager.get_all_entries()
 
