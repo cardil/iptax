@@ -15,7 +15,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from iptax.models import InFlightReport
+from iptax.models import INFLIGHT_SCHEMA_VERSION, InFlightReport
 from iptax.utils.env import get_cache_dir
 
 logger = logging.getLogger(__name__)
@@ -192,15 +192,29 @@ class InFlightCache:
         return self.cache_dir / f"{month}.json"
 
     def exists(self, month: str) -> bool:
-        """Check if in-flight cache exists for a month.
+        """Check if in-flight cache exists for a month with compatible schema.
 
         Args:
             month: Month in YYYY-MM format
 
         Returns:
-            True if cache exists
+            True if cache exists and has compatible schema version,
+            False if missing or has incompatible schema
         """
-        return self._get_cache_path(month).exists()
+        cache_path = self._get_cache_path(month)
+        if not cache_path.exists():
+            return False
+
+        # Check schema version compatibility
+        try:
+            with cache_path.open("r") as f:
+                data = json.load(f)
+            schema_version = data.get("schema_version")
+        except (json.JSONDecodeError, OSError):
+            # Corrupted file or read error - treat as non-existent
+            return False
+        else:
+            return bool(schema_version == INFLIGHT_SCHEMA_VERSION)
 
     def load(self, month: str) -> InFlightReport | None:
         """Load in-flight report from cache.
@@ -209,7 +223,8 @@ class InFlightCache:
             month: Month in YYYY-MM format
 
         Returns:
-            InFlightReport if exists, None otherwise (also None for corrupted files)
+            InFlightReport if exists and schema version matches, None otherwise
+            (also None for corrupted files or incompatible schema versions)
         """
         cache_path = self._get_cache_path(month)
         if not cache_path.exists():
@@ -218,6 +233,19 @@ class InFlightCache:
         try:
             with cache_path.open("r") as f:
                 data = json.load(f)
+
+            # Check schema version compatibility
+            schema_version = data.get("schema_version")
+            if schema_version != INFLIGHT_SCHEMA_VERSION:
+                logger.warning(
+                    "Incompatible cache schema version in %s: "
+                    "expected %s, got %s. Cache will be ignored.",
+                    cache_path,
+                    INFLIGHT_SCHEMA_VERSION,
+                    schema_version,
+                )
+                return None
+
             return InFlightReport(**data)
         except (json.JSONDecodeError, ValidationError) as e:
             logger.warning("Corrupted cache file %s: %s", cache_path, e)
@@ -226,13 +254,21 @@ class InFlightCache:
     def save(self, report: InFlightReport) -> Path:
         """Save in-flight report to cache.
 
+        Note:
+            This method modifies the input report by setting report.schema_version
+            to the current INFLIGHT_SCHEMA_VERSION before saving. This ensures all
+            saved reports have the correct schema version for cache validation.
+
         Args:
-            report: Report to save
+            report: Report to save (will be modified in-place)
 
         Returns:
             Path where report was saved
         """
         cache_path = self._get_cache_path(report.month)
+
+        # Set schema version to current before saving
+        report.schema_version = INFLIGHT_SCHEMA_VERSION
 
         with cache_path.open("w") as f:
             json.dump(

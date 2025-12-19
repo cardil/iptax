@@ -147,6 +147,45 @@ class TestInFlightCache:
         count = cache.clear_all()
         assert count == 0
 
+    def test_exists_returns_false_for_incompatible_schema(self, tmp_path: Path) -> None:
+        """Test that exists returns False for incompatible schema versions."""
+        import json
+
+        cache = InFlightCache(cache_dir=tmp_path)
+
+        # Create cache file with incompatible schema (no schema_version)
+        cache_path = tmp_path / "2024-11.json"
+        old_report_data = {
+            "month": "2024-11",
+            "workday_start": "2024-11-01",
+            "workday_end": "2024-11-30",
+            "changes_since": "2024-10-25",
+            "changes_until": "2024-11-25",
+            "changes": [],
+            "judgments": [],
+            "workday_entries": [],
+            "workday_validated": False,
+            # Note: no schema_version field
+        }
+        with cache_path.open("w") as f:
+            json.dump(old_report_data, f)
+
+        # exists() should return False for incompatible schema
+        assert not cache.exists("2024-11")
+
+        # For comparison, create a compatible cache file
+        report = InFlightReport(
+            month="2024-12",
+            workday_start=date(2024, 12, 1),
+            workday_end=date(2024, 12, 31),
+            changes_since=date(2024, 11, 25),
+            changes_until=date(2024, 12, 25),
+        )
+        cache.save(report)
+
+        # exists() should return True for compatible schema
+        assert cache.exists("2024-12")
+
     def test_save_creates_directory(self, tmp_path: Path) -> None:
         """Test that save creates cache directory if needed."""
         cache_dir = tmp_path / "subdir" / "cache"

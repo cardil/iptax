@@ -318,9 +318,10 @@ class TestCalendarEntriesCollector:
                 hours=8.0,
             ),
         ]
-        working, time_off, total = collector.get_hours_for_month(2025, 11)
+        working, pto, holiday, total = collector.get_hours_for_month(2025, 11)
         assert working == 8.0
-        assert time_off == 16.0
+        assert pto == 8.0
+        assert holiday == 8.0
         assert total == 24.0
 
     def test_get_hours_for_month_filters_by_date(self) -> None:
@@ -340,12 +341,12 @@ class TestCalendarEntriesCollector:
                 hours=8.0,
             ),
         ]
-        working, _time_off, total = collector.get_hours_for_month(2025, 11)
+        working, _pto, _holiday, total = collector.get_hours_for_month(2025, 11)
         assert working == 8.0
         assert total == 8.0
 
-    def test_get_hours_skips_time_off_entries(self) -> None:
-        """Test that Time Off type entries are skipped."""
+    def test_get_hours_counts_time_off_without_time_tracking(self) -> None:
+        """Test that Time Off entries are counted when no Time Tracking exists."""
         collector = CalendarEntriesCollector()
         collector.entries = [
             WorkdayCalendarEntry(
@@ -354,6 +355,7 @@ class TestCalendarEntriesCollector:
                 entry_type="Time Tracking",
                 hours=8.0,
             ),
+            # Time Off entry without corresponding Time Tracking (future PTO)
             WorkdayCalendarEntry(
                 entry_date=date(2025, 11, 28),
                 title="TOIL",
@@ -361,7 +363,8 @@ class TestCalendarEntriesCollector:
                 hours=8.0,
             ),
         ]
-        working, time_off, total = collector.get_hours_for_month(2025, 11)
+        working, pto, holiday, total = collector.get_hours_for_month(2025, 11)
         assert working == 8.0
-        assert time_off == 0.0
-        assert total == 8.0
+        assert pto == 8.0  # Time Off entry counted
+        assert holiday == 0.0
+        assert total == 16.0
