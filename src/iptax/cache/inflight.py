@@ -254,8 +254,13 @@ class InFlightCache:
     def save(self, report: InFlightReport) -> Path:
         """Save in-flight report to cache.
 
+        Note:
+            This method modifies the input report by setting report.schema_version
+            to the current INFLIGHT_SCHEMA_VERSION before saving. This ensures all
+            saved reports have the correct schema version for cache validation.
+
         Args:
-            report: Report to save
+            report: Report to save (will be modified in-place)
 
         Returns:
             Path where report was saved

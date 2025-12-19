@@ -373,6 +373,8 @@ async def extract_work_hours(
 
         # Calculate working days, PTO days, and holiday days
         working_days = calculate_working_days(start_date, end_date)
+        # Note: int() truncates partial-day hours (e.g., 12h = 1.5 days -> 1 day).
+        # This is intentional since Workday reports days as discrete units.
         absence_days = int(pto_hours / 8.0) if pto_hours > 0 else 0
         holiday_days = int(holiday_hours / 8.0) if holiday_hours > 0 else 0
 

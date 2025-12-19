@@ -12,6 +12,14 @@ from iptax.models import WorkdayCalendarEntry
 
 logger = logging.getLogger(__name__)
 
+# Calendar entry type constants
+ENTRY_TYPE_TIME_TRACKING = "Time Tracking"
+ENTRY_TYPE_TIME_OFF = "Time Off"
+
+# Calendar entry title constants
+TITLE_PAID_HOLIDAY = "Paid Holiday"
+TITLE_PAID_TIME_OFF = "Paid Time Off in Hours"
+
 
 class WorkdayError(Exception):
     """Base exception for Workday errors."""
@@ -99,7 +107,7 @@ class CalendarEntriesCollector:
         for entry in self.entries:
             if entry.entry_date.year != year or entry.entry_date.month != month:
                 continue
-            if entry.entry_type == "Time Tracking":
+            if entry.entry_type == ENTRY_TYPE_TIME_TRACKING:
                 time_tracking_dates.add(entry.entry_date)
 
         # Now process all entries
@@ -107,16 +115,16 @@ class CalendarEntriesCollector:
             if entry.entry_date.year != year or entry.entry_date.month != month:
                 continue
 
-            if entry.entry_type == "Time Tracking":
+            if entry.entry_type == ENTRY_TYPE_TIME_TRACKING:
                 # Separate holidays from PTO in Time Tracking entries
-                if entry.title == "Paid Holiday":
+                if entry.title == TITLE_PAID_HOLIDAY:
                     holiday_hours += entry.hours
-                elif entry.title == "Paid Time Off in Hours":
+                elif entry.title == TITLE_PAID_TIME_OFF:
                     pto_hours += entry.hours
                 else:
                     working_hours += entry.hours
             elif (
-                entry.entry_type == "Time Off"
+                entry.entry_type == ENTRY_TYPE_TIME_OFF
                 and entry.entry_date not in time_tracking_dates
             ):
                 # Count Time Off entries only if there's no Time Tracking for that date
@@ -185,7 +193,7 @@ def _parse_calendar_entry(entry: dict) -> WorkdayCalendarEntry | None:
         quantity_data = entry.get("quantity", {})
         quantity_value = float(quantity_data.get("value", 0)) if quantity_data else 0.0
 
-        if entry_type == "Time Off":
+        if entry_type == ENTRY_TYPE_TIME_OFF:
             # For Time Off, first try to parse hours from subtitle1 like "8 Hours"
             subtitle1 = entry.get("subtitle1", {}).get("value", "")
             if subtitle1 and "Hour" in subtitle1:

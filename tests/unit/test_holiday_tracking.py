@@ -15,6 +15,7 @@ from iptax.models import (
     WorkdayCalendarEntry,
     WorkHours,
 )
+from iptax.workday.models import CalendarEntriesCollector
 
 
 class TestInflightSchemaVersion:
@@ -172,8 +173,6 @@ class TestCalendarEntriesCollectorHolidays:
     @pytest.mark.unit
     def test_get_hours_for_month_separates_holidays(self) -> None:
         """Test that get_hours_for_month returns holidays separately."""
-        from iptax.workday.models import CalendarEntriesCollector
-
         collector = CalendarEntriesCollector()
         collector.entries = [
             # Work entry
@@ -212,8 +211,6 @@ class TestCalendarEntriesCollectorHolidays:
     @pytest.mark.unit
     def test_get_hours_for_month_counts_time_off_entries(self) -> None:
         """Test that Time Off entries are counted when no Time Tracking exists."""
-        from iptax.workday.models import CalendarEntriesCollector
-
         collector = CalendarEntriesCollector()
         collector.entries = [
             # Work entry
@@ -244,8 +241,6 @@ class TestCalendarEntriesCollectorHolidays:
     @pytest.mark.unit
     def test_get_hours_deduplicates_time_off_with_time_tracking(self) -> None:
         """Test that Time Off entries are NOT double-counted with Time Tracking."""
-        from iptax.workday.models import CalendarEntriesCollector
-
         collector = CalendarEntriesCollector()
         collector.entries = [
             # Time Off marker entry
