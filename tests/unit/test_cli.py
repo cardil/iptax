@@ -218,6 +218,7 @@ class TestCacheCommand:
         cache_dir.mkdir(parents=True)
         # Create a valid InFlightReport cache file with all required fields
         valid_report = {
+            "schema_version": 2,
             "month": "2024-11",
             "workday_start": "2024-11-01",
             "workday_end": "2024-11-30",

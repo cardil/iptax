@@ -334,8 +334,8 @@ async def extract_work_hours(
             # Navigate to next week
             await navigate_next_week(driver)
 
-        # Calculate hours from collected entries
-        working_hours, time_off_hours, total = collector.get_hours_for_month(
+        # Calculate hours from collected entries (now returns 4-tuple with holidays)
+        working_hours, pto_hours, holiday_hours, total = collector.get_hours_for_month(
             start_date.year, start_date.month
         )
 
@@ -363,21 +363,27 @@ async def extract_work_hours(
             )
 
         logger.info(
-            "Per-day calculation: working=%.1f, time_off=%.1f, total=%.1f",
+            "Per-day calculation: working=%.1f, pto=%.1f, holiday=%.1f, total=%.1f",
             working_hours,
-            time_off_hours,
+            pto_hours,
+            holiday_hours,
             total,
         )
         logger.info("Weeks visited: %s", weeks_visited)
 
-        # Calculate working days and absence days
+        # Calculate working days, PTO days, and holiday days
         working_days = calculate_working_days(start_date, end_date)
-        absence_days = int(time_off_hours / 8.0) if time_off_hours > 0 else 0
+        # Note: int() truncates partial-day hours (e.g., 12h = 1.5 days -> 1 day).
+        # This is intentional since Workday reports days as discrete units.
+        absence_days = int(pto_hours / 8.0) if pto_hours > 0 else 0
+        holiday_days = int(holiday_hours / 8.0) if holiday_hours > 0 else 0
 
         logger.info(
-            "Final: working_days=%d, absence_days=%d, total_hours=%.1f",
+            "Final: working_days=%d, absence_days=%d, holiday_days=%d, "
+            "total_hours=%.1f",
             working_days,
             absence_days,
+            holiday_days,
             total,
         )
 
@@ -387,6 +393,7 @@ async def extract_work_hours(
         return WorkHours(
             working_days=working_days,
             absence_days=absence_days,
+            holiday_days=holiday_days,
             total_hours=total,
             calendar_entries=range_entries,
         )

@@ -25,6 +25,10 @@ from pydantic.fields import FieldInfo
 # Work schedule constants (may become configurable in the future)
 HOURS_PER_DAY = 8.0
 
+# Schema version for InFlightReport cache compatibility
+# Increment when making breaking changes to the model
+INFLIGHT_SCHEMA_VERSION = 2
+
 
 class Fields:
     """Proxy class for accessing Pydantic model field info via attributes.
@@ -442,7 +446,12 @@ class WorkHours(BaseModel):
     )
     absence_days: int = Field(
         default=0,
-        description="Vacation, sick leave, holidays",
+        description="Vacation, sick leave (PTO)",
+        ge=0,
+    )
+    holiday_days: int = Field(
+        default=0,
+        description="Paid holidays (company holidays)",
         ge=0,
     )
     total_hours: float = Field(
@@ -457,8 +466,9 @@ class WorkHours(BaseModel):
 
     @property
     def effective_hours(self) -> float:
-        """Hours actually worked (assuming 8h/day for absences)."""
-        return self.total_hours - (self.absence_days * HOURS_PER_DAY)
+        """Hours actually worked (excluding PTO and holidays)."""
+        absence_hours = (self.absence_days + self.holiday_days) * HOURS_PER_DAY
+        return self.total_hours - absence_hours
 
     @property
     def effective_days(self) -> int:
@@ -839,6 +849,10 @@ class InFlightReport(BaseModel):
     run AI filtering, and review across multiple sessions.
     """
 
+    schema_version: int | None = Field(
+        default=None,
+        description="Schema version for cache compatibility (None = old/incompatible)",
+    )
     month: str = Field(
         ...,
         description="Report month in YYYY-MM format",
@@ -889,7 +903,11 @@ class InFlightReport(BaseModel):
     )
     absence_days: int | None = Field(
         default=None,
-        description="Absence days from Workday (if collected)",
+        description="PTO/sick leave days from Workday (if collected)",
+    )
+    holiday_days: int | None = Field(
+        default=None,
+        description="Paid holiday days from Workday (if collected)",
     )
 
     def is_reviewed(self) -> bool:
@@ -904,10 +922,10 @@ class InFlightReport(BaseModel):
 
     @property
     def effective_hours(self) -> float | None:
-        """Actual work hours (excluding PTO/absences).
+        """Actual work hours (excluding PTO/absences and holidays).
 
         Used for IP tax calculation - creative work percentage should
-        only apply to actual work hours, not time off.
+        only apply to actual work hours, not time off or holidays.
 
         Returns:
             Actual work hours or None if total_hours not set.
@@ -915,7 +933,8 @@ class InFlightReport(BaseModel):
         if self.total_hours is None:
             return None
         absence_hours = (self.absence_days or 0) * HOURS_PER_DAY
-        return self.total_hours - absence_hours
+        holiday_hours = (self.holiday_days or 0) * HOURS_PER_DAY
+        return self.total_hours - absence_hours - holiday_hours
 
     @property
     def effective_days(self) -> int | None:

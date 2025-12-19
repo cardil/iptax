@@ -12,6 +12,14 @@ from iptax.models import WorkdayCalendarEntry
 
 logger = logging.getLogger(__name__)
 
+# Calendar entry type constants
+ENTRY_TYPE_TIME_TRACKING = "Time Tracking"
+ENTRY_TYPE_TIME_OFF = "Time Off"
+
+# Calendar entry title constants
+TITLE_PAID_HOLIDAY = "Paid Holiday"
+TITLE_PAID_TIME_OFF = "Paid Time Off in Hours"
+
 
 class WorkdayError(Exception):
     """Base exception for Workday errors."""
@@ -78,7 +86,9 @@ class CalendarEntriesCollector:
 
         return added
 
-    def get_hours_for_month(self, year: int, month: int) -> tuple[float, float, float]:
+    def get_hours_for_month(
+        self, year: int, month: int
+    ) -> tuple[float, float, float, float]:
         """Calculate hours for a specific month.
 
         Args:
@@ -86,29 +96,45 @@ class CalendarEntriesCollector:
             month: Target month (1-12)
 
         Returns:
-            Tuple of (working_hours, time_off_hours, total_hours)
+            Tuple of (working_hours, pto_hours, holiday_hours, total_hours)
         """
         working_hours = 0.0
-        time_off_hours = 0.0
+        pto_hours = 0.0
+        holiday_hours = 0.0
 
+        # First, collect all Time Tracking entries by date
+        time_tracking_dates = set()
+        for entry in self.entries:
+            if entry.entry_date.year != year or entry.entry_date.month != month:
+                continue
+            if entry.entry_type == ENTRY_TYPE_TIME_TRACKING:
+                time_tracking_dates.add(entry.entry_date)
+
+        # Now process all entries
         for entry in self.entries:
             if entry.entry_date.year != year or entry.entry_date.month != month:
                 continue
 
-            if entry.entry_type == "Time Tracking":
-                # Check for time off entries that have "Time Tracking" type
-                # but are actually paid time off (vacation, PTO, etc.)
-                if entry.title in ("Paid Holiday", "Paid Time Off in Hours"):
-                    time_off_hours += entry.hours
+            if entry.entry_type == ENTRY_TYPE_TIME_TRACKING:
+                # Separate holidays from PTO in Time Tracking entries
+                if entry.title == TITLE_PAID_HOLIDAY:
+                    holiday_hours += entry.hours
+                elif entry.title == TITLE_PAID_TIME_OFF:
+                    pto_hours += entry.hours
                 else:
                     working_hours += entry.hours
-            # Note: We skip "Time Off" entries (e.g., "Annual Leave") because
-            # the actual hours are captured in "Time Tracking" entries like
-            # "Paid Time Off in Hours". The "Time Off" entries are just
-            # absence request/approval markers without actual hour values.
-            # Also skip "Holiday Calendar Entry Type" - just markers, no hours
+            elif (
+                entry.entry_type == ENTRY_TYPE_TIME_OFF
+                and entry.entry_date not in time_tracking_dates
+            ):
+                # Count Time Off entries only if there's no Time Tracking for that date
+                # This handles future PTO that only has markers
+                pto_hours += entry.hours
 
-        return working_hours, time_off_hours, working_hours + time_off_hours
+            # Skip "Holiday Calendar Entry Type" - just markers, no hours
+
+        total_hours = working_hours + pto_hours + holiday_hours
+        return working_hours, pto_hours, holiday_hours, total_hours
 
     def get_entries_for_range(
         self, start_date: date, end_date: date
@@ -167,7 +193,7 @@ def _parse_calendar_entry(entry: dict) -> WorkdayCalendarEntry | None:
         quantity_data = entry.get("quantity", {})
         quantity_value = float(quantity_data.get("value", 0)) if quantity_data else 0.0
 
-        if entry_type == "Time Off":
+        if entry_type == ENTRY_TYPE_TIME_OFF:
             # For Time Off, first try to parse hours from subtitle1 like "8 Hours"
             subtitle1 = entry.get("subtitle1", {}).get("value", "")
             if subtitle1 and "Hour" in subtitle1:
