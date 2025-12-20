@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from iptax.cache.history import (
-    HistoryCorruptedError,
+    HistoryError,
     HistoryManager,
     get_history_path,
     get_last_report_date,
@@ -153,7 +153,7 @@ class TestHistoryLoad:
 
         manager = HistoryManager(history_path=history_file)
 
-        with pytest.raises(HistoryCorruptedError, match="invalid JSON"):
+        with pytest.raises(HistoryError, match="invalid JSON"):
             manager.load()
 
     @pytest.mark.unit
@@ -165,7 +165,7 @@ class TestHistoryLoad:
 
         manager = HistoryManager(history_path=history_file)
 
-        with pytest.raises(HistoryCorruptedError, match="Invalid history entry"):
+        with pytest.raises(HistoryError, match="Invalid history entry"):
             manager.load()
 
 

@@ -22,12 +22,6 @@ class HistoryError(Exception):
     pass
 
 
-class HistoryCorruptedError(HistoryError):
-    """History file is corrupted and cannot be parsed."""
-
-    pass
-
-
 class HistoryManager:
     """Manages report history.
 
@@ -72,10 +66,10 @@ class HistoryManager:
         """Load history from JSON file.
 
         If the file doesn't exist, starts with empty history.
-        If the file is corrupted, raises HistoryCorruptedError.
+        If the file is corrupted, raises HistoryError.
 
         Raises:
-            HistoryCorruptedError: If history file cannot be parsed
+            HistoryError: If history file cannot be parsed
         """
         if not self.history_path.exists():
             self._history = {}
@@ -111,21 +105,19 @@ class HistoryManager:
                         )
                     self._history[month] = HistoryEntry(**entry_data)
                 except ValidationError as e:
-                    raise HistoryCorruptedError(
-                        f"Invalid history entry for {month}: {e}"
-                    ) from e
+                    raise HistoryError(f"Invalid history entry for {month}: {e}") from e
 
             self._loaded = True
 
         except json.JSONDecodeError as e:
-            raise HistoryCorruptedError(
+            raise HistoryError(
                 f"Cannot parse {self.history_path}: {e}\n\n"
                 "The history file has invalid JSON syntax."
             ) from e
-        except HistoryCorruptedError:
+        except HistoryError:
             raise
         except Exception as e:
-            raise HistoryCorruptedError(
+            raise HistoryError(
                 f"Failed to load history from {self.history_path}: {e}"
             ) from e
 
