@@ -65,7 +65,7 @@ async def navigate_to_time_page(
     personal_button = driver.get_by_role("button", name="Personal", exact=True)
     try:
         await personal_button.wait_for(state="visible", timeout=_NAV_LAYOUT_TIMEOUT)
-    except Exception:
+    except TimeoutError:
         # Sidebar is hidden: click the MENU hamburger button to open nav dialog
         logger.info("No sidebar — using MENU button fallback...")
         menu_button = driver.get_by_role("button", name="MENU", exact=True)
@@ -115,7 +115,7 @@ async def select_week_via_modal(
     select_week_link = driver.get_by_role("link", name=re.compile(r"Select Week"))
     try:
         await select_week_link.wait_for(state="visible", timeout=ELEMENT_TIMEOUT)
-    except Exception:
+    except TimeoutError:
         # Maybe it's visible as a button instead
         select_week_link = driver.get_by_role("button", name=re.compile(r"Select Week"))
         await select_week_link.wait_for(state="visible", timeout=ELEMENT_TIMEOUT)

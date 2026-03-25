@@ -6,6 +6,7 @@ import re
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from iptax.workday.driver import (
     PlaywrightDriver,
@@ -27,6 +28,16 @@ class TestPlaywrightLocator:
         await wrapper.wait_for(state="visible", timeout=5000)
 
         mock_locator.wait_for.assert_called_once_with(state="visible", timeout=5000)
+
+    @pytest.mark.asyncio
+    async def test_wait_for_translates_playwright_timeout_to_builtin(self) -> None:
+        """Test wait_for translates Playwright TimeoutError to built-in TimeoutError."""
+        mock_locator = AsyncMock()
+        mock_locator.wait_for.side_effect = PlaywrightTimeoutError("timed out")
+        wrapper = PlaywrightLocator(mock_locator)
+
+        with pytest.raises(TimeoutError):
+            await wrapper.wait_for(state="visible", timeout=100)
 
     @pytest.mark.asyncio
     async def test_click(self) -> None:
