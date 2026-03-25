@@ -7,23 +7,61 @@
 <body>
   <header>
     <h1>Workday</h1>
+    <nav aria-label="Workday Global Navigation">
+      <ul>
+        <li><a href="/d/pex/home.htmld">Home</a></li>
+        <li><button type="button">Organization</button></li>
+        <li>
+          <!-- Personal nav button with hover submenu -->
+          <!-- Matches: get_by_role("button", name="Personal", exact=True) -->
+          <button type="button" id="personal-btn"
+            onmouseenter="showPersonalMenu()"
+            onmouseleave="hidePersonalMenuDelayed()">
+            Personal
+          </button>
+          <ul id="personal-menu" style="display:none"
+            onmouseenter="cancelHidePersonalMenu()"
+            onmouseleave="hidePersonalMenu()">
+            <li><a href="#">Talent and Performance</a></li>
+            <!-- Matches: get_by_role("link", name="Time", exact=True) -->
+            <li><a href="/d/time.htmld">Time</a></li>
+            <li><a href="#">Absence</a></li>
+            <li><a href="#">Career Hub</a></li>
+          </ul>
+        </li>
+        <li><button type="button">More</button></li>
+      </ul>
+    </nav>
   </header>
 
   <main>
-    <section aria-label="Your Top Apps">
-      <h2>Your Top Apps</h2>
-      <div class="app-grid">
-        <!-- Matches: get_by_role("button", name="Time", exact=True) -->
-        <button type="button"
-          onclick="window.location='/d/time.htmld'">
-          Time
-        </button>
-
-        <!-- Other apps for realism -->
-        <button type="button">Benefits</button>
-        <button type="button">Pay</button>
-      </div>
+    <section>
+      <h1>Let's Get Started</h1>
+      <input type="search" aria-label="Search Workday" role="combobox" />
+      <ul aria-label="Quick Actions">
+        <li><button type="button">My Org Chart</button></li>
+        <li><button type="button">Request Absence</button></li>
+        <li><button type="button">Time Off Balance</button></li>
+        <li><button type="button">Feedback Received</button></li>
+      </ul>
     </section>
   </main>
+
+  <script>
+    let hideTimer = null;
+    function showPersonalMenu() {
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      document.getElementById('personal-menu').style.display = 'block';
+    }
+    function hidePersonalMenu() {
+      document.getElementById('personal-menu').style.display = 'none';
+    }
+    function hidePersonalMenuDelayed() {
+      hideTimer = setTimeout(hidePersonalMenu, 200);
+    }
+    function cancelHidePersonalMenu() {
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    }
+  </script>
 </body>
 </html>

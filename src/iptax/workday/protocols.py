@@ -36,6 +36,10 @@ class LocatorProtocol(Protocol):
         """Click the element."""
         ...
 
+    async def hover(self) -> None:
+        """Hover over the element."""
+        ...
+
     async def fill(self, value: str) -> None:
         """Fill the element with text (clears existing content)."""
         ...

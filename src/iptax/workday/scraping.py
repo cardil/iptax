@@ -37,32 +37,26 @@ async def navigate_to_time_page(
     Uses the "Select Week" option to jump directly to the target date,
     which is much faster than navigating week by week.
 
+    The Workday home page now places "Time" under the "Personal" submenu,
+    which appears on hover. We hover over "Personal" then click "Time".
+
     Args:
         driver: Browser driver object
         target_date: The target date to navigate to
     """
-    logger.info("Looking for Time button...")
+    logger.info("Looking for Time link under Personal submenu...")
 
-    # Wait for the page to have the "Your Top Apps" section loaded
-    # Try to find the Time button with different strategies
-    time_button = driver.get_by_role("button", name="Time", exact=True)
+    # Hover over the "Personal" nav button to reveal submenu
+    personal_button = driver.get_by_role("button", name="Personal", exact=True)
+    await personal_button.wait_for(state="visible", timeout=ELEMENT_TIMEOUT)
+    await personal_button.hover()
+    logger.info("Hovered over Personal button, looking for Time link...")
 
-    # Wait for the Time button
-    try:
-        await time_button.wait_for(state="visible")
-    except Exception:
-        # If button not found, the home page might not have loaded properly
-        logger.warning("Time button not found on first attempt")
-
-        # Try scrolling to find the button
-        await driver.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await driver.wait_for_timeout(1000)
-
-        # Try again with shorter timeout
-        await time_button.wait_for(timeout=ELEMENT_TIMEOUT, state="visible")
-
-    logger.info("Clicking Time button...")
-    await time_button.click()
+    # Find and click the "Time" link in the revealed submenu
+    time_link = driver.get_by_role("link", name="Time", exact=True)
+    await time_link.wait_for(state="visible", timeout=ELEMENT_TIMEOUT)
+    logger.info("Clicking Time link...")
+    await time_link.click()
 
     # Wait for navigation to complete
     await driver.wait_for_load_state("domcontentloaded")
