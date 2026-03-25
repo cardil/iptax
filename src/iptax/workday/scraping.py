@@ -65,9 +65,6 @@ async def navigate_to_time_page(
     personal_button = driver.get_by_role("button", name="Personal", exact=True)
     try:
         await personal_button.wait_for(state="visible", timeout=_NAV_LAYOUT_TIMEOUT)
-        # Sidebar is visible: hover Personal to reveal submenu, then click Time
-        logger.info("Sidebar detected — hovering Personal to reveal submenu...")
-        await personal_button.hover()
     except Exception:
         # Sidebar is hidden: click the MENU hamburger button to open nav dialog
         logger.info("No sidebar — using MENU button fallback...")
@@ -75,6 +72,10 @@ async def navigate_to_time_page(
         await menu_button.wait_for(state="visible", timeout=ELEMENT_TIMEOUT)
         await menu_button.click()
         logger.info("Opened MENU navigation dialog...")
+    else:
+        # Sidebar is visible: hover Personal to reveal submenu, then click Time
+        logger.info("Sidebar detected — hovering Personal to reveal submenu...")
+        await personal_button.hover()
 
     # In both layouts, "Time" is now a visible link (sidebar submenu or dialog)
     time_link = driver.get_by_role("link", name="Time", exact=True)
