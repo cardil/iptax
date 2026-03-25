@@ -29,6 +29,12 @@ logger = logging.getLogger(__name__)
 ProgressCallback = Callable[[str], None] | None
 
 
+# Short timeout for sidebar/hamburger detection after page load is confirmed.
+# At this point the SPA has loaded (Search box visible), so the nav layout
+# is already determined — we just need a short window to check.
+_NAV_LAYOUT_TIMEOUT = 3000  # 3 seconds
+
+
 async def navigate_to_time_page(
     driver: BrowserDriverProtocol, target_date: date
 ) -> None:
@@ -37,22 +43,40 @@ async def navigate_to_time_page(
     Uses the "Select Week" option to jump directly to the target date,
     which is much faster than navigating week by week.
 
-    The Workday home page now places "Time" under the "Personal" submenu,
-    which appears on hover. We hover over "Personal" then click "Time".
+    Supports two Workday home page layouts:
+    - **Sidebar visible (default):** hover over "Personal" → click "Time" link
+    - **Sidebar hidden (user preference):** click "MENU" button → click "Time"
+
+    The user can toggle the sidebar via Workday Customize → "Always Show Sidebar".
 
     Args:
         driver: Browser driver object
         target_date: The target date to navigate to
     """
-    logger.info("Looking for Time link under Personal submenu...")
+    # Wait for the SPA to finish loading — "Search Workday" is always present
+    # in both sidebar and hamburger layouts once the home page is ready.
+    logger.info("Waiting for Workday home page to load...")
+    search_box = driver.get_by_role("combobox", name="Search Workday")
+    await search_box.wait_for(state="visible", timeout=ELEMENT_TIMEOUT)
+    logger.info("Home page loaded, detecting navigation layout...")
 
-    # Hover over the "Personal" nav button to reveal submenu
+    # Detect layout: sidebar (Personal button) or hamburger (MENU button).
+    # Now that page is confirmed loaded, a short timeout is safe.
     personal_button = driver.get_by_role("button", name="Personal", exact=True)
-    await personal_button.wait_for(state="visible", timeout=ELEMENT_TIMEOUT)
-    await personal_button.hover()
-    logger.info("Hovered over Personal button, looking for Time link...")
+    try:
+        await personal_button.wait_for(state="visible", timeout=_NAV_LAYOUT_TIMEOUT)
+        # Sidebar is visible: hover Personal to reveal submenu, then click Time
+        logger.info("Sidebar detected — hovering Personal to reveal submenu...")
+        await personal_button.hover()
+    except Exception:
+        # Sidebar is hidden: click the MENU hamburger button to open nav dialog
+        logger.info("No sidebar — using MENU button fallback...")
+        menu_button = driver.get_by_role("button", name="MENU", exact=True)
+        await menu_button.wait_for(state="visible", timeout=ELEMENT_TIMEOUT)
+        await menu_button.click()
+        logger.info("Opened MENU navigation dialog...")
 
-    # Find and click the "Time" link in the revealed submenu
+    # In both layouts, "Time" is now a visible link (sidebar submenu or dialog)
     time_link = driver.get_by_role("link", name="Time", exact=True)
     await time_link.wait_for(state="visible", timeout=ELEMENT_TIMEOUT)
     logger.info("Clicking Time link...")
