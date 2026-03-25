@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import re
 from datetime import date
 from typing import ClassVar
@@ -439,12 +438,19 @@ class TestNavigateToTimePage:
 
     @pytest.mark.asyncio
     async def test_navigate_to_time_page_success(self) -> None:
-        """Test successful navigation to time page."""
+        """Test successful navigation to time page via Personal submenu hover."""
         driver = FakeBrowserDriver()
 
-        # Configure Time button
+        # Configure Personal button (hover reveals submenu)
         driver.configure_locator(
             role="button",
+            name="Personal",
+            text_content="Personal",
+        )
+
+        # Configure Time link in the Personal submenu
+        driver.configure_locator(
+            role="link",
             name="Time",
             text_content="Time",
         )
@@ -470,45 +476,6 @@ class TestNavigateToTimePage:
         )
 
         await navigate_to_time_page(driver, date(2025, 4, 15))
-
-    @pytest.mark.asyncio
-    async def test_navigate_to_time_page_with_scroll(self) -> None:
-        """Test navigation when Time button not initially visible."""
-        driver = FakeBrowserDriver()
-
-        # Configure Time button that fails first wait_for, succeeds second
-        time_button = driver.configure_locator(
-            role="button",
-            name="Time",
-            text_content="Time",
-        )
-        # First wait_for raises, second succeeds
-        time_button.wait_for_raises = TimeoutError("Button not found")
-
-        # After evaluate (scroll), create new button that works
-        driver.configure_locator(
-            role="button",
-            name="Time",
-            text_content="Time",
-        )
-
-        # Configure rest of the flow
-        driver.configure_locator(role="link", name=re.compile(r"Select Week"))
-        driver.configure_locator(role="spinbutton", name="Month")
-        driver.configure_locator(role="spinbutton", name="Day")
-        driver.configure_locator(role="spinbutton", name="Year")
-        driver.configure_locator(role="button", name="OK")
-        driver.configure_locator(
-            role="heading",
-            name=re.compile(r"\w+ \d+.*\d{4}"),
-            level=2,
-            text_content="Apr 14 - 20, 2025",
-        )
-
-        # This should handle the scroll fallback
-        with contextlib.suppress(TimeoutError):
-            # Expected since our fake doesn't perfectly simulate the retry
-            await navigate_to_time_page(driver, date(2025, 4, 15))
 
 
 class TestSelectWeekViaModal:

@@ -52,6 +52,9 @@ class FakeLocator:
         if self.click_callback:
             self.click_callback()
 
+    async def hover(self) -> None:
+        """Hover over the element - no-op in fake."""
+
     async def fill(self, value: str) -> None:
         """Fill the element - calls callback if configured."""
         if self.fill_callback:

@@ -49,6 +49,10 @@ class PlaywrightLocator:
         """Click the element."""
         await self._locator.click()
 
+    async def hover(self) -> None:
+        """Hover over the element."""
+        await self._locator.hover()
+
     async def fill(self, value: str) -> None:
         """Fill the element with text."""
         await self._locator.fill(value)
