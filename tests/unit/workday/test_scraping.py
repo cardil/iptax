@@ -436,10 +436,30 @@ class TestWaitForWeekChange:
 class TestNavigateToTimePage:
     """Test navigate_to_time_page function."""
 
+    def _configure_rest_of_flow(self, driver: FakeBrowserDriver) -> None:
+        """Configure Select Week modal and heading locators (shared between tests)."""
+        driver.configure_locator(
+            role="link",
+            name=re.compile(r"Select Week"),
+        )
+        driver.configure_locator(role="spinbutton", name="Month")
+        driver.configure_locator(role="spinbutton", name="Day")
+        driver.configure_locator(role="spinbutton", name="Year")
+        driver.configure_locator(role="button", name="OK")
+        driver.configure_locator(
+            role="heading",
+            name=re.compile(r"\w+ \d+.*\d{4}"),
+            level=2,
+            text_content="Apr 14 - 20, 2025",
+        )
+
     @pytest.mark.asyncio
-    async def test_navigate_to_time_page_success(self) -> None:
-        """Test successful navigation to time page via Personal submenu hover."""
+    async def test_navigate_to_time_page_sidebar_layout(self) -> None:
+        """Test successful navigation via Personal submenu hover (sidebar visible)."""
         driver = FakeBrowserDriver()
+
+        # Page load gate: Search Workday combobox is always present on home page
+        driver.configure_locator(role="combobox", name="Search Workday")
 
         # Configure Personal button (hover reveals submenu)
         driver.configure_locator(
@@ -455,26 +475,40 @@ class TestNavigateToTimePage:
             text_content="Time",
         )
 
-        # Configure Select Week link
+        self._configure_rest_of_flow(driver)
+        await navigate_to_time_page(driver, date(2025, 4, 15))
+
+    @pytest.mark.asyncio
+    async def test_navigate_to_time_page_hamburger_layout(self) -> None:
+        """Test navigation via MENU button when sidebar is hidden."""
+        driver = FakeBrowserDriver()
+
+        # Page load gate: Search Workday combobox is always present on home page
+        driver.configure_locator(role="combobox", name="Search Workday")
+
+        # Personal button not present (sidebar hidden) — wait_for times out
+        personal_button = driver.configure_locator(
+            role="button",
+            name="Personal",
+            text_content="Personal",
+        )
+        personal_button.wait_for_raises = TimeoutError("No sidebar")
+
+        # MENU (hamburger) button is present instead
+        driver.configure_locator(
+            role="button",
+            name="MENU",
+            text_content="MENU",
+        )
+
+        # Time link is visible in the opened MENU dialog
         driver.configure_locator(
             role="link",
-            name=re.compile(r"Select Week"),
+            name="Time",
+            text_content="Time",
         )
 
-        # Configure date inputs
-        driver.configure_locator(role="spinbutton", name="Month")
-        driver.configure_locator(role="spinbutton", name="Day")
-        driver.configure_locator(role="spinbutton", name="Year")
-        driver.configure_locator(role="button", name="OK")
-
-        # Configure week heading for verification
-        driver.configure_locator(
-            role="heading",
-            name=re.compile(r"\w+ \d+.*\d{4}"),
-            level=2,
-            text_content="Apr 14 - 20, 2025",
-        )
-
+        self._configure_rest_of_flow(driver)
         await navigate_to_time_page(driver, date(2025, 4, 15))
 
 

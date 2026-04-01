@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+
 from iptax.workday.protocols import (
     KeyboardProtocol,
     LocatorProtocol,
@@ -38,12 +40,19 @@ class PlaywrightLocator:
         state: str = "visible",
         timeout: int | None = None,
     ) -> None:
-        """Wait for element to reach specified state."""
-        # Cast to expected literal type for Playwright API
-        await self._locator.wait_for(
-            state=cast(Literal["attached", "detached", "hidden", "visible"], state),
-            timeout=timeout,
-        )
+        """Wait for element to reach specified state.
+
+        Translates Playwright's TimeoutError to the built-in TimeoutError so
+        callers can catch TimeoutError without importing Playwright internals.
+        """
+        try:
+            # Cast to expected literal type for Playwright API
+            await self._locator.wait_for(
+                state=cast(Literal["attached", "detached", "hidden", "visible"], state),
+                timeout=timeout,
+            )
+        except PlaywrightTimeoutError as exc:
+            raise TimeoutError(str(exc)) from exc
 
     async def click(self) -> None:
         """Click the element."""
