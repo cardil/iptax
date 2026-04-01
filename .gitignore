@@ -153,6 +153,8 @@ AGENTS.md
 CLAUDE.md
 .claude/
 .make/
+.ai/
+.playwright-mcp/
 *.pdf
 *.docx
 

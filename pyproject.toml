@@ -58,8 +58,8 @@ dependencies = [
     # Data validation
     "pydantic>=2.5.0",
 
-    # Did integration (PR/MR fetching) - using PR #311
-    "did @ git+https://github.com/psss/did.git@refs/pull/311/head",
+    # Did integration (PR/MR fetching)
+    "did>=0.23.0",
 ]
 
 [project.optional-dependencies]
