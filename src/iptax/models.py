@@ -877,6 +877,10 @@ class InFlightReport(BaseModel):
         default_factory=lambda: datetime.now(UTC),
         description="When this in-flight report was created (UTC)",
     )
+    did_collected: bool = Field(
+        default=False,
+        description="Whether Did collection was performed (even if zero changes)",
+    )
     changes: list[Change] = Field(
         default_factory=list,
         description="Did changes (PRs/MRs) collected",

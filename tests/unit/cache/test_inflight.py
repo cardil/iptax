@@ -287,6 +287,7 @@ class TestReportState:
             workday_end=date(2024, 11, 30),
             changes_since=date(2024, 10, 25),
             changes_until=date(2024, 11, 25),
+            did_collected=with_changes,
             changes=changes,
             total_hours=10.0 if with_total_hours else None,
             workday_validated=workday_validated,
@@ -380,6 +381,16 @@ class TestReportState:
         assert state.ai == STATE_COMPLETE
         assert state.reviewed == STATE_COMPLETE
         assert state.status == "Ready for dist"
+
+    @pytest.mark.unit
+    def test_zero_changes_did_collected_state(self) -> None:
+        """Test state when Did collected zero changes (PTO month)."""
+        report = self._create_report()
+        report.did_collected = True
+        state = ReportState.from_report(report)
+
+        assert state.did == STATE_COMPLETE
+        assert state.status != "Collecting"
 
     @pytest.mark.unit
     def test_workday_disabled(self) -> None:

@@ -484,6 +484,7 @@ async def collect_flow(
         )
         changes = fetch_changes(console, settings, ranges.did_start, ranges.did_end)
         report.changes = changes
+        report.did_collected = True
 
         if not changes and not _confirm_zero_changes(console):
             return False

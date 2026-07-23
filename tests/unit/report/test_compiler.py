@@ -146,20 +146,6 @@ class TestCompileReport:
         with pytest.raises(ValueError, match="working_days is missing"):
             compile_report(basic_inflight, basic_settings)
 
-    def test_fails_with_no_changes(self, basic_inflight, basic_settings):
-        """Test that compilation succeeds with zero changes (full PTO month)."""
-        # 21 absence days * 8h = 168h total, effective_hours = 0
-        basic_inflight.changes = []
-        basic_inflight.total_hours = 168.0
-        basic_inflight.working_days = 21
-        basic_inflight.absence_days = 21
-
-        report = compile_report(basic_inflight, basic_settings)
-
-        assert report.changes == []
-        assert report.repositories == []
-        assert report.total_hours >= 0
-
     def test_compiles_with_zero_changes(self, basic_inflight, basic_settings):
         """Test that compilation succeeds with zero changes (full PTO month)."""
         # 21 absence days * 8h = 168h total, effective_hours = 0
