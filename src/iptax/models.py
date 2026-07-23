@@ -885,6 +885,14 @@ class InFlightReport(BaseModel):
         default_factory=list,
         description="Did changes (PRs/MRs) collected",
     )
+
+    @model_validator(mode="after")
+    def infer_did_collected_from_changes(self) -> "InFlightReport":
+        """Infer did_collected for legacy caches that predate the field."""
+        if not self.did_collected and self.changes:
+            self.did_collected = True
+        return self
+
     judgments: list[Judgment] = Field(
         default_factory=list,
         description="AI judgments for changes (empty until AI runs)",
