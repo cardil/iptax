@@ -987,12 +987,12 @@ class ReportData(BaseModel):
     total_hours: int = Field(
         ...,
         description="Total working hours in period (rounded to whole hours)",
-        gt=0,
+        ge=0,
     )
     creative_hours: int = Field(
         ...,
         description="Creative work hours (calculated from total and percentage)",
-        gt=0,
+        ge=0,
     )
     creative_percentage: int = Field(
         ...,

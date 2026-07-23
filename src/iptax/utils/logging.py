@@ -83,7 +83,7 @@ def setup_logging(
 
     # Configure third-party loggers that add their own handlers
     # LiteLLM and related libs add StreamHandlers; redirect to our file handler
-    for logger_name in ("LiteLLM", "litellm", "httpx", "httpcore"):
+    for logger_name in ("LiteLLM", "litellm", "httpx", "httpcore", "did"):
         lib_logger = logging.getLogger(logger_name)
         # Remove any existing handlers (e.g., StreamHandlers to console)
         lib_logger.handlers.clear()

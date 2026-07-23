@@ -777,6 +777,7 @@ class TestCollectFlow:
         with (
             patch.object(flows, "config_load_settings", return_value=mock_settings),
             patch.object(flows, "did_fetch_changes", return_value=[]),
+            patch.object(flows, "_confirm_zero_changes", return_value=True),
             patch.object(flows, "InFlightCache") as mock_cache_cls,
         ):
             mock_cache = MagicMock()
@@ -836,6 +837,7 @@ class TestCollectFlow:
         with (
             patch.object(flows, "config_load_settings", return_value=mock_settings),
             patch.object(flows, "did_fetch_changes", return_value=[]),
+            patch.object(flows, "_confirm_zero_changes", return_value=True),
             patch.object(flows, "InFlightCache") as mock_cache_cls,
         ):
             mock_cache = MagicMock()
@@ -1072,6 +1074,7 @@ class TestReportFlow:
         with (
             patch.object(flows, "config_load_settings", return_value=mock_settings),
             patch.object(flows, "did_fetch_changes", return_value=[]),
+            patch.object(flows, "_confirm_zero_changes", return_value=True),
             patch.object(flows, "InFlightCache") as mock_cache_cls,
             patch.object(flows, "dist_flow", return_value=True),
             patch.object(flows, "save_report_date"),  # Prevent history leak
@@ -1693,11 +1696,13 @@ class TestDistFlow:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_no_changes_fails(self):
-        """Test that dist fails when no changes to report."""
+    async def test_no_changes_succeeds_when_hours_present(self, tmp_path):
+        """Test that dist succeeds with zero changes when hours data is present."""
         console = Console(file=StringIO(), force_terminal=True)
 
         mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+        mock_settings.ai.provider = None
 
         report = InFlightReport(
             month="2024-11",
@@ -1705,25 +1710,32 @@ class TestDistFlow:
             workday_end=date(2024, 11, 30),
             changes_since=date(2024, 10, 25),
             changes_until=date(2024, 11, 25),
-            changes=[],  # No changes
+            changes=[],
+            total_hours=168.0,
+            working_days=21,
+            absence_days=21,
         )
 
         with (
             patch.object(flows, "config_load_settings", return_value=mock_settings),
             patch.object(flows, "InFlightCache") as mock_cache_cls,
+            patch.object(flows, "compile_report") as mock_compile,
+            patch.object(flows, "generate_all") as mock_generate,
         ):
             mock_cache = MagicMock()
             mock_cache.list_all.return_value = ["2024-11"]
             mock_cache.load.return_value = report
             mock_cache_cls.return_value = mock_cache
 
+            mock_report_data = MagicMock()
+            mock_compile.return_value = mock_report_data
+            mock_generate.return_value = [tmp_path / "report.md"]
+
             result = await flows.dist_flow(
-                console, month="2024-11", output_options=OutputOptions()
+                console, month="2024-11", output_options=OutputOptions(), force=True
             )
 
-        assert result is False
-        output = strip_ansi(console.file.getvalue())
-        assert "No changes" in output
+        assert result is True
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -1853,6 +1865,119 @@ class TestDistFlow:
         assert result is False
         output = strip_ansi(console.file.getvalue())
         assert "Missing work hours data" in output
+
+
+class TestLoadReport:
+    """Tests for _load_report function."""
+
+    @pytest.mark.unit
+    def test_load_report_without_changes_check(self):
+        """Test that _load_report loads a report even when changes is empty."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=[],  # No changes -- _load_report must NOT reject this
+        )
+
+        mock_cache = MagicMock(spec=InFlightCache)
+        mock_cache.list_all.return_value = ["2024-11"]
+        mock_cache.load.return_value = report
+
+        loaded_report, month_key = flows._load_report(console, mock_cache, "2024-11")
+
+        assert loaded_report is not None
+        assert month_key == "2024-11"
+        assert loaded_report.changes == []
+
+
+class TestValidateDistReadiness:
+    """Tests for _validate_dist_readiness function."""
+
+    @pytest.mark.unit
+    def test_validate_dist_readiness_accepts_zero_changes(self):
+        """Test that _validate_dist_readiness returns None when changes is empty."""
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=[],
+            total_hours=160.0,
+            working_days=21,
+        )
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = False
+
+        result = flows._validate_dist_readiness(report, mock_settings, force=True)
+
+        assert result is None
+
+    @pytest.mark.unit
+    def test_validate_dist_readiness_still_requires_hours(self):
+        """Test that _validate_dist_readiness fails when hours are missing."""
+        report = InFlightReport(
+            month="2024-11",
+            workday_start=date(2024, 11, 1),
+            workday_end=date(2024, 11, 30),
+            changes_since=date(2024, 10, 25),
+            changes_until=date(2024, 11, 25),
+            changes=[],
+            total_hours=None,  # Missing hours
+        )
+
+        mock_settings = MagicMock()
+        mock_settings.workday.enabled = True
+
+        result = flows._validate_dist_readiness(report, mock_settings, force=True)
+
+        assert result is not None
+        assert "Missing work hours" in result
+
+
+class TestConfirmZeroChanges:
+    """Tests for _confirm_zero_changes function."""
+
+    @pytest.mark.unit
+    def test_confirms_when_user_accepts(self):
+        """Given TTY console, when user confirms, then returns True."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        with patch.object(Confirm, "ask", return_value=True):
+            result = flows._confirm_zero_changes(console)
+
+        assert result is True
+        output = strip_ansi(console.file.getvalue())
+        assert "No code changes found" in output
+
+    @pytest.mark.unit
+    def test_aborts_when_user_declines(self):
+        """Given TTY console, when user declines, then returns False."""
+        console = Console(file=StringIO(), force_terminal=True)
+
+        with patch.object(Confirm, "ask", return_value=False):
+            result = flows._confirm_zero_changes(console)
+
+        assert result is False
+        output = strip_ansi(console.file.getvalue())
+        assert "Aborted by user" in output
+
+    @pytest.mark.unit
+    def test_proceeds_in_non_interactive_mode(self):
+        """Given non-TTY console, then proceeds automatically."""
+        console = Console(file=StringIO(), force_terminal=False)
+
+        result = flows._confirm_zero_changes(console)
+
+        assert result is True
+        output = strip_ansi(console.file.getvalue())
+        assert "Continuing with zero changes" in output
 
 
 class TestConfirmOrForce:
