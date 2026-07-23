@@ -146,12 +146,49 @@ class TestCompileReport:
         with pytest.raises(ValueError, match="working_days is missing"):
             compile_report(basic_inflight, basic_settings)
 
-    def test_fails_with_no_changes(self, basic_inflight, basic_settings):
-        """Test that compilation fails if no changes exist."""
+    def test_compiles_with_zero_changes(self, basic_inflight, basic_settings):
+        """Test that compilation succeeds with zero changes (full PTO month)."""
+        # 21 absence days * 8h = 168h total, effective_hours = 0
         basic_inflight.changes = []
+        basic_inflight.total_hours = 168.0
+        basic_inflight.working_days = 21
+        basic_inflight.absence_days = 21
 
-        with pytest.raises(ValueError, match="no changes found"):
-            compile_report(basic_inflight, basic_settings)
+        report = compile_report(basic_inflight, basic_settings)
+
+        assert report.changes == []
+        assert report.repositories == []
+        assert report.total_hours >= 0
+
+    def test_compiles_with_all_excluded_changes(
+        self, basic_inflight, basic_change, basic_settings
+    ):
+        """Test that compilation succeeds when all changes are excluded."""
+        judgment = Judgment(
+            change_id=basic_change.get_change_id(),
+            url=basic_change.get_url(),
+            description=basic_change.title,
+            decision=Decision.EXCLUDE,
+            reasoning="Not relevant to product",
+            product="Test Product",
+            ai_provider="gemini/gemini-2.5-pro",
+        )
+        basic_inflight.judgments = [judgment]
+
+        report = compile_report(basic_inflight, basic_settings)
+
+        assert report.changes == []
+
+    def test_zero_hours_report_compiles(self, basic_inflight, basic_settings):
+        """Test that a report with zero hours compiles (e.g. no working days)."""
+        basic_inflight.changes = []
+        basic_inflight.total_hours = 0.0
+        basic_inflight.working_days = 0
+        basic_inflight.absence_days = 0
+
+        report = compile_report(basic_inflight, basic_settings)
+
+        assert report.total_hours == 0
 
     def test_fails_with_missing_judgment_when_ai_enabled(
         self, basic_inflight, basic_settings
@@ -187,7 +224,7 @@ class TestCompileReport:
     def test_fails_with_no_included_changes(
         self, basic_inflight, basic_change, basic_settings
     ):
-        """Test that compilation fails if all changes are excluded."""
+        """Test compilation succeeds when all changes are excluded (empty result)."""
         judgment = Judgment(
             change_id=basic_change.get_change_id(),
             url=basic_change.get_url(),
@@ -199,8 +236,9 @@ class TestCompileReport:
         )
         basic_inflight.judgments = [judgment]
 
-        with pytest.raises(ValueError, match="no changes were included"):
-            compile_report(basic_inflight, basic_settings)
+        report = compile_report(basic_inflight, basic_settings)
+
+        assert report.changes == []
 
     def test_includes_only_accepted_changes(
         self, basic_inflight, github_repo, basic_settings
@@ -299,7 +337,7 @@ class TestCompileReport:
     def test_resolved_uncertain_judgment_with_exclude(
         self, basic_inflight, basic_change, basic_settings
     ):
-        """Test that resolved UNCERTAIN judgment (user=EXCLUDE) works."""
+        """Test that resolved UNCERTAIN judgment (user=EXCLUDE) yields empty changes."""
         judgment = Judgment(
             change_id=basic_change.get_change_id(),
             url=basic_change.get_url(),
@@ -313,8 +351,9 @@ class TestCompileReport:
         )
         basic_inflight.judgments = [judgment]
 
-        with pytest.raises(ValueError, match="no changes were included"):
-            compile_report(basic_inflight, basic_settings)
+        report = compile_report(basic_inflight, basic_settings)
+
+        assert report.changes == []
 
     def test_extracts_unique_repositories(
         self, basic_inflight, github_repo, gitlab_repo, basic_settings

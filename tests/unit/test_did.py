@@ -817,6 +817,99 @@ class TestCheckDidStderr:
         assert "github.com" in caplog.text
 
 
+class TestDidLoggingInterceptor:
+    """Test that did logging errors are captured and raised as DidIntegrationError."""
+
+    @patch("iptax.did.did.cli.main")
+    def test_error_log_during_did_call_raises_error(self, mock_did_main: Mock) -> None:
+        """Simulate did.cli.main() logging an ERROR -- assert error raised."""
+
+        def mock_did_main_with_error(*_args: object) -> tuple[list[object]]:
+            logging.getLogger("did").error(
+                "Skipping <Future at 0x123> due to "
+                "Unable to connect to 'https://gitlab.example.com'"
+            )
+            mock_user = Mock()
+            mock_user.stats = []
+            return ([mock_user],)
+
+        mock_did_main.side_effect = mock_did_main_with_error
+
+        with pytest.raises(DidIntegrationError):
+            _fetch_provider_changes(
+                "gitlab.example.com",
+                date(2024, 1, 1),
+                date(2024, 1, 31),
+            )
+
+    @patch("iptax.did.did.cli.main")
+    def test_warning_log_during_did_call_does_not_raise(
+        self, mock_did_main: Mock
+    ) -> None:
+        """Simulate did.cli.main() logging a WARNING -- assert no exception raised."""
+
+        def mock_did_main_with_warning(*_args: object) -> tuple[list[object]]:
+            logging.getLogger("did").warning("Some non-fatal warning from did")
+            mock_user = Mock()
+            mock_user.stats = []
+            return ([mock_user],)
+
+        mock_did_main.side_effect = mock_did_main_with_warning
+
+        # Should not raise -- warnings are acceptable
+        changes = _fetch_provider_changes(
+            "github.com",
+            date(2024, 1, 1),
+            date(2024, 1, 31),
+        )
+        assert changes == []
+
+    @patch("iptax.did.did.cli.main")
+    def test_error_message_is_clean_no_future_repr(self, mock_did_main: Mock) -> None:
+        """Error message must strip Future repr but keep useful text."""
+
+        def mock_did_main_with_future_error(*_args: object) -> tuple[list[object]]:
+            logging.getLogger("did").error(
+                "Skipping <Future at 0x7f599b6cbc90 state=finished raised ReportError>"
+                " due to Unable to connect to 'https://gitlab.example.com'"
+            )
+            mock_user = Mock()
+            mock_user.stats = []
+            return ([mock_user],)
+
+        mock_did_main.side_effect = mock_did_main_with_future_error
+
+        with pytest.raises(DidIntegrationError) as exc_info:
+            _fetch_provider_changes(
+                "gitlab.example.com",
+                date(2024, 1, 1),
+                date(2024, 1, 31),
+            )
+
+        error_msg = str(exc_info.value)
+        assert "<Future at 0x7f599b6cbc90" not in error_msg
+        assert "Unable to connect to" in error_msg
+
+    @patch("iptax.did.did.cli.main")
+    def test_logging_handler_is_temporary(self, mock_did_main: Mock) -> None:
+        """The did logger must have no extra handlers before and after the call."""
+        did_logger = logging.getLogger("did")
+        handlers_before = list(did_logger.handlers)
+
+        mock_user = Mock()
+        mock_user.stats = []
+        mock_did_main.return_value = ([mock_user],)
+
+        _fetch_provider_changes(
+            "github.com",
+            date(2024, 1, 1),
+            date(2024, 1, 31),
+        )
+
+        handlers_after = list(did_logger.handlers)
+        assert handlers_after == handlers_before
+
+
 class TestFetchChanges:
     """Test fetch_changes function."""
 

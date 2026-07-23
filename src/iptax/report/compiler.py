@@ -42,9 +42,6 @@ def compile_report(inflight: InFlightReport, settings: Settings) -> ReportData:
     if effective_hours is None:
         raise ValueError("Cannot compile report: effective_hours calculation failed")
 
-    if not inflight.changes:
-        raise ValueError("Cannot compile report: no changes found")
-
     # Build judgment lookup map
     judgment_map = {j.change_id: j for j in inflight.judgments}
 
@@ -79,12 +76,6 @@ def compile_report(inflight: InFlightReport, settings: Settings) -> ReportData:
         if judgment.final_decision == Decision.INCLUDE:
             included_changes.append(change)
         # EXCLUDE: skip (not an error)
-
-    if not included_changes:
-        raise ValueError(
-            "Cannot compile report: no changes were included after filtering. "
-            "Review judgments or add changes."
-        )
 
     # Extract unique repositories from included changes
     repo_map: dict[str, Repository] = {}

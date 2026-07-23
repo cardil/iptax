@@ -283,6 +283,61 @@ async def review(
 MIN_WORK_HOURS = 0.5
 
 
+def _handle_existing_inflight(
+    console: Console,
+    cache: InFlightCache,
+    month_key: str,
+    force: bool,
+) -> bool:
+    """Handle existing in-flight report (discard if forced, reject otherwise).
+
+    Returns:
+        True if should proceed, False if blocked by existing report.
+    """
+    if force and cache.exists(month_key):
+        console.print(
+            f"[yellow]🗑[/yellow] Discarding existing in-flight for {month_key}"
+        )
+        cache.delete(month_key)
+        return True
+
+    if cache.exists(month_key):
+        existing_report = cache.load(month_key)
+        console.print(f"\n[red]✗[/red] In-flight report already exists for {month_key}")
+        if existing_report:
+            _display_inflight_summary(console, existing_report)
+        console.print("\nUse --force to discard and start fresh")
+        return False
+
+    return True
+
+
+def _confirm_zero_changes(console: Console) -> bool:
+    """Warn about zero changes and ask user to confirm.
+
+    Args:
+        console: Rich console for output
+
+    Returns:
+        True if should proceed, False if user declined.
+    """
+    console.print(
+        "\n[yellow]⚠ WARNING:[/yellow] " "No code changes found for this period."
+    )
+    if console.is_terminal:
+        if not Confirm.ask(
+            "[bold]Continue with a zero-change report?[/bold]",
+            default=True,
+        ):
+            console.print("[yellow]⏹[/yellow] Aborted by user")
+            return False
+    else:
+        console.print(
+            "[yellow]⚠[/yellow] Continuing with zero changes " "(non-interactive mode)"
+        )
+    return True
+
+
 async def _fetch_workday_data(
     console: Console,
     report: InFlightReport,
@@ -409,17 +464,7 @@ async def collect_flow(
 
     # Check for existing in-flight
     cache = InFlightCache()
-    if options.force and cache.exists(month_key):
-        console.print(
-            f"[yellow]🗑[/yellow] Discarding existing in-flight for {month_key}"
-        )
-        cache.delete(month_key)
-    elif cache.exists(month_key):
-        existing_report = cache.load(month_key)
-        console.print(f"\n[red]✗[/red] In-flight report already exists for {month_key}")
-        if existing_report:
-            _display_inflight_summary(console, existing_report)
-        console.print("\nUse --force to discard and start fresh")
+    if not _handle_existing_inflight(console, cache, month_key, options.force):
         return False
 
     # Create in-flight report
@@ -439,6 +484,10 @@ async def collect_flow(
         )
         changes = fetch_changes(console, settings, ranges.did_start, ranges.did_end)
         report.changes = changes
+        report.did_collected = True
+
+        if not changes and not _confirm_zero_changes(console):
+            return False
     else:
         console.print("[yellow]⏭[/yellow] Skipping Did collection")
 
@@ -665,12 +714,12 @@ def _resolve_review_month(
     return None
 
 
-def _load_report_for_review(
+def _load_report(
     console: Console,
     cache: InFlightCache,
     month: str | None,
 ) -> tuple[InFlightReport | None, str | None]:
-    """Load and validate report for review.
+    """Load report from cache without checking for changes.
 
     Args:
         console: Rich console for output
@@ -701,6 +750,29 @@ def _load_report_for_review(
 
     if report is None:
         console.print(f"[red]✗[/red] Failed to load report for {month_key}")
+        return None, None
+
+    return report, month_key
+
+
+def _load_report_for_review(
+    console: Console,
+    cache: InFlightCache,
+    month: str | None,
+) -> tuple[InFlightReport | None, str | None]:
+    """Load and validate report for review (requires changes to be present).
+
+    Args:
+        console: Rich console for output
+        cache: In-flight cache manager
+        month: Month specification
+
+    Returns:
+        Tuple of (report, month_key) or (None, None) on failure
+    """
+    report, month_key = _load_report(console, cache, month)
+
+    if report is None:
         return None, None
 
     if not report.changes:
@@ -1037,36 +1109,36 @@ def _validate_dist_readiness(
     Returns:
         Error message if validation fails, None if successful
     """
-    if not report.changes:
-        return "No changes in report"
-
-    # Check review status - AI is disabled if it's DisabledAIConfig OR provider is None
-    ai_enabled = (
-        not isinstance(settings.ai, DisabledAIConfig)
-        and getattr(settings.ai, "provider", None) is not None
-    )
-
-    if ai_enabled:
-        # AI enabled: require judgments and all must be reviewed
-        if not report.judgments:
-            return (
-                "AI is enabled but no judgments found. "
-                "Run [cyan]iptax review[/cyan] first."
-            )
-
-        # Check if all judgments are reviewed
-        unreviewed = [j for j in report.judgments if j.user_decision is None]
-        if unreviewed:
-            return (
-                f"{len(unreviewed)} judgment(s) not reviewed. "
-                "Run [cyan]iptax review[/cyan] first."
-            )
-    elif not report.judgments and not force:
-        # AI disabled: require manual review confirmation
-        return (
-            "AI is disabled. Changes require manual review before generation.\n"
-            "Review your changes manually, then use --force to confirm and generate."
+    # When changes is empty, skip AI/judgment checks entirely -- zero-change months
+    # (e.g. full PTO) are valid and should compile to an empty report.
+    if report.changes:
+        # Check review status -- AI disabled if DisabledAIConfig OR provider is None
+        ai_enabled = (
+            not isinstance(settings.ai, DisabledAIConfig)
+            and getattr(settings.ai, "provider", None) is not None
         )
+
+        if ai_enabled:
+            # AI enabled: require judgments and all must be reviewed
+            if not report.judgments:
+                return (
+                    "AI is enabled but no judgments found. "
+                    "Run [cyan]iptax review[/cyan] first."
+                )
+
+            # Check if all judgments are reviewed
+            unreviewed = [j for j in report.judgments if j.user_decision is None]
+            if unreviewed:
+                return (
+                    f"{len(unreviewed)} judgment(s) not reviewed. "
+                    "Run [cyan]iptax review[/cyan] first."
+                )
+        elif not report.judgments and not force:
+            # AI disabled: require manual review confirmation
+            return (
+                "AI is disabled. Changes require manual review before generation.\n"
+                "Review your changes manually, then use --force to generate."
+            )
 
     # Check for required hours data (only if Workday is enabled)
     if report.total_hours is None and settings.workday.enabled:
@@ -1102,7 +1174,7 @@ async def dist_flow(
 
     # Load in-flight report
     cache = InFlightCache()
-    report, month_key = _load_report_for_review(console, cache, month)
+    report, month_key = _load_report(console, cache, month)
 
     if report is None:
         return False

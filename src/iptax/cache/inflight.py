@@ -59,8 +59,8 @@ class ReportState:
         Returns:
             ReportState with derived states and status
         """
-        # Did collection state
-        did = STATE_COMPLETE if report.changes else STATE_PENDING
+        # Did collection state (based on whether collection ran, not change count)
+        did = STATE_COMPLETE if report.did_collected else STATE_PENDING
 
         # Workday collection state
         if report.total_hours is not None:

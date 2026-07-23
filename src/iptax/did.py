@@ -9,6 +9,7 @@ import logging
 import re
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import date, datetime
+from types import TracebackType
 from typing import Literal, cast
 from urllib.parse import urlparse
 
@@ -23,6 +24,66 @@ logger = logging.getLogger(__name__)
 
 # Constants for stat detection
 MERGED_STAT_KEYWORDS = ("merged", "pull", "merge")
+
+# Regex to strip raw Future repr from did error messages
+_FUTURE_REPR_RE = re.compile(r"<Future at 0x[0-9a-fA-F]+ [^>]*>")
+
+
+class _DidErrorCapture:
+    """Context manager that captures ERROR-level log records from the 'did' logger."""
+
+    def __init__(self) -> None:
+        self._errors: list[str] = []
+        self._handler: logging.Handler | None = None
+
+    def __enter__(self) -> "_DidErrorCapture":
+        capture = self
+
+        class _Handler(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                if record.levelno >= logging.ERROR:
+                    capture._errors.append(record.getMessage())
+
+        self._handler = _Handler()
+        # Attach only to the "did" logger. With propagate=True (default),
+        # records from did.* children propagate up to "did", so this single
+        # attachment point catches all did-namespace errors without duplicates.
+        logging.getLogger("did").addHandler(self._handler)
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        if self._handler is not None:
+            logging.getLogger("did").removeHandler(self._handler)
+            self._handler = None
+
+    def get_errors(self) -> list[str]:
+        return list(self._errors)
+
+
+_DUE_TO_SEPARATOR = "due to"
+
+
+def _clean_did_error_message(raw: str) -> str:
+    """Strip raw Future repr from a did error message, keeping the useful part."""
+    cleaned = _FUTURE_REPR_RE.sub("", raw)
+    parts = [p.strip() for p in cleaned.split(_DUE_TO_SEPARATOR) if p.strip()]
+    if len(parts) >= len(_DUE_TO_SEPARATOR.split()):
+        return parts[-1]
+    return " ".join(cleaned.split())
+
+
+def _raise_if_did_errors(errors: list[str], provider_name: str) -> None:
+    if not errors:
+        return
+    clean_messages = [_clean_did_error_message(e) for e in errors]
+    raise DidIntegrationError(
+        f"did provider '{provider_name}' reported errors: " + "; ".join(clean_messages)
+    )
 
 
 class DidIntegrationError(Exception):
@@ -120,15 +181,21 @@ def _fetch_provider_changes(
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
 
-        # Redirect both stdout and stderr
-        with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-            # Call did.cli.main() to get stats (POPOs)
+        # Redirect both stdout and stderr; also intercept did's logging errors
+        with (
+            redirect_stdout(stdout_capture),
+            redirect_stderr(stderr_capture),
+            _DidErrorCapture() as error_capture,
+        ):
             result = did.cli.main(option.split())
 
         # Check for errors in stderr
         _check_did_stderr(
             stderr_content=stderr_capture.getvalue(), provider_name=provider_name
         )
+
+        # Check for errors captured via logging
+        _raise_if_did_errors(error_capture.get_errors(), provider_name)
 
         # Log stdout output for debugging
         stdout_content = stdout_capture.getvalue()

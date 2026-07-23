@@ -1386,8 +1386,28 @@ class TestReportData:
         assert en == "November 2024"
         assert pl == "Listopad 2024"
 
-    def test_hours_must_be_positive(self):
-        """Test that hours must be greater than 0."""
+    def test_hours_must_be_non_negative(self):
+        """Test that hours must be >= 0 (zero is valid for PTO months)."""
+        report = ReportData(
+            month="2024-11",
+            start_date=date(2024, 11, 1),
+            end_date=date(2024, 11, 30),
+            changes_since=date(2024, 10, 26),
+            changes_until=date(2024, 11, 23),
+            total_hours=0,
+            creative_hours=0,
+            creative_percentage=80,
+            workday_entries=[],
+            employee_name="John Doe",
+            supervisor_name="Jane Smith",
+            product_name="Test Product",
+        )
+
+        assert report.total_hours == 0
+        assert report.creative_hours == 0
+
+    def test_hours_must_not_be_negative(self):
+        """Test that negative hours are rejected."""
         with pytest.raises(ValidationError) as exc_info:
             ReportData(
                 month="2024-11",
@@ -1395,7 +1415,7 @@ class TestReportData:
                 end_date=date(2024, 11, 30),
                 changes_since=date(2024, 10, 26),
                 changes_until=date(2024, 11, 23),
-                total_hours=0,
+                total_hours=-1,
                 creative_hours=0,
                 creative_percentage=80,
                 workday_entries=[],
@@ -1404,4 +1424,4 @@ class TestReportData:
                 product_name="Test Product",
             )
 
-        assert "greater than 0" in str(exc_info.value).lower()
+        assert "greater than or equal to 0" in str(exc_info.value).lower()

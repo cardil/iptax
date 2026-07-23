@@ -363,6 +363,7 @@ class TestDisplayInflightTable:
             workday_end=date(2024, 11, 30),
             changes_since=date(2024, 10, 25),
             changes_until=date(2024, 11, 25),
+            did_collected=with_changes,
             changes=changes,
             total_hours=total_hours,
             workday_validated=workday_validated,
