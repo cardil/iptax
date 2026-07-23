@@ -97,8 +97,8 @@ Generate monthly IP tax reports for the Polish IP tax deduction program by:
 
 #### psss/did Integration
 
-**Repository:** [psss/did](https://github.com/psss/did) **Version Required:** PR #311
-(until merged into main)
+**Repository:** [psss/did](https://github.com/psss/did) **Version Required:** >=0.23.0
+(PR #311 merged into main on 2026-03-27, released as 0.23.1 on 2026-03-30)
 
 **Purpose:** Fetch merged PRs/MRs from GitHub/GitLab instances.
 

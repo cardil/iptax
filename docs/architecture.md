@@ -43,7 +43,7 @@ See [`pyproject.toml`](../pyproject.toml:1) for the complete dependency list.
 - **HTTP Client:** `httpx>=0.25.0`
 - **Date/Time:** `python-dateutil>=2.8.2`
 - **Markdown:** `markdown>=3.5.0`
-- **did Integration:** `did @ git+https://github.com/psss/did.git@refs/pull/311/head`
+- **did Integration:** `did>=0.23.0`
 
 ### Project Structure
 
