@@ -45,8 +45,10 @@ class _DidErrorCapture:
                     capture._errors.append(record.getMessage())
 
         self._handler = _Handler()
+        # Attach only to the "did" logger. With propagate=True (default),
+        # records from did.* children propagate up to "did", so this single
+        # attachment point catches all did-namespace errors without duplicates.
         logging.getLogger("did").addHandler(self._handler)
-        logging.getLogger().addHandler(self._handler)
         return self
 
     def __exit__(
@@ -57,7 +59,6 @@ class _DidErrorCapture:
     ) -> None:
         if self._handler is not None:
             logging.getLogger("did").removeHandler(self._handler)
-            logging.getLogger().removeHandler(self._handler)
             self._handler = None
 
     def get_errors(self) -> list[str]:
