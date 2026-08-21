@@ -235,13 +235,15 @@ class TestGitLabMRMergedAtExtraction:
             "title": "Test MR",
             "merged_at": "2024-01-20T14:45:00Z",
         }
-        stat.iid = Mock(return_value=1)
+        stat.id = 1
+        stat.iid.side_effect = KeyError("target_id")
         gitlabapi_mock = Mock()
         gitlabapi_mock.url = "https://gitlab.com/group/project/-/merge_requests/1"
         stat.gitlabapi = gitlabapi_mock
 
         change = _convert_gitlab_mr(stat)
 
+        assert change.number == 1
         assert change.merged_at is not None
         assert change.merged_at == datetime(
             2024,
@@ -260,13 +262,15 @@ class TestGitLabMRMergedAtExtraction:
         stat.data = {
             "title": "Test MR",
         }
-        stat.iid = Mock(return_value=1)
+        stat.id = 1
+        stat.iid.side_effect = KeyError("target_id")
         gitlabapi_mock = Mock()
         gitlabapi_mock.url = "https://gitlab.com/group/project/-/merge_requests/1"
         stat.gitlabapi = gitlabapi_mock
 
         change = _convert_gitlab_mr(stat)
 
+        assert change.number == 1
         assert change.merged_at is None
 
     def test_gitlab_mr_with_invalid_merged_at_format(self) -> None:
@@ -277,13 +281,15 @@ class TestGitLabMRMergedAtExtraction:
             "title": "Test MR",
             "merged_at": "not-a-date",
         }
-        stat.iid = Mock(return_value=1)
+        stat.id = 1
+        stat.iid.side_effect = KeyError("target_id")
         gitlabapi_mock = Mock()
         gitlabapi_mock.url = "https://gitlab.com/group/project/-/merge_requests/1"
         stat.gitlabapi = gitlabapi_mock
 
         # Should not raise, just log and set merged_at to None
         change = _convert_gitlab_mr(stat)
+        assert change.number == 1
         assert change.merged_at is None
 
 
@@ -319,7 +325,7 @@ def _create_gitlab_mr_mock(
     mock = Mock(spec=MergedRequest)
     mock.project = {"path_with_namespace": path_with_namespace}
     mock.data = {"title": title}
-    mock.iid = Mock(return_value=iid)
+    mock.id = iid
     # Create gitlabapi mock with URL
     gitlabapi_mock = Mock()
     if url is None:
