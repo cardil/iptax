@@ -611,14 +611,19 @@ def _convert_gitlab_mr(stat: MergedRequest) -> Change:
     """Convert a GitLab MergeRequestMerged to a Change object.
 
     GitLab MergedRequest objects have:
-    - iid() as a method returning the MR number
+    - id set to the MR number (resolved once in __init__)
     - project as a dict with 'path_with_namespace'
     - data dict with 'title'
     - gitlabapi.url for the GitLab instance URL
+
+    Note: don't call stat.iid() here. That inherited Issue.iid() method
+    re-derives the id from data['target_id'], which only exists on
+    event-stream data, not on merged-MR data (which lacks 'target_id').
+    MergedRequest.__init__ already resolves the correct id into stat.id.
     """
-    # Get MR number via iid() method
+    # Get MR number from the already-resolved id attribute
     try:
-        number = stat.iid()
+        number = stat.id
     except Exception as e:
         raise InvalidStatDataError(f"Failed to get iid: {e}") from e
 
